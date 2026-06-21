@@ -187,6 +187,18 @@ export function excelOlarakIndir(basliklar, satirlar2D, dosyaAdi) {
   window.XLSX.writeFile(wb, dosyaAdi);
 }
 
+/* ---------------- KG toplamı hesaplama ---------------- */
+// Birimi "KG" olan ürünlerin miktarlarını toplar (büyük/küçük harf, boşluk farkına bakmaz).
+export function kgToplami(urunler) {
+  return urunler
+    .filter((u) => String(u.birim || "").trim().toLowerCase() === "kg")
+    .reduce((toplam, u) => toplam + (Number(u.miktar) || 0), 0);
+}
+
+export function sayiBicimle(sayi) {
+  return Number(sayi || 0).toLocaleString("tr-TR", { maximumFractionDigits: 2 });
+}
+
 /* ---------------- Tarih biçimleme ---------------- */
 export function tarihBicimle(timestamp) {
   if (!timestamp) return "—";
