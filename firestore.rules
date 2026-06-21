@@ -1,0 +1,37 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function girisYapmis() { return request.auth != null; }
+    function kullaniciDoc() {
+      return get(/databases/$(database)/documents/kullanicilar/$(request.auth.uid));
+    }
+    function rolU() { return kullaniciDoc().data.rol; }
+    function admin()     { return girisYapmis() && rolU() == 'admin'; }
+    function toplayici() { return girisYapmis() && (rolU() == 'toplayici' || admin()); }
+    function kontrolor() { return girisYapmis() && (rolU() == 'kontrolor' || admin()); }
+
+    // Kullanıcı profil/rol belgeleri: herkes kendi belgesini okuyabilir,
+    // yalnızca admin yazabilir (rol ataması admin işidir).
+    match /kullanicilar/{uid} {
+      allow read: if girisYapmis() && (request.auth.uid == uid || admin());
+      allow write: if admin();
+    }
+
+    match /siparisler/{siparisId} {
+      allow read: if girisYapmis();
+      allow create: if toplayici();
+      // Not: Basitlik için toplayıcı/kontrolör sipariş belgesinin tamamını
+      // güncelleyebiliyor. Alan bazlı kısıtlama (örn. kontrolörün sadece
+      // kontrolEdilenUrun alanını değiştirebilmesi) ileride eklenebilir.
+      allow update: if toplayici() || kontrolor();
+      allow delete: if admin();
+
+      match /urunler/{urunId} {
+        allow read: if girisYapmis();
+        allow create, delete: if toplayici();
+        allow update: if toplayici() || kontrolor();
+      }
+    }
+  }
+}

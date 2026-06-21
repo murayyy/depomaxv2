@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Giriş — Depomax</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+<div class="login-wrap">
+  <div class="login-card">
+    <div class="login-brand">
+      <div class="topbar__mark">D</div>
+      <div>
+        <h1>Depomax</h1>
+        <p>Tuğlubey Depo Otomasyon Sistemi</p>
+      </div>
+    </div>
+
+    <div class="login-error" id="loginError"></div>
+
+    <form id="loginForm">
+      <div class="field">
+        <label for="email">E-posta</label>
+        <input class="input" type="email" id="email" autocomplete="username" required />
+      </div>
+      <div class="field">
+        <label for="sifre">Şifre</label>
+        <input class="input" type="password" id="sifre" autocomplete="current-password" required />
+      </div>
+      <button type="submit" class="btn btn-primary btn-block" id="girisBtn">
+        Giriş Yap
+      </button>
+    </form>
+
+    <p class="u-text-soft" style="font-size:12px; margin-top:16px; text-align:center;">
+      Hesabınız yok mu? Sistem yöneticinizden hesap açmasını isteyin.
+    </p>
+  </div>
+</div>
+
+<!-- Admin için ekran seçimi (rol = admin olunca gösterilir, diğerlerinde otomatik yönlendirilir) -->
+<div class="modal-backdrop u-hidden" id="secimEkrani">
+  <div class="modal" style="max-width:380px; text-align:center;">
+    <h3>Hangi ekrana geçmek istersiniz?</h3>
+    <p>Yönetici hesabıyla giriş yaptınız.</p>
+    <div style="display:flex; flex-direction:column; gap:10px; margin-top:14px;">
+      <button class="btn btn-green btn-block" onclick="window.location.href='toplama.html'">📦 Toplama Ekranı</button>
+      <button class="btn btn-blue btn-block" onclick="window.location.href='kontrol.html'">✅ Kontrol Ekranı</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+  import { auth, onAuthStateChanged, signInWithEmailAndPassword, kullaniciBilgisiGetir } from "./js/firebase.js";
+
+  const params = new URLSearchParams(window.location.search);
+  const hataAlani = document.getElementById("loginError");
+  if (params.get("hata") === "yetkisiz") {
+    hataAlani.textContent = "Bu hesabın bu sayfaya erişim yetkisi yok.";
+    hataAlani.classList.add("is-visible");
+  }
+
+  function yonlendir(rol) {
+    if (rol === "toplayici") window.location.href = "toplama.html";
+    else if (rol === "kontrolor") window.location.href = "kontrol.html";
+    else if (rol === "admin") document.getElementById("secimEkrani").classList.remove("u-hidden");
+  }
+
+  // Zaten girişliyse direkt yönlendir
+  onAuthStateChanged(auth, async (user) => {
+    if (user) {
+      const bilgi = await kullaniciBilgisiGetir(user.uid);
+      if (bilgi) yonlendir(bilgi.rol);
+    }
+  });
+
+  document.getElementById("loginForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const email = document.getElementById("email").value.trim();
+    const sifre = document.getElementById("sifre").value;
+    const btn = document.getElementById("girisBtn");
+    hataAlani.classList.remove("is-visible");
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Giriş yapılıyor…';
+    try {
+      const cred = await signInWithEmailAndPassword(auth, email, sifre);
+      const bilgi = await kullaniciBilgisiGetir(cred.user.uid);
+      if (!bilgi) {
+        hataAlani.textContent = "Hesabınıza bir rol atanmamış. Yöneticinize başvurun.";
+        hataAlani.classList.add("is-visible");
+        btn.disabled = false;
+        btn.textContent = "Giriş Yap";
+        return;
+      }
+      yonlendir(bilgi.rol);
+    } catch (err) {
+      hataAlani.textContent = "E-posta veya şifre hatalı.";
+      hataAlani.classList.add("is-visible");
+      btn.disabled = false;
+      btn.textContent = "Giriş Yap";
+    }
+  });
+</script>
+</body>
+</html>
