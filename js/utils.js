@@ -187,6 +187,41 @@ export function excelOlarakIndir(basliklar, satirlar2D, dosyaAdi) {
   window.XLSX.writeFile(wb, dosyaAdi);
 }
 
+/* ---------------- Yeniden cizim sirasinda duzenleme odagini koruma ---------------- */
+// Firestore'dan gelen anlik guncellemeler tabloyu yeniden ciziyor; kullanici
+// o sirada bir kutuya yaziyorsa (mesela miktar), bu yeniden cizim henuz
+// kaydedilmemis karakteri ve imlec konumunu silebiliyordu. Bu iki fonksiyon,
+// yeniden çizimden önce hangi kutunun odakta olduğunu kaydedip, çizimden
+// sonra aynı değer ve imleç konumuyla geri yüklüyor.
+export function odakDurumunuKaydet(kapsayiciId) {
+  const aktif = document.activeElement;
+  if (!aktif || !aktif.dataset || !aktif.dataset.rol) return null;
+  const kapsayici = document.getElementById(kapsayiciId);
+  if (!kapsayici || !kapsayici.contains(aktif)) return null;
+  const satir = aktif.closest("[data-uid]");
+  if (!satir) return null;
+  return {
+    uid: satir.dataset.uid,
+    rol: aktif.dataset.rol,
+    deger: aktif.value,
+    secimBaslangic: aktif.selectionStart,
+    secimBitis: aktif.selectionEnd
+  };
+}
+
+export function odakDurumunuGeriYukle(kapsayiciId, durum) {
+  if (!durum) return;
+  const kapsayici = document.getElementById(kapsayiciId);
+  const satir = kapsayici && kapsayici.querySelector(`[data-uid="${durum.uid}"]`);
+  const eleman = satir && satir.querySelector(`[data-rol="${durum.rol}"]`);
+  if (!eleman) return;
+  eleman.value = durum.deger;
+  eleman.focus();
+  if (typeof durum.secimBaslangic === "number" && eleman.setSelectionRange) {
+    try { eleman.setSelectionRange(durum.secimBaslangic, durum.secimBitis); } catch (e) { /* yoksay */ }
+  }
+}
+
 /* ---------------- Ondalıklı sayı okuma (virgül veya nokta kabul eder) ---------------- */
 export function ondalikOku(deger) {
   if (deger === null || deger === undefined || deger === "") return 0;

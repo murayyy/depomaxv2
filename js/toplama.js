@@ -9,7 +9,8 @@ import {
 import {
   arayuzHazirla, toast, onayIste, yukleniyorGoster, yukleniyorKapat,
   reyonKarsilastir, excelDosyasiniOku, excelOlarakIndir, tarihBicimle,
-  debounce, BarkodTarayici, kacisEt, kgToplami, sayiBicimle, ondalikOku
+  debounce, BarkodTarayici, kacisEt, kgToplami, sayiBicimle, ondalikOku,
+  odakDurumunuKaydet, odakDurumunuGeriYukle
 } from "./utils.js";
 
 arayuzHazirla();
@@ -268,11 +269,17 @@ function renderUrunler(saltOkunur) {
 
   if (liste.length === 0) { tbody.innerHTML = ""; kartGovde.innerHTML = ""; return; }
 
+  const tbodyOdak = odakDurumunuKaydet("urunTabloGovde");
+  const kartOdak = odakDurumunuKaydet("urunKartGovde");
+
   tbody.innerHTML = liste.map((u) => satirHtml(u, saltOkunur)).join("");
   kartGovde.innerHTML = liste.map((u) => kartHtml(u, saltOkunur)).join("");
 
   baglaSatirOlaylari(tbody, saltOkunur);
   baglaSatirOlaylari(kartGovde, saltOkunur);
+
+  odakDurumunuGeriYukle("urunTabloGovde", tbodyOdak);
+  odakDurumunuGeriYukle("urunKartGovde", kartOdak);
 }
 
 function durumSinifi(u) {

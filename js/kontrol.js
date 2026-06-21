@@ -6,7 +6,8 @@ import { siparisleriDinle, siparisGuncelle, urunleriDinle, urunGuncelle } from "
 import {
   arayuzHazirla, toast, onayIste,
   reyonKarsilastir, excelOlarakIndir, tarihBicimle,
-  debounce, BarkodTarayici, kacisEt, kgToplami, sayiBicimle, ondalikOku
+  debounce, BarkodTarayici, kacisEt, kgToplami, sayiBicimle, ondalikOku,
+  odakDurumunuKaydet, odakDurumunuGeriYukle
 } from "./utils.js";
 
 arayuzHazirla();
@@ -198,10 +199,16 @@ function renderUrunler(saltOkunur) {
   const kartGovde = document.getElementById("urunKartGovde");
   if (liste.length === 0) { tbody.innerHTML = ""; kartGovde.innerHTML = ""; return; }
 
+  const tbodyOdak = odakDurumunuKaydet("urunTabloGovde");
+  const kartOdak = odakDurumunuKaydet("urunKartGovde");
+
   tbody.innerHTML = liste.map((u) => satirHtml(u, saltOkunur)).join("");
   kartGovde.innerHTML = liste.map((u) => kartHtml(u, saltOkunur)).join("");
   baglaSatirOlaylari(tbody, saltOkunur);
   baglaSatirOlaylari(kartGovde, saltOkunur);
+
+  odakDurumunuGeriYukle("urunTabloGovde", tbodyOdak);
+  odakDurumunuGeriYukle("urunKartGovde", kartOdak);
 }
 
 function toplamaDurumRozeti(u) {
