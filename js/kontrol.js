@@ -111,7 +111,7 @@ function siparisAc(siparis) {
   if (urunAbonelikIptal) urunAbonelikIptal();
   urunAbonelikIptal = urunleriDinle(siparis.id, (liste) => {
     urunlerCache = liste;
-    const kontrolEdilen = liste.filter((u) => u.kontrol).length;
+    const kontrolEdilen = liste.filter((u) => u.kontrol || u.eksik).length;
     if (siparis.durum !== "tamamlandi" && kontrolEdilen !== siparis.kontrolEdilenUrun) {
       siparis.kontrolEdilenUrun = kontrolEdilen;
       siparisGuncelle(siparis.id, { kontrolEdilenUrun: kontrolEdilen });
@@ -156,7 +156,7 @@ function renderUrunler(saltOkunur) {
   }
 
   const toplam = urunlerCache.length;
-  const kontrolEdilen = urunlerCache.filter((u) => u.kontrol).length;
+  const kontrolEdilen = urunlerCache.filter((u) => u.kontrol || u.eksik).length;
   const yuzde = toplam ? Math.round((kontrolEdilen / toplam) * 100) : 0;
   document.getElementById("detayIlerlemeYazi").textContent = `${kontrolEdilen}/${toplam} ürün kontrol edildi`;
   document.getElementById("detayIlerlemeBar").style.width = yuzde + "%";
@@ -181,6 +181,7 @@ function toplamaDurumRozeti(u) {
 function durumSinifi(u) {
   if (u.kontrol) return "row-checked";
   if (u.eksik) return "row-missing";
+  if (u.toplandi) return "row-done";
   return "";
 }
 
@@ -189,11 +190,12 @@ function satirHtml(u, saltOkunur) {
     <tr class="${durumSinifi(u)}" data-uid="${u.id}">
       <td class="cell-code">${kacisEt(u.kod)}</td>
       <td>${kacisEt(u.ad)}</td>
-      <td>${u.miktar || 0}</td>
+      <td><input type="number" class="cell-qty-input" data-rol="miktar" value="${u.miktar || 0}" ${saltOkunur ? "disabled" : ""} /></td>
       <td>${kacisEt(u.birim || "—")}</td>
       <td><span class="reyon-tag">${kacisEt(u.reyon || "—")}</span></td>
       <td class="cell-code">${kacisEt(u.barkod)}</td>
-      <td>${toplamaDurumRozeti(u)}</td>
+      <td><input type="checkbox" class="checkbox-lg" data-rol="toplandi" ${u.toplandi ? "checked" : ""} ${saltOkunur ? "disabled" : ""} /></td>
+      <td><input type="checkbox" class="checkbox-lg" data-rol="eksik" ${u.eksik ? "checked" : ""} ${saltOkunur ? "disabled" : ""} /></td>
       <td><input class="input" data-rol="not" value="${kacisEt(u.kontrolNotu || "")}" placeholder="—" ${saltOkunur ? "disabled" : ""} style="min-width:120px;" /></td>
       <td><input type="checkbox" class="checkbox-lg cb-blue" data-rol="kontrol" ${u.kontrol ? "checked" : ""} ${saltOkunur ? "disabled" : ""} /></td>
     </tr>`;
@@ -210,14 +212,16 @@ function kartHtml(u, saltOkunur) {
         <span class="reyon-tag">${kacisEt(u.reyon || "—")}</span>
       </div>
       <div class="row-card__grid">
-        <div><div class="row-card__label">Miktar</div>${u.miktar || 0} ${kacisEt(u.birim || "")}</div>
-        <div><div class="row-card__label">Toplama Durumu</div>${toplamaDurumRozeti(u)}</div>
+        <div><div class="row-card__label">Miktar</div><input type="number" class="cell-qty-input" data-rol="miktar" value="${u.miktar || 0}" ${saltOkunur ? "disabled" : ""} /></div>
+        <div><div class="row-card__label">Birim</div>${kacisEt(u.birim || "—")}</div>
       </div>
       <div class="field" style="margin-top:8px;">
         <label class="row-card__label">Not</label>
         <input class="input" data-rol="not" value="${kacisEt(u.kontrolNotu || "")}" placeholder="Varsa not ekleyin" ${saltOkunur ? "disabled" : ""} />
       </div>
       <div class="row-card__actions">
+        <label class="row-card__action"><input type="checkbox" class="checkbox-lg" data-rol="toplandi" ${u.toplandi ? "checked" : ""} ${saltOkunur ? "disabled" : ""} /> Toplandı</label>
+        <label class="row-card__action"><input type="checkbox" class="checkbox-lg" data-rol="eksik" ${u.eksik ? "checked" : ""} ${saltOkunur ? "disabled" : ""} /> Eksik</label>
         <label class="row-card__action"><input type="checkbox" class="checkbox-lg cb-blue" data-rol="kontrol" ${u.kontrol ? "checked" : ""} ${saltOkunur ? "disabled" : ""} /> Kontrol Edildi</label>
       </div>
     </div>`;
@@ -227,6 +231,25 @@ function baglaSatirOlaylari(kapsayici, saltOkunur) {
   if (saltOkunur) return;
   kapsayici.querySelectorAll("[data-uid]").forEach((satir) => {
     const uid = satir.dataset.uid;
+
+    const miktarInput = satir.querySelector('[data-rol="miktar"]');
+    if (miktarInput) {
+      miktarInput.addEventListener("input", debounce(() => {
+        urunGuncelle(aktifSiparis.id, uid, { miktar: parseInt(miktarInput.value, 10) || 0 });
+      }, 400));
+    }
+    const toplandiCb = satir.querySelector('[data-rol="toplandi"]');
+    if (toplandiCb) {
+      toplandiCb.addEventListener("change", () => {
+        urunGuncelle(aktifSiparis.id, uid, toplandiCb.checked ? { toplandi: true, eksik: false } : { toplandi: false });
+      });
+    }
+    const eksikCb = satir.querySelector('[data-rol="eksik"]');
+    if (eksikCb) {
+      eksikCb.addEventListener("change", () => {
+        urunGuncelle(aktifSiparis.id, uid, eksikCb.checked ? { eksik: true, toplandi: false } : { eksik: false });
+      });
+    }
     const kontrolCb = satir.querySelector('[data-rol="kontrol"]');
     if (kontrolCb) {
       kontrolCb.addEventListener("change", async () => {
@@ -334,7 +357,7 @@ document.getElementById("excelIndirBtn").addEventListener("click", () => {
 
 /* ---------------- Kontrolü tamamla ---------------- */
 document.getElementById("tamamlaBtn").addEventListener("click", async () => {
-  const kontrolEdilmemis = urunlerCache.filter((u) => !u.kontrol);
+  const kontrolEdilmemis = urunlerCache.filter((u) => !u.kontrol && !u.eksik);
   if (kontrolEdilmemis.length > 0) {
     toast(`${kontrolEdilmemis.length} ürün henüz kontrol edilmedi.`, "error");
     return;
