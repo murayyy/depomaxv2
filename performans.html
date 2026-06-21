@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Personel Performansı — Depomax</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+<div class="app-shell">
+  <header class="topbar">
+    <div class="topbar__brand"><span class="topbar__mark">D</span> Depomax</div>
+    <nav class="topbar__nav" id="topNav">
+      <a class="topbar__link" href="toplama.html">📦 Toplama</a>
+      <a class="topbar__link" href="kontrol.html">✅ Kontrol</a>
+      <a class="topbar__link" href="admin.html">👥 Yönetim</a>
+      <a class="topbar__link is-active" href="performans.html">📊 Performans</a>
+    </nav>
+    <div class="topbar__user">
+      <span class="role-chip" id="rolEtiketi">…</span>
+      <span id="kullaniciAdi">…</span>
+      <button class="btn btn-ghost btn-sm" id="cikisBtn">Çıkış</button>
+    </div>
+  </header>
+
+  <main class="page">
+    <div class="page__header">
+      <div>
+        <div class="page__title">Personel Performansı</div>
+        <div class="page__subtitle">Kim ne kadar topladı / kontrol etti — seçtiğiniz tarih aralığında.</div>
+      </div>
+    </div>
+
+    <div class="toolbar">
+      <div class="toolbar__group">
+        <input class="input" type="date" id="tarihBaslangic" style="max-width:150px;" title="Başlangıç tarihi" />
+        <input class="input" type="date" id="tarihBitis" style="max-width:150px;" title="Bitiş tarihi" />
+        <button class="btn btn-ghost btn-sm" id="butGun7">Son 7 Gün</button>
+        <button class="btn btn-ghost btn-sm" id="butGun30">Son 30 Gün</button>
+        <button class="btn btn-ghost btn-sm" id="butTumZamanlar">Tüm Zamanlar</button>
+      </div>
+      <button class="btn btn-primary" id="hesaplaBtn">Hesapla</button>
+    </div>
+
+    <div id="ozetAlani" class="page__subtitle" style="margin-bottom:14px;"></div>
+
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Personel</th>
+            <th>Topladığı Ürün</th>
+            <th>Topladığı KG</th>
+            <th>Kontrol Ettiği Ürün</th>
+            <th>Kontrol Ettiği KG</th>
+          </tr>
+        </thead>
+        <tbody id="performansTabloGovde"></tbody>
+      </table>
+    </div>
+    <div class="row-cards" id="performansKartGovde"></div>
+
+    <div class="empty-state u-hidden" id="bosDurum">
+      <div class="empty-state__icon">📊</div>
+      <div class="empty-state__title">Veri yok</div>
+      <div class="empty-text">Seçilen tarih aralığında işlem bulunamadı.</div>
+    </div>
+    <div class="empty-state u-hidden" id="baslangicDurum">
+      <div class="empty-state__icon">📊</div>
+      <div class="empty-state__title">Bir tarih aralığı seçip "Hesapla"ya basın</div>
+    </div>
+  </main>
+</div>
+
+<script type="module" src="js/performans.js"></script>
+</body>
+</html>
