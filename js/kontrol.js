@@ -28,7 +28,7 @@ sayfaKorumasi(["kontrolor"], (kullanici) => {
   document.getElementById("rolEtiketi").textContent = kullanici.rol;
   if (kullanici.rol === "admin") {
     document.getElementById("topNav").insertAdjacentHTML("beforeend",
-      `<a class="topbar__link" href="toplama.html">📦 Toplama</a><a class="topbar__link" href="admin.html">👥 Yönetim</a>`);
+      `<a class="topbar__link" href="toplama.html">📦 Toplama</a><a class="topbar__link" href="admin.html">👥 Yönetim</a><a class="topbar__link" href="performans.html">📊 Performans</a>`);
   }
   sekmeYukle("aktif");
 });

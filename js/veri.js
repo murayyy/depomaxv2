@@ -128,6 +128,11 @@ export function urunSil(siparisId, urunId) {
   return deleteDoc(doc(db, SIPARISLER, siparisId, "urunler", urunId));
 }
 
+export async function tumSiparisleriGetir() {
+  const snap = await getDocs(collection(db, SIPARISLER));
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
+
 export async function urunleriniGetir(siparisId) {
   const snap = await getDocs(collection(db, SIPARISLER, siparisId, "urunler"));
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));

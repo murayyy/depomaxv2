@@ -32,7 +32,7 @@ sayfaKorumasi(["toplayici"], (kullanici) => {
   document.getElementById("rolEtiketi").textContent = kullanici.rol;
   if (kullanici.rol === "admin") {
     document.getElementById("topNav").insertAdjacentHTML("beforeend",
-      `<a class="topbar__link" href="kontrol.html">✅ Kontrol</a><a class="topbar__link" href="admin.html">👥 Yönetim</a>`);
+      `<a class="topbar__link" href="kontrol.html">✅ Kontrol</a><a class="topbar__link" href="admin.html">👥 Yönetim</a><a class="topbar__link" href="performans.html">📊 Performans</a>`);
   }
   sekmeYukle("aktif");
 });
