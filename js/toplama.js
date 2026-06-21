@@ -9,7 +9,7 @@ import {
 import {
   arayuzHazirla, toast, onayIste, yukleniyorGoster, yukleniyorKapat,
   reyonKarsilastir, excelDosyasiniOku, excelOlarakIndir, tarihBicimle,
-  debounce, BarkodTarayici, kacisEt
+  debounce, BarkodTarayici, kacisEt, kgToplami, sayiBicimle
 } from "./utils.js";
 
 arayuzHazirla();
@@ -83,6 +83,7 @@ function renderSiparisListesi(liste) {
           <div class="order-card__meta">
             ${durumRozeti}
             <span>${toplam} ürün</span>
+            ${s.toplamKg ? `<span>${sayiBicimle(s.toplamKg)} KG</span>` : ""}
             <span>${tarihBicimle(s.olusturulmaTarihi)}</span>
           </div>
         </div>
@@ -185,12 +186,14 @@ function siparisAc(siparis) {
     // Liste sayfasındaki ilerleme göstergesi için sipariş üzerinde sayaçları güncelle.
     const toplanan = liste.filter((u) => u.toplandi).length;
     const eksik = liste.filter((u) => u.eksik).length;
+    const toplamKg = kgToplami(liste);
     if (siparis.durum === "toplaniyor" &&
-        (toplanan !== siparis.toplananUrun || eksik !== siparis.eksikUrun || liste.length !== siparis.toplamUrun)) {
+        (toplanan !== siparis.toplananUrun || eksik !== siparis.eksikUrun || liste.length !== siparis.toplamUrun || toplamKg !== siparis.toplamKg)) {
       siparis.toplananUrun = toplanan;
       siparis.eksikUrun = eksik;
       siparis.toplamUrun = liste.length;
-      siparisGuncelle(siparis.id, { toplananUrun: toplanan, eksikUrun: eksik, toplamUrun: liste.length });
+      siparis.toplamKg = toplamKg;
+      siparisGuncelle(siparis.id, { toplananUrun: toplanan, eksikUrun: eksik, toplamUrun: liste.length, toplamKg });
     }
     renderUrunler(saltOkunur);
   });
@@ -228,6 +231,8 @@ function renderUrunler(saltOkunur) {
   const yuzde = toplam ? Math.round((tamam / toplam) * 100) : 0;
   document.getElementById("detayIlerlemeYazi").textContent = `${tamam}/${toplam} ürün işaretlendi`;
   document.getElementById("detayIlerlemeBar").style.width = yuzde + "%";
+  const toplamKg = kgToplami(urunlerCache);
+  document.getElementById("detayAgirlikYazi").textContent = toplamKg ? `Toplam: ${sayiBicimle(toplamKg)} KG` : "";
 
   document.getElementById("detayBosDurum").classList.toggle("u-hidden", urunlerCache.length !== 0);
 
