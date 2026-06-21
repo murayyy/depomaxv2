@@ -58,16 +58,19 @@ export function urunleriDinle(siparisId, callback) {
 // Excel'den okunan satırları toplu olarak alt koleksiyona yazar (500'lük gruplar halinde).
 export async function urunleriTopluEkle(siparisId, satirlar) {
   const KOLON_ESLESTIRME = {
-    kod: ["Ürün Kodu", "ürün kodu", "Kod", "kod", "Sipariş Kodu", "sipariş kodu", "Stok Kodu", "stok kodu"],
-    ad: ["Ürün Adı", "ürün adı", "Ad", "ad", "İsim", "Stok Adı", "stok adı"],
-    miktar: ["Miktar", "miktar", "Sipariş Miktarı", "sipariş miktarı"],
-    birim: ["Birim", "birim"],
-    aciklama: ["Açıklama", "açıklama"],
-    reyon: ["Reyon", "reyon", "Reyon Kodu", "reyon kodu"],
-    barkod: ["Barkod", "barkod"]
+    kod: ["ürün kodu", "kod", "sipariş kodu", "stok kodu"],
+    ad: ["ürün adı", "ad", "isim", "stok adı"],
+    miktar: ["miktar", "sipariş miktarı"],
+    birim: ["birim"],
+    aciklama: ["açıklama"],
+    reyon: ["reyon", "reyon kodu"],
+    barkod: ["barkod"]
   };
   const deger = (satir, alanlar) => {
-    for (const a of alanlar) if (satir[a] !== undefined) return satir[a];
+    for (const anahtar of Object.keys(satir)) {
+      const normalAnahtar = anahtar.trim().toLowerCase();
+      if (alanlar.includes(normalAnahtar) && satir[anahtar] !== "") return satir[anahtar];
+    }
     return "";
   };
 
