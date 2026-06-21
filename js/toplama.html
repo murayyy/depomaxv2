@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Toplama — Depomax</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://unpkg.com/html5-qrcode@2.3.10/minified/html5-qrcode.min.js"></script>
+</head>
+<body>
+
+<div class="app-shell">
+  <header class="topbar">
+    <div class="topbar__brand"><span class="topbar__mark">D</span> Depomax</div>
+    <nav class="topbar__nav" id="topNav">
+      <a class="topbar__link is-active" href="toplama.html">📦 Toplama</a>
+    </nav>
+    <div class="topbar__user">
+      <span class="role-chip" id="rolEtiketi">…</span>
+      <span id="kullaniciAdi">…</span>
+      <button class="btn btn-ghost btn-sm" id="cikisBtn">Çıkış</button>
+    </div>
+  </header>
+
+  <main class="page">
+
+    <!-- ======================= SİPARİŞ LİSTESİ ======================= -->
+    <section id="listeGorunumu">
+      <div class="page__header">
+        <div>
+          <div class="page__title">Toplama Siparişleri</div>
+          <div class="page__subtitle">Excel'den yükleyin veya devam eden bir siparişi açın.</div>
+        </div>
+        <button class="btn btn-primary" id="yeniSiparisBtn">+ Yeni Sipariş</button>
+      </div>
+
+      <div class="toolbar">
+        <div class="toolbar__group">
+          <button class="btn btn-ghost btn-sm is-active" data-sekme="aktif">Devam Eden</button>
+          <button class="btn btn-ghost btn-sm" data-sekme="tamamlanan">Tamamlanan</button>
+        </div>
+      </div>
+
+      <div class="order-grid" id="siparisListesi"></div>
+      <div class="empty-state u-hidden" id="bosDurum">
+        <div class="empty-state__icon">📦</div>
+        <div class="empty-state__title">Henüz sipariş yok</div>
+        <div class="empty-state__text">Yeni bir sipariş oluşturup Excel dosyanızı yükleyerek başlayın.</div>
+      </div>
+    </section>
+
+    <!-- ======================= SİPARİŞ DETAYI ======================= -->
+    <section id="detayGorunumu" class="u-hidden">
+      <button class="btn btn-ghost btn-sm" id="geriBtn" style="margin-bottom:12px;">‹ Sipariş Listesine Dön</button>
+
+      <div class="page__header">
+        <div>
+          <div class="page__title" id="detaySiparisAdi">—</div>
+          <div class="page__subtitle" id="detayIlerlemeYazi">—</div>
+          <div class="progress-bar" style="margin-top:8px; max-width:280px;">
+            <div class="progress-bar__fill" id="detayIlerlemeBar" style="width:0%;"></div>
+          </div>
+        </div>
+        <div class="u-flex">
+          <button class="btn btn-blue" id="barkodTaraBtn">📷 Barkod Tara</button>
+          <button class="btn btn-ghost" id="excelYukleBtn">📄 Excel'den Ekle</button>
+          <input type="file" id="excelYukleInput" accept=".xlsx,.xls,.csv" class="u-hidden" />
+          <button class="btn btn-ghost" id="urunEkleBtn">+ Ürün</button>
+        </div>
+      </div>
+
+      <div class="toolbar">
+        <input class="input search-input" id="aramaKutusu" placeholder="🔍 Ürün, kod veya reyon ara…" />
+        <div class="toolbar__group">
+          <button class="btn btn-ghost btn-sm" id="excelIndirBtn">⬇ Excel'e Aktar</button>
+          <button class="btn btn-green" id="tamamlaBtn">Toplamayı Tamamla ✓</button>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Kod</th><th>Ürün Adı</th><th>Miktar</th><th>Birim</th><th>Reyon</th>
+              <th>Açıklama</th><th>Barkod</th><th>Toplandı</th><th>Eksik</th><th></th>
+            </tr>
+          </thead>
+          <tbody id="urunTabloGovde"></tbody>
+        </table>
+      </div>
+      <div class="row-cards" id="urunKartGovde"></div>
+
+      <div class="empty-state u-hidden" id="detayBosDurum">
+        <div class="empty-state__icon">📭</div>
+        <div class="empty-state__title">Bu siparişte ürün yok</div>
+        <div class="empty-state__text">Excel ile yükleyin veya manuel ekleyin.</div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- Barkod tarayıcı modalı -->
+<div class="modal-backdrop u-hidden" id="tarayiciModal">
+  <div class="modal scanner-modal">
+    <h3>📷 Barkod Tara</h3>
+    <p>Ürün barkodunu kameraya gösterin.</p>
+    <div id="scannerView"></div>
+    <div class="scanner-hint">Kameraya izin vermeniz gerekebilir.</div>
+    <div class="modal__actions">
+      <button class="btn btn-ghost" id="tarayiciKapatBtn">Kapat</button>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="js/toplama.js"></script>
+</body>
+</html>
