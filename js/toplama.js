@@ -31,7 +31,7 @@ sayfaKorumasi(["toplayici"], (kullanici) => {
   document.getElementById("rolEtiketi").textContent = kullanici.rol;
   if (kullanici.rol === "admin") {
     document.getElementById("topNav").insertAdjacentHTML("beforeend",
-      `<a class="topbar__link" href="kontrol.html">✅ Kontrol</a>`);
+      `<a class="topbar__link" href="kontrol.html">✅ Kontrol</a><a class="topbar__link" href="admin.html">👥 Yönetim</a>`);
   }
   sekmeYukle("aktif");
 });
@@ -50,12 +50,39 @@ document.querySelectorAll("[data-sekme]").forEach((btn) => {
   });
 });
 
+let sonSiparisListesi = [];
+
 function sekmeYukle(sekme) {
   aktifSekme = sekme;
   if (siparisAbonelikIptal) siparisAbonelikIptal();
   const durumlar = sekme === "aktif" ? ["toplaniyor"] : ["toplandi", "kontrol_ediliyor", "tamamlandi"];
-  siparisAbonelikIptal = siparisleriDinle(durumlar, renderSiparisListesi);
+  siparisAbonelikIptal = siparisleriDinle(durumlar, (liste) => {
+    sonSiparisListesi = liste;
+    filtreliSiparisleriGoster();
+  });
 }
+
+function filtreliSiparisleriGoster() {
+  let liste = sonSiparisListesi;
+  const aramaMetni = document.getElementById("siparisAramaKutusu").value.trim().toLowerCase();
+  if (aramaMetni) liste = liste.filter((s) => (s.ad || "").toLowerCase().includes(aramaMetni));
+
+  const baslangic = document.getElementById("tarihBaslangic").value;
+  const bitis = document.getElementById("tarihBitis").value;
+  if (baslangic) {
+    const sinir = new Date(baslangic + "T00:00:00").getTime();
+    liste = liste.filter((s) => !s.olusturulmaTarihi || s.olusturulmaTarihi.toMillis() >= sinir);
+  }
+  if (bitis) {
+    const sinir = new Date(bitis + "T23:59:59").getTime();
+    liste = liste.filter((s) => !s.olusturulmaTarihi || s.olusturulmaTarihi.toMillis() <= sinir);
+  }
+  renderSiparisListesi(liste);
+}
+
+document.getElementById("siparisAramaKutusu").addEventListener("input", debounce(filtreliSiparisleriGoster, 200));
+document.getElementById("tarihBaslangic").addEventListener("change", filtreliSiparisleriGoster);
+document.getElementById("tarihBitis").addEventListener("change", filtreliSiparisleriGoster);
 
 function renderSiparisListesi(liste) {
   const kapsayici = document.getElementById("siparisListesi");
@@ -266,6 +293,7 @@ function satirHtml(u, saltOkunur) {
       <td class="cell-code">${kacisEt(u.barkod)}</td>
       <td><input type="checkbox" class="checkbox-lg" data-rol="toplandi" ${u.toplandi ? "checked" : ""} ${saltOkunur ? "disabled" : ""} /></td>
       <td><input type="checkbox" class="checkbox-lg" data-rol="eksik" ${u.eksik ? "checked" : ""} ${saltOkunur ? "disabled" : ""} /></td>
+      <td class="u-text-soft" style="font-size:12px;">${kacisEt(u.toplayanKullanici || "—")}</td>
       <td>${saltOkunur ? "" : `<button class="btn btn-danger btn-sm" data-rol="sil">Sil</button>`}</td>
     </tr>`;
 }
@@ -290,6 +318,7 @@ function kartHtml(u, saltOkunur) {
         <label class="row-card__action"><input type="checkbox" class="checkbox-lg" data-rol="eksik" ${u.eksik ? "checked" : ""} ${saltOkunur ? "disabled" : ""} /> Eksik</label>
         ${saltOkunur ? "" : `<button class="btn btn-danger btn-sm" data-rol="sil">Sil</button>`}
       </div>
+      ${u.toplayanKullanici ? `<div class="u-text-soft" style="font-size:11.5px; margin-top:6px;">Toplayan: ${kacisEt(u.toplayanKullanici)}</div>` : ""}
     </div>`;
 }
 
@@ -306,13 +335,17 @@ function baglaSatirOlaylari(kapsayici, saltOkunur) {
     const toplandiCb = satir.querySelector('[data-rol="toplandi"]');
     if (toplandiCb) {
       toplandiCb.addEventListener("change", () => {
-        urunGuncelle(aktifSiparis.id, uid, toplandiCb.checked ? { toplandi: true, eksik: false } : { toplandi: false });
+        const patch = toplandiCb.checked ? { toplandi: true, eksik: false } : { toplandi: false };
+        if (toplandiCb.checked) patch.toplayanKullanici = mevcutKullanici.ad || mevcutKullanici.uid;
+        urunGuncelle(aktifSiparis.id, uid, patch);
       });
     }
     const eksikCb = satir.querySelector('[data-rol="eksik"]');
     if (eksikCb) {
       eksikCb.addEventListener("change", () => {
-        urunGuncelle(aktifSiparis.id, uid, eksikCb.checked ? { eksik: true, toplandi: false } : { eksik: false });
+        const patch = eksikCb.checked ? { eksik: true, toplandi: false } : { eksik: false };
+        if (eksikCb.checked) patch.toplayanKullanici = mevcutKullanici.ad || mevcutKullanici.uid;
+        urunGuncelle(aktifSiparis.id, uid, patch);
       });
     }
     const silBtn = satir.querySelector('[data-rol="sil"]');
@@ -454,13 +487,13 @@ function taramaSonucModalAc(urun) {
   root.querySelector('[data-role="backdrop"]').onclick = (e) => { if (e.target.dataset.role === "backdrop") devamEt(); };
   root.querySelector('[data-role="toplandi"]').onclick = async () => {
     const miktar = parseInt(document.getElementById("tsMiktar").value, 10) || 0;
-    await urunGuncelle(aktifSiparis.id, urun.id, { toplandi: true, eksik: false, miktar });
+    await urunGuncelle(aktifSiparis.id, urun.id, { toplandi: true, eksik: false, miktar, toplayanKullanici: mevcutKullanici.ad || mevcutKullanici.uid });
     toast(`${urun.ad} toplandı olarak işaretlendi.`, "success");
     devamEt();
   };
   root.querySelector('[data-role="eksik"]').onclick = async () => {
     const miktar = parseInt(document.getElementById("tsMiktar").value, 10) || 0;
-    await urunGuncelle(aktifSiparis.id, urun.id, { eksik: true, toplandi: false, miktar });
+    await urunGuncelle(aktifSiparis.id, urun.id, { eksik: true, toplandi: false, miktar, toplayanKullanici: mevcutKullanici.ad || mevcutKullanici.uid });
     toast(`${urun.ad} eksik olarak işaretlendi.`, "info");
     devamEt();
   };

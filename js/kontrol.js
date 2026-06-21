@@ -27,7 +27,7 @@ sayfaKorumasi(["kontrolor"], (kullanici) => {
   document.getElementById("rolEtiketi").textContent = kullanici.rol;
   if (kullanici.rol === "admin") {
     document.getElementById("topNav").insertAdjacentHTML("beforeend",
-      `<a class="topbar__link" href="toplama.html">📦 Toplama</a>`);
+      `<a class="topbar__link" href="toplama.html">📦 Toplama</a><a class="topbar__link" href="admin.html">👥 Yönetim</a>`);
   }
   sekmeYukle("aktif");
 });
@@ -46,11 +46,38 @@ document.querySelectorAll("[data-sekme]").forEach((btn) => {
   });
 });
 
+let sonSiparisListesi = [];
+
 function sekmeYukle(sekme) {
   if (siparisAbonelikIptal) siparisAbonelikIptal();
   const durumlar = sekme === "aktif" ? ["toplandi", "kontrol_ediliyor"] : ["tamamlandi"];
-  siparisAbonelikIptal = siparisleriDinle(durumlar, renderSiparisListesi);
+  siparisAbonelikIptal = siparisleriDinle(durumlar, (liste) => {
+    sonSiparisListesi = liste;
+    filtreliSiparisleriGoster();
+  });
 }
+
+function filtreliSiparisleriGoster() {
+  let liste = sonSiparisListesi;
+  const aramaMetni = document.getElementById("siparisAramaKutusu").value.trim().toLowerCase();
+  if (aramaMetni) liste = liste.filter((s) => (s.ad || "").toLowerCase().includes(aramaMetni));
+
+  const baslangic = document.getElementById("tarihBaslangic").value;
+  const bitis = document.getElementById("tarihBitis").value;
+  if (baslangic) {
+    const sinir = new Date(baslangic + "T00:00:00").getTime();
+    liste = liste.filter((s) => !s.olusturulmaTarihi || s.olusturulmaTarihi.toMillis() >= sinir);
+  }
+  if (bitis) {
+    const sinir = new Date(bitis + "T23:59:59").getTime();
+    liste = liste.filter((s) => !s.olusturulmaTarihi || s.olusturulmaTarihi.toMillis() <= sinir);
+  }
+  renderSiparisListesi(liste);
+}
+
+document.getElementById("siparisAramaKutusu").addEventListener("input", debounce(filtreliSiparisleriGoster, 200));
+document.getElementById("tarihBaslangic").addEventListener("change", filtreliSiparisleriGoster);
+document.getElementById("tarihBitis").addEventListener("change", filtreliSiparisleriGoster);
 
 function renderSiparisListesi(liste) {
   const kapsayici = document.getElementById("siparisListesi");
@@ -201,8 +228,10 @@ function satirHtml(u, saltOkunur) {
       <td class="cell-code">${kacisEt(u.barkod)}</td>
       <td><input type="checkbox" class="checkbox-lg" data-rol="toplandi" ${u.toplandi ? "checked" : ""} ${saltOkunur ? "disabled" : ""} /></td>
       <td><input type="checkbox" class="checkbox-lg" data-rol="eksik" ${u.eksik ? "checked" : ""} ${saltOkunur ? "disabled" : ""} /></td>
+      <td class="u-text-soft" style="font-size:12px;">${kacisEt(u.toplayanKullanici || "—")}</td>
       <td><input class="input" data-rol="not" value="${kacisEt(u.kontrolNotu || "")}" placeholder="—" ${saltOkunur ? "disabled" : ""} style="min-width:120px;" /></td>
       <td><input type="checkbox" class="checkbox-lg cb-blue" data-rol="kontrol" ${u.kontrol ? "checked" : ""} ${saltOkunur ? "disabled" : ""} /></td>
+      <td class="u-text-soft" style="font-size:12px;">${kacisEt(u.kontrolEdenKullanici || "—")}</td>
     </tr>`;
 }
 
@@ -229,6 +258,10 @@ function kartHtml(u, saltOkunur) {
         <label class="row-card__action"><input type="checkbox" class="checkbox-lg" data-rol="eksik" ${u.eksik ? "checked" : ""} ${saltOkunur ? "disabled" : ""} /> Eksik</label>
         <label class="row-card__action"><input type="checkbox" class="checkbox-lg cb-blue" data-rol="kontrol" ${u.kontrol ? "checked" : ""} ${saltOkunur ? "disabled" : ""} /> Kontrol Edildi</label>
       </div>
+      <div class="u-text-soft" style="font-size:11.5px; margin-top:6px; display:flex; gap:12px; flex-wrap:wrap;">
+        ${u.toplayanKullanici ? `<span>Toplayan: ${kacisEt(u.toplayanKullanici)}</span>` : ""}
+        ${u.kontrolEdenKullanici ? `<span>Kontrol: ${kacisEt(u.kontrolEdenKullanici)}</span>` : ""}
+      </div>
     </div>`;
 }
 
@@ -246,19 +279,25 @@ function baglaSatirOlaylari(kapsayici, saltOkunur) {
     const toplandiCb = satir.querySelector('[data-rol="toplandi"]');
     if (toplandiCb) {
       toplandiCb.addEventListener("change", () => {
-        urunGuncelle(aktifSiparis.id, uid, toplandiCb.checked ? { toplandi: true, eksik: false } : { toplandi: false });
+        const patch = toplandiCb.checked ? { toplandi: true, eksik: false } : { toplandi: false };
+        if (toplandiCb.checked) patch.toplayanKullanici = mevcutKullanici.ad || mevcutKullanici.uid;
+        urunGuncelle(aktifSiparis.id, uid, patch);
       });
     }
     const eksikCb = satir.querySelector('[data-rol="eksik"]');
     if (eksikCb) {
       eksikCb.addEventListener("change", () => {
-        urunGuncelle(aktifSiparis.id, uid, eksikCb.checked ? { eksik: true, toplandi: false } : { eksik: false });
+        const patch = eksikCb.checked ? { eksik: true, toplandi: false } : { eksik: false };
+        if (eksikCb.checked) patch.toplayanKullanici = mevcutKullanici.ad || mevcutKullanici.uid;
+        urunGuncelle(aktifSiparis.id, uid, patch);
       });
     }
     const kontrolCb = satir.querySelector('[data-rol="kontrol"]');
     if (kontrolCb) {
       kontrolCb.addEventListener("change", async () => {
-        await urunGuncelle(aktifSiparis.id, uid, { kontrol: kontrolCb.checked });
+        const patch = { kontrol: kontrolCb.checked };
+        if (kontrolCb.checked) patch.kontrolEdenKullanici = mevcutKullanici.ad || mevcutKullanici.uid;
+        await urunGuncelle(aktifSiparis.id, uid, patch);
         if (aktifSiparis.durum === "toplandi") {
           aktifSiparis.durum = "kontrol_ediliyor";
           siparisGuncelle(aktifSiparis.id, { durum: "kontrol_ediliyor" });
@@ -332,7 +371,7 @@ function taramaSonucModalAc(urun) {
   root.querySelector('[data-role="backdrop"]').onclick = (e) => { if (e.target.dataset.role === "backdrop") devamEt(); };
   root.querySelector('[data-role="onayla"]').onclick = async () => {
     const not = document.getElementById("tsNot").value.trim();
-    await urunGuncelle(aktifSiparis.id, urun.id, { kontrol: true, kontrolNotu: not });
+    await urunGuncelle(aktifSiparis.id, urun.id, { kontrol: true, kontrolNotu: not, kontrolEdenKullanici: mevcutKullanici.ad || mevcutKullanici.uid });
     if (aktifSiparis.durum === "toplandi") {
       aktifSiparis.durum = "kontrol_ediliyor";
       siparisGuncelle(aktifSiparis.id, { durum: "kontrol_ediliyor" });
