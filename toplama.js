@@ -170,6 +170,7 @@ function siparisAc(siparis) {
   document.getElementById("tamamlaBtn").classList.toggle("u-hidden", saltOkunur);
   document.getElementById("urunEkleBtn").classList.toggle("u-hidden", saltOkunur);
   document.getElementById("barkodTaraBtn").classList.toggle("u-hidden", saltOkunur);
+  document.getElementById("excelYukleBtn").classList.toggle("u-hidden", saltOkunur);
 
   if (urunAbonelikIptal) urunAbonelikIptal();
   urunAbonelikIptal = urunleriDinle(siparis.id, (liste) => {
@@ -311,6 +312,27 @@ function baglaSatirOlaylari(kapsayici, saltOkunur) {
     }
   });
 }
+
+/* ---------------- Mevcut siparişe Excel'den ürün ekle ---------------- */
+document.getElementById("excelYukleBtn").addEventListener("click", () => {
+  document.getElementById("excelYukleInput").click();
+});
+document.getElementById("excelYukleInput").addEventListener("change", async (e) => {
+  const dosya = e.target.files[0];
+  e.target.value = ""; // aynı dosyayı tekrar seçebilmek için sıfırla
+  if (!dosya || !aktifSiparis) return;
+  yukleniyorGoster("Excel okunuyor ve ürünler ekleniyor…");
+  try {
+    const satirlar = await excelDosyasiniOku(dosya);
+    const eklenen = await urunleriTopluEkle(aktifSiparis.id, satirlar);
+    yukleniyorKapat();
+    toast(`${eklenen} ürün siparişe eklendi.`, "success");
+  } catch (err) {
+    yukleniyorKapat();
+    console.error(err);
+    toast("Excel okunurken hata oluştu. Dosya formatını kontrol edin.", "error");
+  }
+});
 
 /* ---------------- Manuel ürün ekle ---------------- */
 document.getElementById("urunEkleBtn").addEventListener("click", () => {
