@@ -187,6 +187,14 @@ export function excelOlarakIndir(basliklar, satirlar2D, dosyaAdi) {
   window.XLSX.writeFile(wb, dosyaAdi);
 }
 
+/* ---------------- Ondalıklı sayı okuma (virgül veya nokta kabul eder) ---------------- */
+export function ondalikOku(deger) {
+  if (deger === null || deger === undefined || deger === "") return 0;
+  const metin = String(deger).trim().replace(",", ".");
+  const sayi = parseFloat(metin);
+  return isNaN(sayi) ? 0 : sayi;
+}
+
 /* ---------------- KG toplamı hesaplama ---------------- */
 // Birimi "KG" olan ürünlerin miktarlarını toplar (büyük/küçük harf, boşluk farkına bakmaz).
 export function kgToplami(urunler) {

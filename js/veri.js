@@ -9,6 +9,7 @@
 //   durum: "toplaniyor" -> "toplandi" -> "kontrol_ediliyor" -> "tamamlandi"
 // ============================================================================
 import { db } from "./firebase.js";
+import { ondalikOku } from "./utils.js";
 import {
   collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot,
   query, where, orderBy, serverTimestamp, writeBatch, getDocs
@@ -86,7 +87,7 @@ export async function urunleriTopluEkle(siparisId, satirlar) {
       batch.set(ref, {
         kod: String(kod || ""),
         ad: String(ad || ""),
-        miktar: parseInt(deger(satir, KOLON_ESLESTIRME.miktar), 10) || 0,
+        miktar: ondalikOku(deger(satir, KOLON_ESLESTIRME.miktar)),
         birim: String(deger(satir, KOLON_ESLESTIRME.birim) || ""),
         aciklama: String(deger(satir, KOLON_ESLESTIRME.aciklama) || ""),
         reyon: String(deger(satir, KOLON_ESLESTIRME.reyon) || ""),

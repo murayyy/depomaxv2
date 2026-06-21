@@ -6,7 +6,7 @@ import { siparisleriDinle, siparisGuncelle, urunleriDinle, urunGuncelle } from "
 import {
   arayuzHazirla, toast, onayIste,
   reyonKarsilastir, excelOlarakIndir, tarihBicimle,
-  debounce, BarkodTarayici, kacisEt, kgToplami, sayiBicimle
+  debounce, BarkodTarayici, kacisEt, kgToplami, sayiBicimle, ondalikOku
 } from "./utils.js";
 
 arayuzHazirla();
@@ -222,7 +222,7 @@ function satirHtml(u, saltOkunur) {
     <tr class="${durumSinifi(u)}" data-uid="${u.id}">
       <td class="cell-code">${kacisEt(u.kod)}</td>
       <td>${kacisEt(u.ad)}</td>
-      <td><input type="number" class="cell-qty-input" data-rol="miktar" value="${u.miktar || 0}" ${saltOkunur ? "disabled" : ""} /></td>
+      <td><input type="text" inputmode="decimal" class="cell-qty-input" data-rol="miktar" value="${u.miktar || 0}" ${saltOkunur ? "disabled" : ""} /></td>
       <td>${kacisEt(u.birim || "—")}</td>
       <td><span class="reyon-tag">${kacisEt(u.reyon || "—")}</span></td>
       <td class="cell-code">${kacisEt(u.barkod)}</td>
@@ -246,7 +246,7 @@ function kartHtml(u, saltOkunur) {
         <span class="reyon-tag">${kacisEt(u.reyon || "—")}</span>
       </div>
       <div class="row-card__grid">
-        <div><div class="row-card__label">Miktar</div><input type="number" class="cell-qty-input" data-rol="miktar" value="${u.miktar || 0}" ${saltOkunur ? "disabled" : ""} /></div>
+        <div><div class="row-card__label">Miktar</div><input type="text" inputmode="decimal" class="cell-qty-input" data-rol="miktar" value="${u.miktar || 0}" ${saltOkunur ? "disabled" : ""} /></div>
         <div><div class="row-card__label">Birim</div>${kacisEt(u.birim || "—")}</div>
       </div>
       <div class="field" style="margin-top:8px;">
@@ -273,7 +273,7 @@ function baglaSatirOlaylari(kapsayici, saltOkunur) {
     const miktarInput = satir.querySelector('[data-rol="miktar"]');
     if (miktarInput) {
       miktarInput.addEventListener("input", debounce(() => {
-        urunGuncelle(aktifSiparis.id, uid, { miktar: parseInt(miktarInput.value, 10) || 0 });
+        urunGuncelle(aktifSiparis.id, uid, { miktar: ondalikOku(miktarInput.value) });
       }, 400));
     }
     const toplandiCb = satir.querySelector('[data-rol="toplandi"]');

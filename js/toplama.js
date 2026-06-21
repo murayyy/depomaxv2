@@ -9,7 +9,7 @@ import {
 import {
   arayuzHazirla, toast, onayIste, yukleniyorGoster, yukleniyorKapat,
   reyonKarsilastir, excelDosyasiniOku, excelOlarakIndir, tarihBicimle,
-  debounce, BarkodTarayici, kacisEt, kgToplami, sayiBicimle
+  debounce, BarkodTarayici, kacisEt, kgToplami, sayiBicimle, ondalikOku
 } from "./utils.js";
 
 arayuzHazirla();
@@ -286,7 +286,7 @@ function satirHtml(u, saltOkunur) {
     <tr class="${durumSinifi(u)}" data-uid="${u.id}">
       <td class="cell-code">${kacisEt(u.kod)}</td>
       <td>${kacisEt(u.ad)}</td>
-      <td><input type="number" class="cell-qty-input" data-rol="miktar" value="${u.miktar || 0}" ${saltOkunur ? "disabled" : ""} /></td>
+      <td><input type="text" inputmode="decimal" class="cell-qty-input" data-rol="miktar" value="${u.miktar || 0}" ${saltOkunur ? "disabled" : ""} /></td>
       <td>${kacisEt(u.birim || "—")}</td>
       <td><span class="reyon-tag">${kacisEt(u.reyon || "—")}</span></td>
       <td>${kacisEt(u.aciklama)}</td>
@@ -309,7 +309,7 @@ function kartHtml(u, saltOkunur) {
         <span class="reyon-tag">${kacisEt(u.reyon || "—")}</span>
       </div>
       <div class="row-card__grid">
-        <div><div class="row-card__label">Miktar</div><input type="number" class="cell-qty-input" data-rol="miktar" value="${u.miktar || 0}" ${saltOkunur ? "disabled" : ""} /></div>
+        <div><div class="row-card__label">Miktar</div><input type="text" inputmode="decimal" class="cell-qty-input" data-rol="miktar" value="${u.miktar || 0}" ${saltOkunur ? "disabled" : ""} /></div>
         <div><div class="row-card__label">Birim</div>${kacisEt(u.birim || "—")}</div>
         <div><div class="row-card__label">Açıklama</div>${kacisEt(u.aciklama) || "—"}</div>
       </div>
@@ -329,7 +329,7 @@ function baglaSatirOlaylari(kapsayici, saltOkunur) {
     const miktarInput = satir.querySelector('[data-rol="miktar"]');
     if (miktarInput) {
       miktarInput.addEventListener("input", debounce(() => {
-        urunGuncelle(aktifSiparis.id, uid, { miktar: parseInt(miktarInput.value, 10) || 0 });
+        urunGuncelle(aktifSiparis.id, uid, { miktar: ondalikOku(miktarInput.value) });
       }, 400));
     }
     const toplandiCb = satir.querySelector('[data-rol="toplandi"]');
@@ -394,7 +394,7 @@ document.getElementById("urunEkleBtn").addEventListener("click", () => {
         <div class="input-row">
           <div class="field"><label>Ürün Kodu</label><input class="input" id="ueKod" /></div>
           <div class="field"><label>Ürün Adı</label><input class="input" id="ueAd" /></div>
-          <div class="field"><label>Miktar</label><input class="input" type="number" id="ueMiktar" /></div>
+          <div class="field"><label>Miktar</label><input class="input" type="text" inputmode="decimal" id="ueMiktar" /></div>
           <div class="field"><label>Birim</label><input class="input" id="ueBirim" placeholder="KG, Adet…" /></div>
           <div class="field"><label>Reyon</label><input class="input" id="ueReyon" /></div>
           <div class="field"><label>Barkod</label><input class="input" id="ueBarkod" /></div>
@@ -415,7 +415,7 @@ document.getElementById("urunEkleBtn").addEventListener("click", () => {
     if (!kod && !ad) { toast("Ürün kodu veya adı girin.", "error"); return; }
     await urunEkle(aktifSiparis.id, {
       kod, ad,
-      miktar: parseInt(document.getElementById("ueMiktar").value, 10) || 0,
+      miktar: ondalikOku(document.getElementById("ueMiktar").value),
       birim: document.getElementById("ueBirim").value.trim(),
       reyon: document.getElementById("ueReyon").value.trim(),
       barkod: document.getElementById("ueBarkod").value.trim(),
@@ -471,7 +471,7 @@ function taramaSonucModalAc(urun) {
         <p><span class="reyon-tag">${kacisEt(urun.reyon || "—")}</span> &nbsp; <span class="cell-code">${kacisEt(urun.kod)}</span></p>
         <div class="field">
           <label>Miktar</label>
-          <input class="input" type="number" id="tsMiktar" value="${urun.miktar || 0}" />
+          <input class="input" type="text" inputmode="decimal" id="tsMiktar" value="${urun.miktar || 0}" />
         </div>
         <div class="modal__actions" style="justify-content:space-between;">
           <button class="btn btn-ghost" data-role="kapat">Kapat</button>
@@ -486,13 +486,13 @@ function taramaSonucModalAc(urun) {
   root.querySelector('[data-role="kapat"]').onclick = devamEt;
   root.querySelector('[data-role="backdrop"]').onclick = (e) => { if (e.target.dataset.role === "backdrop") devamEt(); };
   root.querySelector('[data-role="toplandi"]').onclick = async () => {
-    const miktar = parseInt(document.getElementById("tsMiktar").value, 10) || 0;
+    const miktar = ondalikOku(document.getElementById("tsMiktar").value);
     await urunGuncelle(aktifSiparis.id, urun.id, { toplandi: true, eksik: false, miktar, toplayanKullanici: mevcutKullanici.ad || mevcutKullanici.uid });
     toast(`${urun.ad} toplandı olarak işaretlendi.`, "success");
     devamEt();
   };
   root.querySelector('[data-role="eksik"]').onclick = async () => {
-    const miktar = parseInt(document.getElementById("tsMiktar").value, 10) || 0;
+    const miktar = ondalikOku(document.getElementById("tsMiktar").value);
     await urunGuncelle(aktifSiparis.id, urun.id, { eksik: true, toplandi: false, miktar, toplayanKullanici: mevcutKullanici.ad || mevcutKullanici.uid });
     toast(`${urun.ad} eksik olarak işaretlendi.`, "info");
     devamEt();
