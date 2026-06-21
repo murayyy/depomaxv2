@@ -44,6 +44,14 @@
         </div>
       </div>
 
+      <div class="toolbar">
+        <input class="input search-input" id="siparisAramaKutusu" placeholder="🔍 Sipariş adı ara…" />
+        <div class="toolbar__group">
+          <input class="input" type="date" id="tarihBaslangic" style="max-width:150px;" title="Başlangıç tarihi" />
+          <input class="input" type="date" id="tarihBitis" style="max-width:150px;" title="Bitiş tarihi" />
+        </div>
+      </div>
+
       <div class="order-grid" id="siparisListesi"></div>
       <div class="empty-state u-hidden" id="bosDurum">
         <div class="empty-state__icon">📦</div>
@@ -86,7 +94,7 @@
           <thead>
             <tr>
               <th>Kod</th><th>Ürün Adı</th><th>Miktar</th><th>Birim</th><th>Reyon</th>
-              <th>Açıklama</th><th>Barkod</th><th>Toplandı</th><th>Eksik</th><th></th>
+              <th>Açıklama</th><th>Barkod</th><th>Toplandı</th><th>Eksik</th><th>Toplayan</th><th></th>
             </tr>
           </thead>
           <tbody id="urunTabloGovde"></tbody>

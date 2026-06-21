@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Kullanıcı Yönetimi — Depomax</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+<div class="app-shell">
+  <header class="topbar">
+    <div class="topbar__brand"><span class="topbar__mark">D</span> Depomax</div>
+    <nav class="topbar__nav" id="topNav">
+      <a class="topbar__link" href="toplama.html">📦 Toplama</a>
+      <a class="topbar__link" href="kontrol.html">✅ Kontrol</a>
+      <a class="topbar__link is-active" href="admin.html">👥 Yönetim</a>
+    </nav>
+    <div class="topbar__user">
+      <span class="role-chip" id="rolEtiketi">…</span>
+      <span id="kullaniciAdi">…</span>
+      <button class="btn btn-ghost btn-sm" id="cikisBtn">Çıkış</button>
+    </div>
+  </header>
+
+  <main class="page">
+    <div class="page__header">
+      <div>
+        <div class="page__title">Kullanıcı Yönetimi</div>
+        <div class="page__subtitle">Personel hesabı ekleyin, rol değiştirin veya erişimi kaldırın.</div>
+      </div>
+      <button class="btn btn-primary" id="yeniKullaniciBtn">+ Yeni Kullanıcı</button>
+    </div>
+
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr><th>Ad</th><th>E-posta</th><th>Rol</th><th>Oluşturulma</th><th></th></tr>
+        </thead>
+        <tbody id="kullaniciTabloGovde"></tbody>
+      </table>
+    </div>
+    <div class="row-cards" id="kullaniciKartGovde"></div>
+
+    <div class="empty-state u-hidden" id="bosDurum">
+      <div class="empty-state__icon">👥</div>
+      <div class="empty-state__title">Henüz kullanıcı yok</div>
+      <div class="empty-state__text">"+ Yeni Kullanıcı" ile personel ekleyin.</div>
+    </div>
+  </main>
+</div>
+
+<script type="module" src="js/admin.js"></script>
+</body>
+</html>
