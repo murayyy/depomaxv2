@@ -2,10 +2,11 @@
 // KONTROL EKRANI MANTIĞI
 // ============================================================================
 import { auth, signOut, sayfaKorumasi } from "./firebase.js";
-import { siparisleriDinle, siparisGuncelle, urunleriDinle, urunGuncelle } from "./veri.js";
+import { siparisleriDinle, siparisGuncelle, urunleriDinle, urunGuncelle, urunEkle } from "./veri.js";
 import { stoklariDinle, stokRozetiHtml } from "./stok.js";
+import { serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
-  arayuzHazirla, toast, onayIste,
+  arayuzHazirla, toast, onayIste, girdiIste,
   reyonKarsilastir, excelOlarakIndir, tarihBicimle,
   debounce, BarkodTarayici, kacisEt, kgToplami, sayiBicimle, ondalikOku,
   odakDurumunuKaydet, odakDurumunuGeriYukle, sesCal
@@ -57,7 +58,9 @@ let sonSiparisListesi = [];
 
 function sekmeYukle(sekme) {
   if (siparisAbonelikIptal) siparisAbonelikIptal();
-  const durumlar = sekme === "aktif" ? ["toplandi", "kontrol_ediliyor"] : ["tamamlandi"];
+  const durumlar = sekme === "aktif" ? ["toplandi", "kontrol_ediliyor"]
+    : sekme === "sevkbekleyen" ? ["tamamlandi"]
+    : ["sevk_edildi"];
   siparisAbonelikIptal = siparisleriDinle(durumlar, (liste) => {
     sonSiparisListesi = liste;
     filtreliSiparisleriGoster();
@@ -99,9 +102,11 @@ function renderSiparisListesi(liste) {
     const toplam = s.toplamUrun || 0;
     const kontrolEdilen = s.kontrolEdilenUrun || 0;
     const yuzde = toplam ? Math.round((kontrolEdilen / toplam) * 100) : 0;
-    const durumRozeti = s.durum === "tamamlandi"
-      ? '<span class="badge badge-green">Tamamlandı</span>'
-      : '<span class="badge badge-blue">Kontrol Bekliyor</span>';
+    const durumRozeti = {
+      tamamlandi: '<span class="badge badge-amber">Sevk Bekliyor</span>',
+      sevk_edildi: '<span class="badge badge-green">Sevk Edildi</span>'
+    }[s.durum] || '<span class="badge badge-blue">Kontrol Bekliyor</span>';
+    const butonMetni = s.durum === "sevk_edildi" ? "Görüntüle →" : s.durum === "tamamlandi" ? "Sevke Hazırla →" : "Kontrol Et →";
     return `
       <div class="card order-card" data-id="${s.id}">
         <div class="order-card__main">
@@ -111,6 +116,7 @@ function renderSiparisListesi(liste) {
             <span>${toplam} ürün</span>
             ${s.toplamKg ? `<span>${sayiBicimle(s.toplamKg)} KG</span>` : ""}
             <span>${s.eksikUrun || 0} eksik bildirildi</span>
+            ${s.paletSayisi ? `<span>${s.paletSayisi} palet</span>` : ""}
             <span>${tarihBicimle(s.olusturulmaTarihi)}</span>
           </div>
         </div>
@@ -119,7 +125,7 @@ function renderSiparisListesi(liste) {
           <div class="progress-label">${kontrolEdilen}/${toplam} kontrol edildi</div>
         </div>
         <div class="order-card__actions">
-          <button class="btn btn-primary btn-sm" data-ac="${s.id}">${s.durum === "tamamlandi" ? "Görüntüle →" : "Kontrol Et →"}</button>
+          <button class="btn btn-primary btn-sm" data-ac="${s.id}">${butonMetni}</button>
         </div>
       </div>`;
   }).join("");
@@ -139,16 +145,19 @@ function siparisAc(siparis) {
   document.getElementById("detayGorunumu").classList.remove("u-hidden");
   document.getElementById("detaySiparisAdi").textContent = siparis.ad;
 
-  const saltOkunur = siparis.durum === "tamamlandi";
-  document.getElementById("tamamlaBtn").classList.toggle("u-hidden", saltOkunur);
+  const saltOkunur = siparis.durum === "tamamlandi" || siparis.durum === "sevk_edildi";
+  document.getElementById("tamamlaBtn").classList.toggle("u-hidden", siparis.durum !== "toplandi" && siparis.durum !== "kontrol_ediliyor");
+  document.getElementById("sevkeCevirBtn").classList.toggle("u-hidden", siparis.durum !== "tamamlandi");
+  document.getElementById("sistemeAktarBtn").classList.toggle("u-hidden", siparis.durum !== "sevk_edildi");
   document.getElementById("barkodTaraBtn").classList.toggle("u-hidden", saltOkunur);
+  document.getElementById("urunEkleBtn").classList.toggle("u-hidden", saltOkunur);
 
   if (urunAbonelikIptal) urunAbonelikIptal();
   urunAbonelikIptal = urunleriDinle(siparis.id, (liste) => {
     urunlerCache = liste;
     const kontrolEdilen = liste.filter((u) => u.kontrol || u.eksik).length;
     const toplamKg = kgToplami(liste);
-    if (siparis.durum !== "tamamlandi" && (kontrolEdilen !== siparis.kontrolEdilenUrun || toplamKg !== siparis.toplamKg)) {
+    if (siparis.durum !== "tamamlandi" && siparis.durum !== "sevk_edildi" && (kontrolEdilen !== siparis.kontrolEdilenUrun || toplamKg !== siparis.toplamKg)) {
       siparis.kontrolEdilenUrun = kontrolEdilen;
       siparis.toplamKg = toplamKg;
       siparisGuncelle(siparis.id, { kontrolEdilenUrun: kontrolEdilen, toplamKg });
@@ -248,6 +257,7 @@ function satirHtml(u, saltOkunur) {
       <td>${kacisEt(u.birim || "—")}</td>
       <td>${depoStokHucresi(u.kod)}</td>
       <td><span class="reyon-tag">${kacisEt(u.reyon || "—")}</span></td>
+      <td>${kacisEt(u.aciklama || "—")}</td>
       <td class="cell-code">${kacisEt(u.barkod)}</td>
       <td><input type="checkbox" class="checkbox-lg" data-rol="toplandi" ${u.toplandi ? "checked" : ""} ${saltOkunur ? "disabled" : ""} /></td>
       <td><input type="checkbox" class="checkbox-lg" data-rol="eksik" ${u.eksik ? "checked" : ""} ${saltOkunur ? "disabled" : ""} /></td>
@@ -272,6 +282,7 @@ function kartHtml(u, saltOkunur) {
         <div><div class="row-card__label">Miktar</div><input type="text" inputmode="decimal" class="cell-qty-input" data-rol="miktar" value="${u.miktar || 0}" ${saltOkunur ? "disabled" : ""} /></div>
         <div><div class="row-card__label">Birim</div>${kacisEt(u.birim || "—")}</div>
         <div><div class="row-card__label">Depo Stok</div>${depoStokHucresi(u.kod)}</div>
+        <div><div class="row-card__label">Açıklama</div>${kacisEt(u.aciklama || "—")}</div>
       </div>
       <div class="field" style="margin-top:8px;">
         <label class="row-card__label">Not</label>
@@ -439,11 +450,92 @@ document.getElementById("tamamlaBtn").addEventListener("click", async () => {
   }
   const onay = await onayIste({
     baslik: "Kontrol Tamamlansın mı?",
-    metin: "Tamamlandıktan sonra bu sipariş arşivlenecek ve düzenlenemeyecek.",
+    metin: "Sipariş 'Sevk Bekleyen' kısmına taşınacak. Orada sevke çevirene kadar eksik ürünler için işlem yapabilirsiniz.",
     onayMetni: "Tamamla"
   });
   if (!onay) return;
   await siparisGuncelle(aktifSiparis.id, { durum: "tamamlandi" });
-  toast("Kontrol tamamlandı. Sipariş arşivlendi.", "success");
+  toast("Kontrol tamamlandı. Sipariş sevk bekleyene taşındı.", "success");
   geriDon();
+});
+
+/* ---------------- Kontrol ekranında manuel ürün ekleme ---------------- */
+document.getElementById("urunEkleBtn").addEventListener("click", () => {
+  const root = document.getElementById("modalRoot");
+  root.innerHTML = `
+    <div class="modal-backdrop" data-role="backdrop">
+      <div class="modal">
+        <h3>Ürün Ekle</h3>
+        <p>Toplama sırasında atlanmış bir ürünü buradan ekleyebilirsiniz.</p>
+        <div class="input-row">
+          <div class="field"><label>Ürün Kodu</label><input class="input" id="keKod" /></div>
+          <div class="field"><label>Ürün Adı</label><input class="input" id="keAd" /></div>
+          <div class="field"><label>Miktar</label><input class="input" type="text" inputmode="decimal" id="keMiktar" /></div>
+          <div class="field"><label>Birim</label><input class="input" id="keBirim" placeholder="KG, Adet…" /></div>
+          <div class="field"><label>Reyon</label><input class="input" id="keReyon" /></div>
+          <div class="field"><label>Barkod</label><input class="input" id="keBarkod" /></div>
+          <div class="field"><label>Açıklama</label><input class="input" id="keAciklama" /></div>
+        </div>
+        <div class="modal__actions">
+          <button class="btn btn-ghost" data-role="iptal">Vazgeç</button>
+          <button class="btn btn-primary" data-role="onay">Ekle</button>
+        </div>
+      </div>
+    </div>`;
+  const kapat = () => { root.innerHTML = ""; };
+  root.querySelector('[data-role="iptal"]').onclick = kapat;
+  root.querySelector('[data-role="backdrop"]').onclick = (e) => { if (e.target.dataset.role === "backdrop") kapat(); };
+  root.querySelector('[data-role="onay"]').onclick = async () => {
+    const kod = document.getElementById("keKod").value.trim();
+    const ad = document.getElementById("keAd").value.trim();
+    if (!kod && !ad) { toast("Ürün kodu veya adı girin.", "error"); return; }
+    await urunEkle(aktifSiparis.id, {
+      kod, ad,
+      miktar: ondalikOku(document.getElementById("keMiktar").value),
+      birim: document.getElementById("keBirim").value.trim(),
+      reyon: document.getElementById("keReyon").value.trim(),
+      barkod: document.getElementById("keBarkod").value.trim(),
+      aciklama: document.getElementById("keAciklama").value.trim()
+    });
+    kapat();
+    toast("Ürün eklendi.", "success");
+  };
+});
+
+/* ---------------- Sevke çevir (palet sayısı sorar) ---------------- */
+document.getElementById("sevkeCevirBtn").addEventListener("click", async () => {
+  const palet = await girdiIste({
+    baslik: "Sevke Çevir",
+    metin: "Bu sipariş sevk edildi olarak işaretlenecek ve artık düzenlenemeyecek.",
+    etiket: "Palet Sayısı",
+    placeholder: "Örn. 4",
+    tip: "number",
+    onayMetni: "Sevke Çevir"
+  });
+  if (palet === null) return;
+  await siparisGuncelle(aktifSiparis.id, {
+    durum: "sevk_edildi",
+    paletSayisi: ondalikOku(palet),
+    sevkTarihi: serverTimestamp(),
+    sevkEden: mevcutKullanici ? (mevcutKullanici.ad || mevcutKullanici.uid) : ""
+  });
+  toast("Sipariş sevk edildi olarak işaretlendi.", "success");
+  geriDon();
+});
+
+/* ---------------- Sisteme aktar (kod,miktar CSV) ---------------- */
+document.getElementById("sistemeAktarBtn").addEventListener("click", () => {
+  const toplananlar = urunlerCache.filter((u) => u.toplandi && u.kod);
+  if (toplananlar.length === 0) {
+    toast("Aktarılacak toplanmış ürün bulunamadı.", "error");
+    return;
+  }
+  const satirlar = toplananlar.map((u) => `${u.kod},${u.miktar || 0}`);
+  const BOM = "\uFEFF";
+  const blob = new Blob([BOM + satirlar.join("\n")], { type: "text/csv;charset=utf-8;" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `${(aktifSiparis.ad || "siparis").replace(/[^\wçğıöşüÇĞİÖŞÜ\- ]/g, "_")}_sisteme_aktar.csv`;
+  a.click();
+  toast("CSV dosyası indirildi.", "success");
 });

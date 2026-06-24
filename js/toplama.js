@@ -62,7 +62,7 @@ let sonSiparisListesi = [];
 function sekmeYukle(sekme) {
   aktifSekme = sekme;
   if (siparisAbonelikIptal) siparisAbonelikIptal();
-  const durumlar = sekme === "aktif" ? ["toplaniyor"] : ["toplandi", "kontrol_ediliyor", "tamamlandi"];
+  const durumlar = sekme === "aktif" ? ["toplaniyor"] : ["toplandi", "kontrol_ediliyor", "tamamlandi", "sevk_edildi"];
   siparisAbonelikIptal = siparisleriDinle(durumlar, (liste) => {
     sonSiparisListesi = liste;
     filtreliSiparisleriGoster();
@@ -108,7 +108,8 @@ function renderSiparisListesi(liste) {
       toplaniyor: '<span class="badge badge-amber">Toplanıyor</span>',
       toplandi: '<span class="badge badge-blue">Kontrolde</span>',
       kontrol_ediliyor: '<span class="badge badge-blue">Kontrolde</span>',
-      tamamlandi: '<span class="badge badge-green">Tamamlandı</span>'
+      tamamlandi: '<span class="badge badge-amber">Sevk Bekliyor</span>',
+      sevk_edildi: '<span class="badge badge-green">Sevk Edildi</span>'
     }[s.durum] || "";
     return `
       <div class="card order-card" data-id="${s.id}">
