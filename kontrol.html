@@ -40,7 +40,8 @@
       <div class="toolbar">
         <div class="toolbar__group">
           <button class="btn btn-ghost btn-sm is-active" data-sekme="aktif">Kontrol Bekleyen</button>
-          <button class="btn btn-ghost btn-sm" data-sekme="tamamlanan">Tamamlanan</button>
+          <button class="btn btn-ghost btn-sm" data-sekme="sevkbekleyen">Sevk Bekleyen</button>
+          <button class="btn btn-ghost btn-sm" data-sekme="sevkedildi">Sevk Edildi</button>
         </div>
       </div>
 
@@ -75,6 +76,7 @@
         </div>
         <div class="u-flex">
           <button class="btn btn-blue" id="barkodTaraBtn">📷 Barkod Tara</button>
+          <button class="btn btn-ghost" id="urunEkleBtn">+ Ürün</button>
         </div>
       </div>
 
@@ -83,6 +85,8 @@
         <div class="toolbar__group">
           <button class="btn btn-ghost btn-sm" id="excelIndirBtn">⬇ Excel'e Aktar</button>
           <button class="btn btn-green" id="tamamlaBtn">Kontrolü Tamamla ✓</button>
+          <button class="btn btn-blue" id="sevkeCevirBtn">🚚 Sevke Çevir</button>
+          <button class="btn btn-dark" id="sistemeAktarBtn">⬆ Sisteme Aktar</button>
         </div>
       </div>
 
@@ -91,7 +95,7 @@
           <thead>
             <tr>
               <th>Kod</th><th>Ürün Adı</th><th>Miktar</th><th>Birim</th><th>Depo Stok</th><th>Reyon</th>
-              <th>Barkod</th><th>Toplandı</th><th>Eksik</th><th>Toplayan</th><th>Not</th><th>Kontrol</th><th>Kontrol Eden</th>
+              <th>Açıklama</th><th>Barkod</th><th>Toplandı</th><th>Eksik</th><th>Toplayan</th><th>Not</th><th>Kontrol</th><th>Kontrol Eden</th>
             </tr>
           </thead>
           <tbody id="urunTabloGovde"></tbody>
