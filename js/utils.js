@@ -249,6 +249,44 @@ export function tarihBicimle(timestamp) {
   return d.toLocaleString("tr-TR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
+/* ---------------- Barkod tarama sesli onay (Web Audio API, dosya gerekmez) ---------------- */
+let _sesBaglami = null;
+function _sesBaglamiGetir() {
+  if (!_sesBaglami) {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    _sesBaglami = new AC();
+  }
+  return _sesBaglami;
+}
+
+function _ton(frekans, baslangic, sure, ses = 0.18) {
+  const ctx = _sesBaglamiGetir();
+  if (!ctx) return;
+  const osc = ctx.createOscillator();
+  const kazanc = ctx.createGain();
+  osc.type = "sine";
+  osc.frequency.value = frekans;
+  kazanc.gain.value = ses;
+  osc.connect(kazanc);
+  kazanc.connect(ctx.destination);
+  osc.start(ctx.currentTime + baslangic);
+  kazanc.gain.setValueAtTime(ses, ctx.currentTime + baslangic + sure - 0.03);
+  kazanc.gain.linearRampToValueAtTime(0, ctx.currentTime + baslangic + sure);
+  osc.stop(ctx.currentTime + baslangic + sure);
+}
+
+export function sesCal(tip) {
+  try {
+    if (tip === "basari") {
+      _ton(1300, 0, 0.09);
+    } else if (tip === "hata") {
+      _ton(280, 0, 0.12);
+      _ton(220, 0.13, 0.16);
+    }
+  } catch (e) { /* sesli geri bildirim olmazsa sessizce devam et */ }
+}
+
 /* ---------------- HTML kaçışı (basit XSS koruması) ---------------- */
 export function kacisEt(deger) {
   const d = document.createElement("div");
