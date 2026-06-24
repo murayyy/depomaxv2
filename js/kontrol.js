@@ -102,13 +102,15 @@ function renderSiparisListesi(liste) {
     const toplam = s.toplamUrun || 0;
     const kontrolEdilen = s.kontrolEdilenUrun || 0;
     const yuzde = toplam ? Math.round((kontrolEdilen / toplam) * 100) : 0;
-    const durumRozeti = {
-      tamamlandi: '<span class="badge badge-amber">Sevk Bekliyor</span>',
-      sevk_edildi: '<span class="badge badge-green">Sevk Edildi</span>'
-    }[s.durum] || '<span class="badge badge-blue">Kontrol Bekliyor</span>';
+    const durumRozeti = s.sistemeAktarildi
+      ? '<span class="badge badge-red">Sisteme Aktarıldı</span>'
+      : ({
+          tamamlandi: '<span class="badge badge-amber">Sevk Bekliyor</span>',
+          sevk_edildi: '<span class="badge badge-green">Sevk Edildi</span>'
+        }[s.durum] || '<span class="badge badge-blue">Kontrol Bekliyor</span>');
     const butonMetni = s.durum === "sevk_edildi" ? "Görüntüle →" : s.durum === "tamamlandi" ? "Sevke Hazırla →" : "Kontrol Et →";
     return `
-      <div class="card order-card" data-id="${s.id}">
+      <div class="card order-card${s.sistemeAktarildi ? " is-aktarildi" : ""}" data-id="${s.id}">
         <div class="order-card__main">
           <div class="order-card__name">${kacisEt(s.ad)}</div>
           <div class="order-card__meta">
@@ -144,6 +146,9 @@ function siparisAc(siparis) {
   document.getElementById("listeGorunumu").classList.add("u-hidden");
   document.getElementById("detayGorunumu").classList.remove("u-hidden");
   document.getElementById("detaySiparisAdi").textContent = siparis.ad;
+  document.getElementById("detaySiparisAdi").insertAdjacentHTML("beforeend",
+    `${siparis.paletSayisi ? ` <span class="badge badge-blue">${siparis.paletSayisi} Palet</span>` : ""}` +
+    `${siparis.sistemeAktarildi ? ` <span class="badge badge-red">Sisteme Aktarıldı</span>` : ""}`);
 
   const saltOkunur = siparis.durum === "tamamlandi" || siparis.durum === "sevk_edildi";
   document.getElementById("tamamlaBtn").classList.toggle("u-hidden", siparis.durum !== "toplandi" && siparis.durum !== "kontrol_ediliyor");
@@ -524,18 +529,27 @@ document.getElementById("sevkeCevirBtn").addEventListener("click", async () => {
 });
 
 /* ---------------- Sisteme aktar (kod,miktar CSV) ---------------- */
-document.getElementById("sistemeAktarBtn").addEventListener("click", () => {
-  const toplananlar = urunlerCache.filter((u) => u.toplandi && u.kod);
+document.getElementById("sistemeAktarBtn").addEventListener("click", async () => {
+  const toplananlar = urunlerCache
+    .filter((u) => u.toplandi && u.kod)
+    .slice()
+    .sort((a, b) => String(a.kod).localeCompare(String(b.kod)));
   if (toplananlar.length === 0) {
     toast("Aktarılacak toplanmış ürün bulunamadı.", "error");
     return;
   }
-  const satirlar = toplananlar.map((u) => `${u.kod},${u.miktar || 0}`);
+  // ="0001" hilesi: Excel'de CSV açıldığında koddaki baştaki sıfırların
+  // kaybolmasını önler (Excel düz "0001" gördüğünde bunu 1 sayısına çeviriyor).
+  const satirlar = toplananlar.map((u) => `="${u.kod}",${u.miktar || 0}`);
   const BOM = "\uFEFF";
   const blob = new Blob([BOM + satirlar.join("\n")], { type: "text/csv;charset=utf-8;" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = `${(aktifSiparis.ad || "siparis").replace(/[^\wçğıöşüÇĞİÖŞÜ\- ]/g, "_")}_sisteme_aktar.csv`;
+  const paletEki = aktifSiparis.paletSayisi ? `_${aktifSiparis.paletSayisi}Palet` : "";
+  a.download = `${(aktifSiparis.ad || "siparis").replace(/[^\wçğıöşüÇĞİÖŞÜ\- ]/g, "_")}${paletEki}_sisteme_aktar.csv`;
   a.click();
-  toast("CSV dosyası indirildi.", "success");
+
+  await siparisGuncelle(aktifSiparis.id, { sistemeAktarildi: true, sistemeAktarTarihi: serverTimestamp() });
+  toast("CSV dosyası indirildi ve sipariş 'Sisteme Aktarıldı' işaretlendi.", "success");
+  geriDon();
 });
