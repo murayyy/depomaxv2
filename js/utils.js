@@ -287,6 +287,22 @@ export function sesCal(tip) {
   } catch (e) { /* sesli geri bildirim olmazsa sessizce devam et */ }
 }
 
+/* ---------------- Sipariş durum geçişlerini tespit etme (bildirimler için) ---------------- */
+// oncekiDurumlar: id -> durum eşlemesi olan bir Map (çağıran taraf saklar, bu fonksiyon günceller).
+// İlk çağrıda (ilkYukleme=true) sadece haritayı doldurur, hiç geçiş döndürmez —
+// aksi halde sayfa her açıldığında mevcut tüm siparişler için bildirim "patlardı".
+export function siparisGecisleriniTespitEt(oncekiDurumlar, yeniListe, ilkYukleme) {
+  const gecisler = [];
+  yeniListe.forEach((s) => {
+    const eski = oncekiDurumlar.get(s.id);
+    if (!ilkYukleme && eski !== s.durum) {
+      gecisler.push({ id: s.id, ad: s.ad, eskiDurum: eski, yeniDurum: s.durum });
+    }
+    oncekiDurumlar.set(s.id, s.durum);
+  });
+  return gecisler;
+}
+
 /* ---------------- HTML kaçışı (basit XSS koruması) ---------------- */
 export function kacisEt(deger) {
   const d = document.createElement("div");

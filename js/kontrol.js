@@ -2,14 +2,14 @@
 // KONTROL EKRANI MANTIĞI
 // ============================================================================
 import { auth, signOut, sayfaKorumasi } from "./firebase.js";
-import { siparisleriDinle, siparisGuncelle, urunleriDinle, urunGuncelle, urunEkle } from "./veri.js";
+import { siparisleriDinle, siparisGuncelle, urunleriDinle, urunGuncelle, urunEkle, tumSiparisleriCanliDinle } from "./veri.js";
 import { stoklariDinle, stokRozetiHtml } from "./stok.js";
 import { serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
   arayuzHazirla, toast, onayIste, girdiIste,
   reyonKarsilastir, excelOlarakIndir, tarihBicimle,
   debounce, BarkodTarayici, kacisEt, kgToplami, sayiBicimle, ondalikOku,
-  odakDurumunuKaydet, odakDurumunuGeriYukle, sesCal
+  odakDurumunuKaydet, odakDurumunuGeriYukle, sesCal, siparisGecisleriniTespitEt
 } from "./utils.js";
 
 arayuzHazirla();
@@ -25,7 +25,24 @@ let sonBulunamadiBarkod = null;
 let stokMap = new Map();
 stoklariDinle((map) => {
   stokMap = map;
-  if (aktifSiparis) renderUrunler(aktifSiparis.durum === "tamamlandi");
+  if (aktifSiparis) renderUrunler(aktifSiparis.durum === "tamamlandi" || aktifSiparis.durum === "sevk_edildi");
+});
+
+/* ---------------- Bildirimler: sekme/durum geçişlerini canlı izle ---------------- */
+let bilinenSiparisDurumlari = new Map();
+let bildirimIlkYukleme = true;
+tumSiparisleriCanliDinle((tumListe) => {
+  const gecisler = siparisGecisleriniTespitEt(bilinenSiparisDurumlari, tumListe, bildirimIlkYukleme);
+  bildirimIlkYukleme = false;
+  gecisler.forEach((g) => {
+    if (g.yeniDurum === "toplandi" && g.eskiDurum && g.eskiDurum !== "toplandi") {
+      sesCal("basari");
+      toast(`📦 Sipariş kontrole düştü: ${g.ad}`, "info", 5000);
+    } else if (g.yeniDurum === "sevk_edildi" && g.eskiDurum && g.eskiDurum !== "sevk_edildi") {
+      sesCal("basari");
+      toast(`🚚 Sipariş sevke çevrildi: ${g.ad}`, "success", 5000);
+    }
+  });
 });
 
 /* ---------------- Başlangıç / yetki kontrolü ---------------- */

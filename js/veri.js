@@ -29,6 +29,14 @@ export function siparisleriDinle(durumFiltre, callback) {
   }, (err) => console.error("siparisleriDinle:", err));
 }
 
+// Sekme/filtre seçiminden bağımsız, sürekli açık kalan bildirim amaçlı dinleyici.
+export function tumSiparisleriCanliDinle(callback) {
+  const q = query(collection(db, SIPARISLER), orderBy("olusturulmaTarihi", "desc"));
+  return onSnapshot(q, (snap) => {
+    callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+  }, (err) => console.error("tumSiparisleriCanliDinle:", err));
+}
+
 export async function siparisOlustur({ ad, olusturan }) {
   const ref = await addDoc(collection(db, SIPARISLER), {
     ad,

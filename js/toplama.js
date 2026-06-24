@@ -3,7 +3,7 @@
 // ============================================================================
 import { auth, signOut, sayfaKorumasi } from "./firebase.js";
 import {
-  siparisleriDinle, siparisOlustur, siparisGuncelle,
+  siparisleriDinle, siparisOlustur, siparisGuncelle, tumSiparisleriCanliDinle,
   urunleriDinle, urunleriTopluEkle, urunEkle, urunGuncelle, urunSil
 } from "./veri.js";
 import { stoklariDinle, stokRozetiHtml } from "./stok.js";
@@ -11,7 +11,7 @@ import {
   arayuzHazirla, toast, onayIste, yukleniyorGoster, yukleniyorKapat,
   reyonKarsilastir, excelDosyasiniOku, excelOlarakIndir, tarihBicimle,
   debounce, BarkodTarayici, kacisEt, kgToplami, sayiBicimle, ondalikOku,
-  odakDurumunuKaydet, odakDurumunuGeriYukle, sesCal
+  odakDurumunuKaydet, odakDurumunuGeriYukle, sesCal, siparisGecisleriniTespitEt
 } from "./utils.js";
 
 arayuzHazirla();
@@ -29,6 +29,23 @@ let stokMap = new Map();
 stoklariDinle((map) => {
   stokMap = map;
   if (aktifSiparis) renderUrunler(aktifSiparis.durum !== "toplaniyor");
+});
+
+/* ---------------- Bildirimler: sekme/durum geçişlerini canlı izle ---------------- */
+let bilinenSiparisDurumlari = new Map();
+let bildirimIlkYukleme = true;
+tumSiparisleriCanliDinle((tumListe) => {
+  const gecisler = siparisGecisleriniTespitEt(bilinenSiparisDurumlari, tumListe, bildirimIlkYukleme);
+  bildirimIlkYukleme = false;
+  gecisler.forEach((g) => {
+    if (g.eskiDurum === undefined && g.yeniDurum === "toplaniyor") {
+      sesCal("basari");
+      toast(`🆕 Yeni sipariş oluşturuldu: ${g.ad}`, "info", 5000);
+    } else if (g.yeniDurum === "sevk_edildi" && g.eskiDurum && g.eskiDurum !== "sevk_edildi") {
+      sesCal("basari");
+      toast(`🚚 Sipariş sevke çevrildi: ${g.ad}`, "success", 5000);
+    }
+  });
 });
 
 /* ---------------- Başlangıç / yetki kontrolü ---------------- */
