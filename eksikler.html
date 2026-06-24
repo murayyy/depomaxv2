@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Eksik Ürünler — Depomax</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+<div class="app-shell">
+  <header class="topbar">
+    <div class="topbar__brand"><span class="topbar__mark">D</span> Depomax</div>
+    <nav class="topbar__nav" id="topNav">
+      <a class="topbar__link is-active" href="eksikler.html">📋 Eksikler</a>
+    </nav>
+    <div class="topbar__user">
+      <span class="role-chip" id="rolEtiketi">…</span>
+      <span id="kullaniciAdi">…</span>
+      <button class="btn btn-ghost btn-sm" id="cikisBtn">Çıkış</button>
+    </div>
+  </header>
+
+  <main class="page">
+    <div class="page__header">
+      <div>
+        <div class="page__title">Eksik Ürün Takibi</div>
+        <div class="page__subtitle">Kontrolden sonra eksik kalan ürünler — depoya stok geldiğinde burada görünür.</div>
+      </div>
+      <button class="btn btn-primary" id="yenileBtn">↻ Yenile</button>
+    </div>
+
+    <div id="ozetAlani" class="page__subtitle" style="margin-bottom:14px;"></div>
+
+    <div class="order-grid" id="eksikListesi"></div>
+
+    <div class="empty-state u-hidden" id="bosDurum">
+      <div class="empty-state__icon">✅</div>
+      <div class="empty-state__title">Eksik ürün yok</div>
+      <div class="empty-state__text">Kontrolden sonra eksik kalan ürün bulunamadı.</div>
+    </div>
+    <div class="empty-state u-hidden" id="yukleniyorDurum">
+      <div class="empty-state__icon">⏳</div>
+      <div class="empty-state__title">Yükleniyor…</div>
+    </div>
+  </main>
+</div>
+
+<script type="module" src="js/eksikler.js"></script>
+</body>
+</html>
