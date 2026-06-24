@@ -33,5 +33,13 @@ service cloud.firestore {
         allow update: if toplayici() || kontrolor();
       }
     }
+
+    // Depo stok seviyeleri (Mikro'dan köprü script ile senkronize ediliyor).
+    // Uygulama sadece okur; yazma işlemi güvenilir köprü scripti tarafından
+    // Firebase Admin SDK ile yapılıyor (Admin SDK bu kuralları zaten atlar).
+    match /stoklar/{urunKodu} {
+      allow read: if girisYapmis();
+      allow write: if false;
+    }
   }
 }
