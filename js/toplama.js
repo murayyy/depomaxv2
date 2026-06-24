@@ -6,11 +6,12 @@ import {
   siparisleriDinle, siparisOlustur, siparisGuncelle,
   urunleriDinle, urunleriTopluEkle, urunEkle, urunGuncelle, urunSil
 } from "./veri.js";
+import { stoklariDinle, stokRozetiHtml } from "./stok.js";
 import {
   arayuzHazirla, toast, onayIste, yukleniyorGoster, yukleniyorKapat,
   reyonKarsilastir, excelDosyasiniOku, excelOlarakIndir, tarihBicimle,
   debounce, BarkodTarayici, kacisEt, kgToplami, sayiBicimle, ondalikOku,
-  odakDurumunuKaydet, odakDurumunuGeriYukle
+  odakDurumunuKaydet, odakDurumunuGeriYukle, sesCal
 } from "./utils.js";
 
 arayuzHazirla();
@@ -24,6 +25,11 @@ let urunlerCache = [];
 let aramaMetni = "";
 let tarayici = null;
 let sonBulunamadiBarkod = null;
+let stokMap = new Map();
+stoklariDinle((map) => {
+  stokMap = map;
+  if (aktifSiparis) renderUrunler(aktifSiparis.durum !== "toplaniyor");
+});
 
 /* ---------------- Başlangıç / yetki kontrolü ---------------- */
 sayfaKorumasi(["toplayici"], (kullanici) => {
@@ -244,6 +250,8 @@ document.getElementById("aramaKutusu").addEventListener("input", debounce((e) =>
 }, 200));
 
 function renderUrunler(saltOkunur) {
+  stokRiskBanneriniGoster();
+
   let liste = [...urunlerCache].sort((a, b) => reyonKarsilastir(a.reyon, b.reyon));
   if (aramaMetni) {
     liste = liste.filter((u) =>
@@ -288,6 +296,57 @@ function durumSinifi(u) {
   return "";
 }
 
+function depoStokHucresi(kod) {
+  const kayit = stokMap.get(kod);
+  if (!kayit) return '<span class="u-text-soft" style="font-size:11.5px;">—</span>';
+  return `<div style="display:flex; flex-direction:column; gap:2px; align-items:flex-start;">
+      <span style="font-size:12.5px; font-weight:600;">${sayiBicimle(kayit.miktar)} ${kacisEt(kayit.birim || "")}</span>
+      ${stokRozetiHtml(kayit)}
+    </div>`;
+}
+
+function stokRiskBanneriniGoster() {
+  const banner = document.getElementById("stokRiskBanner");
+  if (!banner) return;
+
+  // Henüz toplanmamış/eksik işaretlenmemiş ürünler için risk kontrolü yapılır —
+  // zaten sonuçlanmış (toplandı/eksik) ürünler artık "risk" sayılmaz.
+  const riskler = urunlerCache
+    .filter((u) => !u.toplandi && !u.eksik && u.kod)
+    .map((u) => {
+      const stok = stokMap.get(u.kod);
+      if (!stok) return null;
+      const stokBirim = String(stok.birim || "").trim().toLowerCase();
+      const siparisBirim = String(u.birim || "").trim().toLowerCase();
+      if (stokBirim && siparisBirim && stokBirim !== siparisBirim) return null; // birim uyuşmuyorsa kıyaslama
+      const mevcut = Number(stok.miktar) || 0;
+      const istenen = Number(u.miktar) || 0;
+      if (mevcut < istenen) return { ...u, mevcutStok: mevcut, stokBirim: stok.birim };
+      return null;
+    })
+    .filter(Boolean);
+
+  if (riskler.length === 0) {
+    banner.classList.add("u-hidden");
+    banner.innerHTML = "";
+    return;
+  }
+
+  banner.classList.remove("u-hidden");
+  banner.innerHTML = `
+    <div class="risk-banner">
+      <div class="risk-banner__title">⚠️ Stok Riski: ${riskler.length} üründe depo stoğu siparişten az görünüyor</div>
+      <div class="risk-banner__list">
+        ${riskler.map((r) => `
+          <div class="risk-banner__item">
+            <b>${kacisEt(r.ad)}</b> (${kacisEt(r.kod)}) —
+            istenen ${sayiBicimle(r.miktar)} ${kacisEt(r.birim || "")},
+            depoda ${sayiBicimle(r.mevcutStok)} ${kacisEt(r.stokBirim || "")}
+          </div>`).join("")}
+      </div>
+    </div>`;
+}
+
 function satirHtml(u, saltOkunur) {
   return `
     <tr class="${durumSinifi(u)}" data-uid="${u.id}">
@@ -295,6 +354,7 @@ function satirHtml(u, saltOkunur) {
       <td>${kacisEt(u.ad)}</td>
       <td><input type="text" inputmode="decimal" class="cell-qty-input" data-rol="miktar" value="${u.miktar || 0}" ${saltOkunur ? "disabled" : ""} /></td>
       <td>${kacisEt(u.birim || "—")}</td>
+      <td>${depoStokHucresi(u.kod)}</td>
       <td><span class="reyon-tag">${kacisEt(u.reyon || "—")}</span></td>
       <td>${kacisEt(u.aciklama)}</td>
       <td class="cell-code">${kacisEt(u.barkod)}</td>
@@ -317,6 +377,7 @@ function kartHtml(u, saltOkunur) {
       </div>
       <div class="row-card__grid">
         <div><div class="row-card__label">Miktar</div><input type="text" inputmode="decimal" class="cell-qty-input" data-rol="miktar" value="${u.miktar || 0}" ${saltOkunur ? "disabled" : ""} /></div>
+        <div><div class="row-card__label">Depo Stok</div>${depoStokHucresi(u.kod)}</div>
         <div><div class="row-card__label">Birim</div>${kacisEt(u.birim || "—")}</div>
         <div><div class="row-card__label">Açıklama</div>${kacisEt(u.aciklama) || "—"}</div>
       </div>
@@ -458,12 +519,14 @@ function barkodOkundu(kod) {
   if (!urun) {
     if (sonBulunamadiBarkod !== kod) {
       sonBulunamadiBarkod = kod;
+      sesCal("hata");
       toast(`Barkod bulunamadı: ${kod}`, "error");
       setTimeout(() => { if (sonBulunamadiBarkod === kod) sonBulunamadiBarkod = null; }, 2500);
     }
     return;
   }
   sonBulunamadiBarkod = null;
+  sesCal("basari");
   if (tarayici) tarayici.durdur();
   document.getElementById("tarayiciModal").classList.add("u-hidden");
   taramaSonucModalAc(urun);
@@ -476,6 +539,7 @@ function taramaSonucModalAc(urun) {
       <div class="modal">
         <h3>${kacisEt(urun.ad)}</h3>
         <p><span class="reyon-tag">${kacisEt(urun.reyon || "—")}</span> &nbsp; <span class="cell-code">${kacisEt(urun.kod)}</span></p>
+        <p class="u-text-soft" style="font-size:13px;">Depo Stok: ${depoStokHucresi(urun.kod)}</p>
         <div class="field">
           <label>Miktar</label>
           <input class="input" type="text" inputmode="decimal" id="tsMiktar" value="${urun.miktar || 0}" />

@@ -3,11 +3,12 @@
 // ============================================================================
 import { auth, signOut, sayfaKorumasi } from "./firebase.js";
 import { siparisleriDinle, siparisGuncelle, urunleriDinle, urunGuncelle } from "./veri.js";
+import { stoklariDinle, stokRozetiHtml } from "./stok.js";
 import {
   arayuzHazirla, toast, onayIste,
   reyonKarsilastir, excelOlarakIndir, tarihBicimle,
   debounce, BarkodTarayici, kacisEt, kgToplami, sayiBicimle, ondalikOku,
-  odakDurumunuKaydet, odakDurumunuGeriYukle
+  odakDurumunuKaydet, odakDurumunuGeriYukle, sesCal
 } from "./utils.js";
 
 arayuzHazirla();
@@ -20,6 +21,11 @@ let urunlerCache = [];
 let aramaMetni = "";
 let tarayici = null;
 let sonBulunamadiBarkod = null;
+let stokMap = new Map();
+stoklariDinle((map) => {
+  stokMap = map;
+  if (aktifSiparis) renderUrunler(aktifSiparis.durum === "tamamlandi");
+});
 
 /* ---------------- Başlangıç / yetki kontrolü ---------------- */
 sayfaKorumasi(["kontrolor"], (kullanici) => {
@@ -224,6 +230,15 @@ function durumSinifi(u) {
   return "";
 }
 
+function depoStokHucresi(kod) {
+  const kayit = stokMap.get(kod);
+  if (!kayit) return '<span class="u-text-soft" style="font-size:11.5px;">—</span>';
+  return `<div style="display:flex; flex-direction:column; gap:2px; align-items:flex-start;">
+      <span style="font-size:12.5px; font-weight:600;">${sayiBicimle(kayit.miktar)} ${kacisEt(kayit.birim || "")}</span>
+      ${stokRozetiHtml(kayit)}
+    </div>`;
+}
+
 function satirHtml(u, saltOkunur) {
   return `
     <tr class="${durumSinifi(u)}" data-uid="${u.id}">
@@ -231,6 +246,7 @@ function satirHtml(u, saltOkunur) {
       <td>${kacisEt(u.ad)}</td>
       <td><input type="text" inputmode="decimal" class="cell-qty-input" data-rol="miktar" value="${u.miktar || 0}" ${saltOkunur ? "disabled" : ""} /></td>
       <td>${kacisEt(u.birim || "—")}</td>
+      <td>${depoStokHucresi(u.kod)}</td>
       <td><span class="reyon-tag">${kacisEt(u.reyon || "—")}</span></td>
       <td class="cell-code">${kacisEt(u.barkod)}</td>
       <td><input type="checkbox" class="checkbox-lg" data-rol="toplandi" ${u.toplandi ? "checked" : ""} ${saltOkunur ? "disabled" : ""} /></td>
@@ -255,6 +271,7 @@ function kartHtml(u, saltOkunur) {
       <div class="row-card__grid">
         <div><div class="row-card__label">Miktar</div><input type="text" inputmode="decimal" class="cell-qty-input" data-rol="miktar" value="${u.miktar || 0}" ${saltOkunur ? "disabled" : ""} /></div>
         <div><div class="row-card__label">Birim</div>${kacisEt(u.birim || "—")}</div>
+        <div><div class="row-card__label">Depo Stok</div>${depoStokHucresi(u.kod)}</div>
       </div>
       <div class="field" style="margin-top:8px;">
         <label class="row-card__label">Not</label>
@@ -345,12 +362,14 @@ function barkodOkundu(kod) {
   if (!urun) {
     if (sonBulunamadiBarkod !== kod) {
       sonBulunamadiBarkod = kod;
+      sesCal("hata");
       toast(`Barkod bulunamadı: ${kod}`, "error");
       setTimeout(() => { if (sonBulunamadiBarkod === kod) sonBulunamadiBarkod = null; }, 2500);
     }
     return;
   }
   sonBulunamadiBarkod = null;
+  sesCal("basari");
   if (tarayici) tarayici.durdur();
   document.getElementById("tarayiciModal").classList.add("u-hidden");
   taramaSonucModalAc(urun);
@@ -363,6 +382,7 @@ function taramaSonucModalAc(urun) {
       <div class="modal">
         <h3>${kacisEt(urun.ad)}</h3>
         <p><span class="reyon-tag">${kacisEt(urun.reyon || "—")}</span> &nbsp; ${toplamaDurumRozeti(urun)}</p>
+        <p class="u-text-soft" style="font-size:13px;">Depo Stok: ${depoStokHucresi(urun.kod)}</p>
         <div class="field">
           <label>Not (opsiyonel)</label>
           <input class="input" id="tsNot" value="${kacisEt(urun.kontrolNotu || "")}" placeholder="Uyuşmazlık varsa not girin" />
