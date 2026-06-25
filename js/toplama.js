@@ -20,6 +20,7 @@ let mevcutKullanici = null;
 let aktifSekme = "aktif";
 let siparisAbonelikIptal = null;
 let urunAbonelikIptal = null;
+let sayacYazimZamanlayici = null;
 let aktifSiparis = null;
 let urunlerCache = [];
 let aramaMetni = "";
@@ -245,7 +246,10 @@ function siparisAc(siparis) {
       siparis.eksikUrun = eksik;
       siparis.toplamUrun = liste.length;
       siparis.toplamKg = toplamKg;
-      siparisGuncelle(siparis.id, { toplananUrun: toplanan, eksikUrun: eksik, toplamUrun: liste.length, toplamKg });
+      clearTimeout(sayacYazimZamanlayici);
+      sayacYazimZamanlayici = setTimeout(() => {
+        siparisGuncelle(siparis.id, { toplananUrun: toplanan, eksikUrun: eksik, toplamUrun: liste.length, toplamKg });
+      }, 2500);
     }
     renderUrunler(saltOkunur);
   });
@@ -254,6 +258,7 @@ function siparisAc(siparis) {
 document.getElementById("geriBtn").addEventListener("click", geriDon);
 function geriDon() {
   if (urunAbonelikIptal) { urunAbonelikIptal(); urunAbonelikIptal = null; }
+  clearTimeout(sayacYazimZamanlayici);
   if (tarayici) tarayici.durdur();
   aktifSiparis = null;
   urunlerCache = [];
