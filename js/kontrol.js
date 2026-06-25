@@ -555,9 +555,9 @@ document.getElementById("sistemeAktarBtn").addEventListener("click", async () =>
     toast("Aktarılacak toplanmış ürün bulunamadı.", "error");
     return;
   }
-  // ="0001" hilesi: Excel'de CSV açıldığında koddaki baştaki sıfırların
-  // kaybolmasını önler (Excel düz "0001" gördüğünde bunu 1 sayısına çeviriyor).
-  const satirlar = toplananlar.map((u) => `="${u.kod}",${u.miktar || 0}`);
+  // Not: Türkçe Windows/Excel ayarlarında CSV ayracı virgül değil noktalı
+  // virgüldür ("," ondalık ayracı olarak kullanılıyor) — bu yüzden ";" kullanıyoruz.
+  const satirlar = toplananlar.map((u) => `="${u.kod}";${u.miktar || 0}`);
   const BOM = "\uFEFF";
   const blob = new Blob([BOM + satirlar.join("\n")], { type: "text/csv;charset=utf-8;" });
   const a = document.createElement("a");
