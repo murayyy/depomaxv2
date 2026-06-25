@@ -556,8 +556,11 @@ document.getElementById("sistemeAktarBtn").addEventListener("click", async () =>
     return;
   }
   // Not: Türkçe Windows/Excel ayarlarında CSV ayracı virgül değil noktalı
-  // virgüldür ("," ondalık ayracı olarak kullanılıyor) — bu yüzden ";" kullanıyoruz.
-  const satirlar = toplananlar.map((u) => `="${u.kod}";${u.miktar || 0}`);
+  // virgüldür; ondalık ayracı da nokta değil virgüldür ("12.5" değil "12,5").
+  const satirlar = toplananlar.map((u) => {
+    const miktarMetni = String(u.miktar || 0).replace(".", ",");
+    return `="${u.kod}";${miktarMetni}`;
+  });
   const BOM = "\uFEFF";
   const blob = new Blob([BOM + satirlar.join("\n")], { type: "text/csv;charset=utf-8;" });
   const a = document.createElement("a");
