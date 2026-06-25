@@ -30,8 +30,15 @@ export function siparisleriDinle(durumFiltre, callback) {
 }
 
 // Sekme/filtre seçiminden bağımsız, sürekli açık kalan bildirim amaçlı dinleyici.
-export function tumSiparisleriCanliDinle(callback) {
-  const q = query(collection(db, SIPARISLER), orderBy("olusturulmaTarihi", "desc"));
+// Bildirimler için sadece SON GÜNLERİN siparişlerini dinler — tüm geçmişi
+// her sayfa açılışında okumak (eski sürüm) gereksiz yere kota tüketiyordu.
+export function tumSiparisleriCanliDinle(callback, gunSayisi = 3) {
+  const sinirTarihi = new Date(Date.now() - gunSayisi * 24 * 60 * 60 * 1000);
+  const q = query(
+    collection(db, SIPARISLER),
+    where("olusturulmaTarihi", ">=", sinirTarihi),
+    orderBy("olusturulmaTarihi", "desc")
+  );
   return onSnapshot(q, (snap) => {
     callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
   }, (err) => console.error("tumSiparisleriCanliDinle:", err));

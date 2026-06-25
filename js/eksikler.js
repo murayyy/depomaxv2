@@ -52,7 +52,11 @@ async function yukle() {
 
   try {
     const tumSiparisler = await tumSiparisleriGetir();
-    const ilgiliSiparisler = tumSiparisler.filter((s) => s.durum === "kontrol_ediliyor" || s.durum === "tamamlandi");
+    const sinirTarihi = Date.now() - 60 * 24 * 60 * 60 * 1000; // son 60 gün (kota tasarrufu)
+    const ilgiliSiparisler = tumSiparisler.filter((s) =>
+      (s.durum === "kontrol_ediliyor" || s.durum === "tamamlandi") &&
+      (!s.olusturulmaTarihi || s.olusturulmaTarihi.toMillis() >= sinirTarihi)
+    );
 
     const eksikKayitlari = [];
     const urunListeleri = await Promise.all(ilgiliSiparisler.map((s) => urunleriniGetir(s.id)));
