@@ -516,16 +516,21 @@ document.getElementById("urunEkleBtn").addEventListener("click", () => {
     const kod = document.getElementById("keKod").value.trim();
     const ad = document.getElementById("keAd").value.trim();
     if (!kod && !ad) { toast("Ürün kodu veya adı girin.", "error"); return; }
-    await urunEkle(aktifSiparis.id, {
-      kod, ad,
-      miktar: ondalikOku(document.getElementById("keMiktar").value),
-      birim: document.getElementById("keBirim").value.trim(),
-      reyon: document.getElementById("keReyon").value.trim(),
-      barkod: document.getElementById("keBarkod").value.trim(),
-      aciklama: document.getElementById("keAciklama").value.trim()
-    });
-    kapat();
-    toast("Ürün eklendi.", "success");
+    try {
+      await urunEkle(aktifSiparis.id, {
+        kod, ad,
+        miktar: ondalikOku(document.getElementById("keMiktar").value),
+        birim: document.getElementById("keBirim").value.trim(),
+        reyon: document.getElementById("keReyon").value.trim(),
+        barkod: document.getElementById("keBarkod").value.trim(),
+        aciklama: document.getElementById("keAciklama").value.trim()
+      });
+      kapat();
+      toast("Ürün eklendi.", "success");
+    } catch (err) {
+      console.error(err);
+      toast("Ürün eklenirken hata oluştu: " + (err.message || err), "error");
+    }
   };
 });
 

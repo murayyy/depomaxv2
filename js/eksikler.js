@@ -6,15 +6,16 @@
 // verisiyle karşılaştırır. Stok gelmiş ürünler üstte ve yeşil rozetle çıkar.
 // ============================================================================
 import { auth, signOut, sayfaKorumasi } from "./firebase.js";
-import { tumSiparisleriGetir, urunleriniGetir, urunGuncelle } from "./veri.js";
+import { tumSiparisleriGetir, urunleriniGetir, urunGuncelle, urunEkle, urunSil } from "./veri.js";
 import { stoklariDinle } from "./stok.js";
-import { arayuzHazirla, toast, onayIste, kacisEt, sayiBicimle, yukleniyorGoster, yukleniyorKapat } from "./utils.js";
+import { arayuzHazirla, toast, onayIste, girdiIste, kacisEt, sayiBicimle, ondalikOku, yukleniyorGoster, yukleniyorKapat } from "./utils.js";
 
 arayuzHazirla();
 
 let mevcutKullanici = null;
 let stokMap = new Map();
 let gruplar = []; // son yüklenen eksik ürün grupları
+let mevcutSiparisler = []; // "ürün ekle" açılır listesi için
 
 sayfaKorumasi(["toplayici", "kontrolor"], (kullanici) => {
   mevcutKullanici = kullanici;
@@ -44,6 +45,66 @@ stoklariDinle((map) => {
 
 document.getElementById("yenileBtn").addEventListener("click", yukle);
 
+document.getElementById("urunEkleBtn").addEventListener("click", () => {
+  if (mevcutSiparisler.length === 0) {
+    toast("Önce listeyi yükleyin / uygun sipariş bulunamadı.", "error");
+    return;
+  }
+  const root = document.getElementById("modalRoot");
+  const siparisOptions = mevcutSiparisler.map((s) => `<option value="${s.id}">${kacisEt(s.ad)}</option>`).join("");
+  root.innerHTML = `
+    <div class="modal-backdrop" data-role="backdrop">
+      <div class="modal">
+        <h3>Eksik Ürün Ekle</h3>
+        <p>Toplama/kontrolde hiç listeye girmemiş bir ürünü, hangi siparişe ait olduğunu seçip eksik olarak ekleyin.</p>
+        <div class="field">
+          <label>Sipariş</label>
+          <select class="select" id="eeSiparis">${siparisOptions}</select>
+        </div>
+        <div class="input-row">
+          <div class="field"><label>Ürün Kodu</label><input class="input" id="eeKod" /></div>
+          <div class="field"><label>Ürün Adı</label><input class="input" id="eeAd" /></div>
+          <div class="field"><label>Miktar</label><input class="input" type="text" inputmode="decimal" id="eeMiktar" /></div>
+          <div class="field"><label>Birim</label><input class="input" id="eeBirim" placeholder="KG, Adet…" /></div>
+          <div class="field"><label>Reyon</label><input class="input" id="eeReyon" /></div>
+          <div class="field"><label>Barkod</label><input class="input" id="eeBarkod" /></div>
+          <div class="field"><label>Açıklama</label><input class="input" id="eeAciklama" /></div>
+        </div>
+        <div class="modal__actions">
+          <button class="btn btn-ghost" data-role="iptal">Vazgeç</button>
+          <button class="btn btn-primary" data-role="onay">Eksik Olarak Ekle</button>
+        </div>
+      </div>
+    </div>`;
+  const kapat = () => { root.innerHTML = ""; };
+  root.querySelector('[data-role="iptal"]').onclick = kapat;
+  root.querySelector('[data-role="backdrop"]').onclick = (e) => { if (e.target.dataset.role === "backdrop") kapat(); };
+  root.querySelector('[data-role="onay"]').onclick = async () => {
+    const siparisId = document.getElementById("eeSiparis").value;
+    const kod = document.getElementById("eeKod").value.trim();
+    const ad = document.getElementById("eeAd").value.trim();
+    if (!kod && !ad) { toast("Ürün kodu veya adı girin.", "error"); return; }
+    try {
+      await urunEkle(siparisId, {
+        kod, ad,
+        miktar: ondalikOku(document.getElementById("eeMiktar").value),
+        birim: document.getElementById("eeBirim").value.trim(),
+        reyon: document.getElementById("eeReyon").value.trim(),
+        barkod: document.getElementById("eeBarkod").value.trim(),
+        aciklama: document.getElementById("eeAciklama").value.trim(),
+        eksik: true,
+        toplayanKullanici: mevcutKullanici.ad || mevcutKullanici.uid
+      });
+      kapat();
+      toast("Ürün eksik olarak eklendi.", "success");
+      yukle();
+    } catch (err) {
+      console.error(err);
+      toast("Eklenirken hata oluştu.", "error");
+    }
+  };
+});
+
 async function yukle() {
   document.getElementById("eksikListesi").innerHTML = "";
   document.getElementById("bosDurum").classList.add("u-hidden");
@@ -57,6 +118,7 @@ async function yukle() {
       (s.durum === "kontrol_ediliyor" || s.durum === "tamamlandi") &&
       (!s.olusturulmaTarihi || s.olusturulmaTarihi.toMillis() >= sinirTarihi)
     );
+    mevcutSiparisler = ilgiliSiparisler;
 
     const eksikKayitlari = [];
     const urunListeleri = await Promise.all(ilgiliSiparisler.map((s) => urunleriniGetir(s.id)));
@@ -157,7 +219,10 @@ function detayModalAc(grup) {
           <div class="row-card__name">${kacisEt(k.siparisAdi)}</div>
           <div class="row-card__code">Eksik: ${sayiBicimle(k.miktar)} ${kacisEt(k.birim || "")}</div>
         </div>
-        <button class="btn btn-green btn-sm" data-topla="${k.siparisId}|${k.urunId}">✓ Toplandı Yap</button>
+        <div class="u-flex">
+          <button class="btn btn-green btn-sm" data-topla="${k.siparisId}|${k.urunId}">✓ Toplandı Yap</button>
+          <button class="btn btn-danger btn-sm" data-sil="${k.siparisId}|${k.urunId}">Sil</button>
+        </div>
       </div>
     </div>`;
 
@@ -200,6 +265,31 @@ function detayModalAc(grup) {
         yukleniyorKapat();
         console.error(err);
         toast("İşaretlenirken hata oluştu.", "error");
+      }
+    });
+  });
+
+  root.querySelectorAll("[data-sil]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const [siparisId, urunId] = btn.dataset.sil.split("|");
+      const onay = await onayIste({
+        baslik: "Kaydı Sil",
+        metin: "Bu ürün, bu siparişten tamamen silinecek. Bu işlem geri alınamaz.",
+        onayMetni: "Sil",
+        tehlikeli: true
+      });
+      if (!onay) return;
+      yukleniyorGoster("Siliniyor…");
+      try {
+        await urunSil(siparisId, urunId);
+        yukleniyorKapat();
+        toast("Kayıt silindi.", "success");
+        kapat();
+        yukle();
+      } catch (err) {
+        yukleniyorKapat();
+        console.error(err);
+        toast("Silinirken hata oluştu.", "error");
       }
     });
   });

@@ -123,11 +123,11 @@ export async function urunleriTopluEkle(siparisId, satirlar) {
 
 export function urunEkle(siparisId, urun) {
   return addDoc(collection(db, SIPARISLER, siparisId, "urunler"), {
-    ...urun,
     toplandi: false,
     eksik: false,
     kontrol: false,
     kontrolNotu: "",
+    ...urun,
     guncellemeTarihi: serverTimestamp()
   });
 }
