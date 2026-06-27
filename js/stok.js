@@ -6,10 +6,18 @@
 // buraya (Firestore) senkronize ediyor. Depomax sadece gösterim için okur.
 // ============================================================================
 import { db } from "./firebase.js";
-import { collection, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { collection, doc, updateDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { toast, sesCal, sayiBicimle, kacisEt } from "./utils.js";
 
 const STOKLAR = "stoklar";
+
+/**
+ * "Yeni ürün" / "stoğa geldi" bildirim bayrağını temizler — kullanıcı
+ * ürünü bir siparişe eklediğinde veya "Gördüm" dediğinde çağrılır.
+ */
+export function stokBildirimGoruldu(kod) {
+  return updateDoc(doc(db, STOKLAR, kod), { durumDegisimi: null });
+}
 
 // Bildirim takibi için modül seviyesinde tutulan durum (kod -> son bilinen miktar).
 let _oncekiStokMiktarlari = new Map();

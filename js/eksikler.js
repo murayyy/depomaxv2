@@ -7,7 +7,7 @@
 // ============================================================================
 import { auth, signOut, sayfaKorumasi } from "./firebase.js";
 import { tumSiparisleriGetir, urunleriniGetir, urunGuncelle, urunEkle, urunSil } from "./veri.js";
-import { stoklariDinle } from "./stok.js";
+import { stoklariDinle, stokBildirimGoruldu } from "./stok.js";
 import { arayuzHazirla, toast, onayIste, girdiIste, kacisEt, sayiBicimle, ondalikOku, yukleniyorGoster, yukleniyorKapat } from "./utils.js";
 
 arayuzHazirla();
@@ -41,15 +41,72 @@ document.getElementById("cikisBtn").addEventListener("click", async () => {
 stoklariDinle((map) => {
   stokMap = map;
   render(); // stok değiştiğinde aynı listeyi yeni stok bilgisiyle yeniden çiz
+  yeniStoklariGoster();
 });
 
 document.getElementById("yenileBtn").addEventListener("click", yukle);
 
-document.getElementById("urunEkleBtn").addEventListener("click", () => {
+document.getElementById("urunEkleBtn").addEventListener("click", () => eksikUrunEkleModalAc());
+
+function yeniStoklariGoster() {
+  const bolum = document.getElementById("yeniStokBolumu");
+  const liste = document.getElementById("yeniStokListesi");
+  const kayitlar = Array.from(stokMap.values()).filter((s) => s.durumDegisimi);
+
+  if (kayitlar.length === 0) {
+    bolum.classList.add("u-hidden");
+    liste.innerHTML = "";
+    return;
+  }
+  bolum.classList.remove("u-hidden");
+
+  liste.innerHTML = kayitlar.map((s) => {
+    const etiket = s.durumDegisimi === "yeni" ? '<span class="badge badge-blue">🆕 Yeni Ürün</span>' : '<span class="badge badge-green">📦 Stoğa Geldi</span>';
+    return `
+      <div class="card order-card" data-kod="${kacisEt(s.kod)}">
+        <div class="order-card__main">
+          <div class="order-card__name">${kacisEt(s.ad || s.kod)} <span class="cell-code">(${kacisEt(s.kod)})</span></div>
+          <div class="order-card__meta">
+            ${etiket}
+            <span>${sayiBicimle(s.miktar || 0)} ${kacisEt(s.birim || "")}</span>
+          </div>
+        </div>
+        <div class="order-card__actions">
+          <button class="btn btn-ghost btn-sm" data-gordum="${kacisEt(s.kod)}">Gördüm</button>
+          <button class="btn btn-primary btn-sm" data-ekle="${kacisEt(s.kod)}">+ Ekle</button>
+        </div>
+      </div>`;
+  }).join("");
+
+  liste.querySelectorAll("[data-gordum]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      try {
+        await stokBildirimGoruldu(btn.dataset.gordum);
+      } catch (err) {
+        console.error(err);
+        toast("İşaretlenirken hata oluştu.", "error");
+      }
+    });
+  });
+
+  liste.querySelectorAll("[data-ekle]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const s = stokMap.get(btn.dataset.ekle);
+      if (!s) return;
+      eksikUrunEkleModalAc(
+        { kod: s.kod, ad: s.ad, birim: s.birim, miktar: s.miktar },
+        () => stokBildirimGoruldu(s.kod)
+      );
+    });
+  });
+}
+
+function eksikUrunEkleModalAc(onDoldur, basariCallback) {
   if (mevcutSiparisler.length === 0) {
     toast("Önce listeyi yükleyin / uygun sipariş bulunamadı.", "error");
     return;
   }
+  const on = onDoldur || {};
   const root = document.getElementById("modalRoot");
   const siparisOptions = mevcutSiparisler.map((s) => `<option value="${s.id}">${kacisEt(s.ad)}</option>`).join("");
   root.innerHTML = `
@@ -62,10 +119,10 @@ document.getElementById("urunEkleBtn").addEventListener("click", () => {
           <select class="select" id="eeSiparis">${siparisOptions}</select>
         </div>
         <div class="input-row">
-          <div class="field"><label>Ürün Kodu</label><input class="input" id="eeKod" /></div>
-          <div class="field"><label>Ürün Adı</label><input class="input" id="eeAd" /></div>
-          <div class="field"><label>Miktar</label><input class="input" type="text" inputmode="decimal" id="eeMiktar" /></div>
-          <div class="field"><label>Birim</label><input class="input" id="eeBirim" placeholder="KG, Adet…" /></div>
+          <div class="field"><label>Ürün Kodu</label><input class="input" id="eeKod" value="${kacisEt(on.kod || "")}" /></div>
+          <div class="field"><label>Ürün Adı</label><input class="input" id="eeAd" value="${kacisEt(on.ad || "")}" /></div>
+          <div class="field"><label>Miktar</label><input class="input" type="text" inputmode="decimal" id="eeMiktar" value="${on.miktar || ""}" /></div>
+          <div class="field"><label>Birim</label><input class="input" id="eeBirim" placeholder="KG, Adet…" value="${kacisEt(on.birim || "")}" /></div>
           <div class="field"><label>Reyon</label><input class="input" id="eeReyon" /></div>
           <div class="field"><label>Barkod</label><input class="input" id="eeBarkod" /></div>
           <div class="field"><label>Açıklama</label><input class="input" id="eeAciklama" /></div>
@@ -97,13 +154,14 @@ document.getElementById("urunEkleBtn").addEventListener("click", () => {
       });
       kapat();
       toast("Ürün eksik olarak eklendi.", "success");
+      if (basariCallback) await basariCallback();
       yukle();
     } catch (err) {
       console.error(err);
       toast("Eklenirken hata oluştu.", "error");
     }
   };
-});
+}
 
 async function yukle() {
   document.getElementById("eksikListesi").innerHTML = "";
