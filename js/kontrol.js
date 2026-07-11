@@ -335,14 +335,32 @@ function baglaSatirOlaylari(kapsayici, saltOkunur) {
     const miktarInput = satir.querySelector('[data-rol="miktar"]');
     if (miktarInput) {
       miktarInput.addEventListener("input", debounce(() => {
-        urunGuncelle(aktifSiparis.id, uid, { miktar: ondalikOku(miktarInput.value) });
+        const urun = urunlerCache.find((u) => u.id === uid);
+        const yeniMiktar = ondalikOku(miktarInput.value);
+        const patch = { miktar: yeniMiktar };
+        if (urun && urun.miktar !== yeniMiktar && urun.toplayanKullanici) {
+          patch.orijinalMiktar = urun.orijinalMiktar ?? urun.miktar;
+          patch.miktarDuzeltildi = true;
+          patch.miktarDuzeltenKullanici = mevcutKullanici.ad || mevcutKullanici.uid;
+        }
+        urunGuncelle(aktifSiparis.id, uid, patch);
       }, 400));
     }
     const toplandiCb = satir.querySelector('[data-rol="toplandi"]');
     if (toplandiCb) {
       toplandiCb.addEventListener("change", () => {
+        const urun = urunlerCache.find((u) => u.id === uid);
+        const eskiEksikti = urun && urun.eksik;
         const patch = toplandiCb.checked ? { toplandi: true, eksik: false } : { toplandi: false };
-        if (toplandiCb.checked) patch.toplayanKullanici = mevcutKullanici.ad || mevcutKullanici.uid;
+        if (toplandiCb.checked) {
+          patch.toplayanKullanici = mevcutKullanici.ad || mevcutKullanici.uid;
+          if (eskiEksikti) {
+            patch.duzeltildi = true;
+            patch.duzeltenkKullanici = mevcutKullanici.ad || mevcutKullanici.uid;
+          }
+        } else {
+          patch.duzeltildi = false;
+        }
         urunGuncelle(aktifSiparis.id, uid, patch);
       });
     }

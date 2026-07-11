@@ -1,10 +1,5 @@
 // ============================================================================
 // PERSONEL PERFORMANSI RAPORU MANTIĞI
-// ----------------------------------------------------------------------------
-// Bu sayfa gerçek zamanlı değil — "Hesapla" butonuna basıldığında seçilen
-// tarih aralığındaki siparişleri ve ürünlerini bir kerelik okuyup,
-// toplayanKullanici / kontrolEdenKullanici alanlarına göre kişi başına
-// toplam ürün sayısı ve KG'yi hesaplar.
 // ============================================================================
 import { auth, signOut, sayfaKorumasi } from "./firebase.js";
 import { tumSiparisleriGetir, urunleriniGetir } from "./veri.js";
@@ -23,51 +18,42 @@ document.getElementById("cikisBtn").addEventListener("click", async () => {
   window.location.href = "index.html";
 });
 
-/* ---------------- Hızlı tarih aralığı butonları ---------------- */
 function tarihGiris(d) { return d.toISOString().slice(0, 10); }
-
 document.getElementById("butGun7").addEventListener("click", () => {
-  const bugun = new Date();
-  const yediGunOnce = new Date(bugun.getTime() - 6 * 24 * 60 * 60 * 1000);
-  document.getElementById("tarihBaslangic").value = tarihGiris(yediGunOnce);
-  document.getElementById("tarihBitis").value = tarihGiris(bugun);
+  const b = new Date();
+  document.getElementById("tarihBaslangic").value = tarihGiris(new Date(b - 6*864e5));
+  document.getElementById("tarihBitis").value = tarihGiris(b);
 });
 document.getElementById("butGun30").addEventListener("click", () => {
-  const bugun = new Date();
-  const otuzGunOnce = new Date(bugun.getTime() - 29 * 24 * 60 * 60 * 1000);
-  document.getElementById("tarihBaslangic").value = tarihGiris(otuzGunOnce);
-  document.getElementById("tarihBitis").value = tarihGiris(bugun);
+  const b = new Date();
+  document.getElementById("tarihBaslangic").value = tarihGiris(new Date(b - 29*864e5));
+  document.getElementById("tarihBitis").value = tarihGiris(b);
 });
 document.getElementById("butTumZamanlar").addEventListener("click", () => {
   document.getElementById("tarihBaslangic").value = "";
   document.getElementById("tarihBitis").value = "";
 });
 
-/* ---------------- Hesaplama ---------------- */
 document.getElementById("hesaplaBtn").addEventListener("click", hesapla);
 
 async function hesapla() {
   document.getElementById("baslangicDurum").classList.add("u-hidden");
   yukleniyorGoster("Siparişler okunuyor…");
   try {
-    const tumSiparisler = await tumSiparisleriGetir();
-
+    let siparisler = await tumSiparisleriGetir();
     const baslangic = document.getElementById("tarihBaslangic").value;
     const bitis = document.getElementById("tarihBitis").value;
-    let siparisler = tumSiparisler;
     if (baslangic) {
-      const sinir = new Date(baslangic + "T00:00:00").getTime();
-      siparisler = siparisler.filter((s) => !s.olusturulmaTarihi || s.olusturulmaTarihi.toMillis() >= sinir);
+      const s = new Date(baslangic + "T00:00:00").getTime();
+      siparisler = siparisler.filter((x) => !x.olusturulmaTarihi || x.olusturulmaTarihi.toMillis() >= s);
     }
     if (bitis) {
-      const sinir = new Date(bitis + "T23:59:59").getTime();
-      siparisler = siparisler.filter((s) => !s.olusturulmaTarihi || s.olusturulmaTarihi.toMillis() <= sinir);
+      const s = new Date(bitis + "T23:59:59").getTime();
+      siparisler = siparisler.filter((x) => !x.olusturulmaTarihi || x.olusturulmaTarihi.toMillis() <= s);
     }
-
     yukleniyorGoster(`${siparisler.length} siparişin ürünleri okunuyor…`);
-    const urunListeleri = await Promise.all(siparisler.map((s) => urunleriniGetir(s.id)));
-    const tumUrunler = urunListeleri.flat();
-
+    const listeleri = await Promise.all(siparisler.map((s) => urunleriniGetir(s.id)));
+    const tumUrunler = listeleri.flat();
     const sonuc = hesaplaPersonelOzeti(tumUrunler);
     render(sonuc, siparisler.length, tumUrunler.length);
     yukleniyorKapat();
@@ -81,25 +67,42 @@ async function hesapla() {
 function hesaplaPersonelOzeti(urunler) {
   const map = new Map();
   const kayitGetir = (ad) => {
-    if (!map.has(ad)) map.set(ad, { ad, toplananUrun: 0, toplananKg: 0, kontrolEdilenUrun: 0, kontrolEdilenKg: 0 });
+    if (!map.has(ad)) map.set(ad, {
+      ad,
+      toplananUrun: 0, toplananKg: 0,
+      kontrolEdilenUrun: 0, kontrolEdilenKg: 0,
+      eksikHata: 0,     // toplayıcı eksik dedi ama kontrolör toplandı yaptı
+      miktarHata: 0     // toplayıcı yanlış miktar girdi, kontrolör düzeltti
+    });
     return map.get(ad);
   };
   const kgMi = (u) => String(u.birim || "").trim().toLowerCase() === "kg";
 
   urunler.forEach((u) => {
     if (u.toplayanKullanici) {
-      const kayit = kayitGetir(u.toplayanKullanici);
-      kayit.toplananUrun++;
-      if (kgMi(u)) kayit.toplananKg += Number(u.miktar) || 0;
+      const k = kayitGetir(u.toplayanKullanici);
+      k.toplananUrun++;
+      if (kgMi(u)) k.toplananKg += Number(u.miktar) || 0;
+      // Eksik işaretleme hatası: kontrolör duzeltildi=true işaretledi
+      if (u.duzeltildi) k.eksikHata++;
+      // Miktar hatası: kontrolör miktarı değiştirdi
+      if (u.miktarDuzeltildi && u.orijinalMiktar !== undefined && u.orijinalMiktar !== u.miktar) k.miktarHata++;
     }
     if (u.kontrolEdenKullanici) {
-      const kayit = kayitGetir(u.kontrolEdenKullanici);
-      kayit.kontrolEdilenUrun++;
-      if (kgMi(u)) kayit.kontrolEdilenKg += Number(u.miktar) || 0;
+      const k = kayitGetir(u.kontrolEdenKullanici);
+      k.kontrolEdilenUrun++;
+      if (kgMi(u)) k.kontrolEdilenKg += Number(u.miktar) || 0;
     }
   });
 
-  return Array.from(map.values()).sort((a, b) => (b.toplananUrun + b.kontrolEdilenUrun) - (a.toplananUrun + a.kontrolEdilenUrun));
+  return Array.from(map.values())
+    .sort((a, b) => (b.toplananUrun + b.kontrolEdilenUrun) - (a.toplananUrun + a.kontrolEdilenUrun));
+}
+
+function hataRozetiHtml(sayi, tip) {
+  if (!sayi) return '<span class="u-text-soft">—</span>';
+  const sinif = sayi > 5 ? "badge-red" : sayi > 2 ? "badge-amber" : "badge-gray";
+  return `<span class="badge ${sinif}" title="${tip}">${sayi}</span>`;
 }
 
 function render(sonuc, siparisSayisi, urunSayisi) {
@@ -125,6 +128,8 @@ function render(sonuc, siparisSayisi, urunSayisi) {
       <td>${k.toplananKg ? sayiBicimle(k.toplananKg) + " KG" : "—"}</td>
       <td>${k.kontrolEdilenUrun}</td>
       <td>${k.kontrolEdilenKg ? sayiBicimle(k.kontrolEdilenKg) + " KG" : "—"}</td>
+      <td>${hataRozetiHtml(k.eksikHata, "Eksik işaretleyip kontrolde düzeltilen ürün")}</td>
+      <td>${hataRozetiHtml(k.miktarHata, "Yanlış miktar girip kontrolde düzeltilen ürün")}</td>
     </tr>`).join("");
 
   kartGovde.innerHTML = sonuc.map((k) => `
@@ -135,6 +140,8 @@ function render(sonuc, siparisSayisi, urunSayisi) {
         <div><div class="row-card__label">Topladığı KG</div>${k.toplananKg ? sayiBicimle(k.toplananKg) + " KG" : "—"}</div>
         <div><div class="row-card__label">Kontrol Ettiği Ürün</div>${k.kontrolEdilenUrun}</div>
         <div><div class="row-card__label">Kontrol Ettiği KG</div>${k.kontrolEdilenKg ? sayiBicimle(k.kontrolEdilenKg) + " KG" : "—"}</div>
+        <div><div class="row-card__label">Eksik Hata</div>${hataRozetiHtml(k.eksikHata, "")}</div>
+        <div><div class="row-card__label">Miktar Hatası</div>${hataRozetiHtml(k.miktarHata, "")}</div>
       </div>
     </div>`).join("");
 }
