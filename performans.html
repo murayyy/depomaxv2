@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
 
@@ -43,7 +44,10 @@
         <button class="btn btn-ghost btn-sm" id="butGun30">Son 30 Gün</button>
         <button class="btn btn-ghost btn-sm" id="butTumZamanlar">Tüm Zamanlar</button>
       </div>
-      <button class="btn btn-primary" id="hesaplaBtn">Hesapla</button>
+      <div class="toolbar__group">
+        <button class="btn btn-primary" id="hesaplaBtn">Hesapla</button>
+        <button class="btn btn-ghost" id="excelExportBtn" style="display:none;">⬇ Excel'e Aktar</button>
+      </div>
     </div>
 
     <div id="ozetAlani" class="page__subtitle" style="margin-bottom:14px;"></div>
@@ -80,6 +84,26 @@
   </main>
 </div>
 
+    <!-- Eksik ürün analizi -->
+    <div id="eksikAnalizBolumu" class="u-hidden" style="margin-top:32px;">
+      <h3 style="font-size:15px;margin-bottom:10px;">📉 En Çok Eksik Çıkan Ürünler</h3>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>Ürün Adı</th><th>Kod</th><th>Eksik Sayısı</th><th>Toplam İstek</th><th>Eksik Oranı</th></tr></thead>
+          <tbody id="eksikAnalizTablosu"></tbody>
+        </table>
+      </div>
+    </div>
+    <!-- Şube analizi -->
+    <div id="subeAnalizBolumu" class="u-hidden" style="margin-top:32px;">
+      <h3 style="font-size:15px;margin-bottom:10px;">🏪 Şube Sipariş Analizi</h3>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>Şube</th><th>Sipariş Sayısı</th><th>Toplam Ürün</th><th>Toplam KG</th><th>Teslim Onayı</th></tr></thead>
+          <tbody id="subeAnalizTablosu"></tbody>
+        </table>
+      </div>
+    </div>
 <script type="module" src="js/performans.js"></script>
 </body>
 </html>
