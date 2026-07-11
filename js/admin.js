@@ -330,3 +330,106 @@ function katalogModalAc(mevcut) {
 }
 
 document.getElementById("yeniKatalogBtn2").addEventListener("click", () => katalogModalAc(null));
+
+/* ============================================================================
+   EXCEL'DEN TOPLU KATALOG EKLEMESİ
+   Beklenen sütunlar (büyük/küçük harf fark etmez):
+     Stok Kodu | Ürün Adı | Birim | Min. Miktar | Kategori | Reyon | Açıklama | Sıra
+   Sadece "Ürün Adı" zorunlu, geri kalanlar isteğe bağlı.
+   ============================================================================ */
+document.getElementById("katalogExcelInput").addEventListener("change", async (e) => {
+  const dosya = e.target.files[0];
+  e.target.value = "";
+  if (!dosya) return;
+
+  const root = document.getElementById("modalRoot");
+  root.innerHTML = `<div class="modal-backdrop"><div class="modal u-flex" style="justify-content:center;"><span class="spinner spinner-dark"></span><span>&nbsp;Excel okunuyor…</span></div></div>`;
+
+  try {
+    const { excelDosyasiniOku } = await import("./utils.js");
+    const satirlar = await excelDosyasiniOku(dosya);
+    root.innerHTML = "";
+
+    if (satirlar.length === 0) { toast("Excel'de ürün bulunamadı.", "error"); return; }
+
+    const norm = (s) => String(s || "").trim().toLowerCase();
+    const bul = (satir, adaylar) => {
+      for (const anahtar of Object.keys(satir)) {
+        if (adaylar.includes(norm(anahtar))) return satir[anahtar];
+      }
+      return "";
+    };
+
+    const urunler = satirlar.map((satir, i) => ({
+      stokKodu: String(bul(satir, ["stok kodu", "kod"]) || "").trim(),
+      ad: String(bul(satir, ["ürün adı", "urun adi", "ad", "isim", "stok adı"]) || "").trim(),
+      birim: String(bul(satir, ["birim"]) || "").trim(),
+      minMiktar: parseFloat(String(bul(satir, ["min. miktar", "min miktar", "minimum miktar", "minimum"]) || "0").replace(",", ".")) || 0,
+      kategori: String(bul(satir, ["kategori"]) || "").trim(),
+      reyon: String(bul(satir, ["reyon"]) || "").trim(),
+      aciklama: String(bul(satir, ["açıklama", "aciklama"]) || "").trim(),
+      sira: parseInt(bul(satir, ["sıra", "sira", "sıra no", "sira no"]) || String(i + 1), 10) || (i + 1),
+      aktif: true
+    })).filter((u) => u.ad);
+
+    if (urunler.length === 0) { toast("Ürün Adı sütunu bulunamadı veya tüm satırlar boş.", "error"); return; }
+
+    // Önizleme modalı
+    root.innerHTML = `
+      <div class="modal-backdrop" data-role="backdrop">
+        <div class="modal" style="max-width:560px;">
+          <h3>Toplu Katalog Ekleme Önizlemesi</h3>
+          <p>${urunler.length} ürün eklenecek. Mevcut katalog ürünleri <strong>silinmez</strong>, bunlar eklenir.</p>
+          <div style="max-height:260px;overflow-y:auto;border:1px solid var(--color-border);border-radius:var(--radius-sm);margin-bottom:12px;">
+            <table class="data-table">
+              <thead><tr><th>Stok Kodu</th><th>Ürün Adı</th><th>Birim</th><th>Min.</th><th>Kategori</th></tr></thead>
+              <tbody>
+                ${urunler.map((u) => `<tr>
+                  <td class="cell-code">${kacisEt(u.stokKodu || "—")}</td>
+                  <td>${kacisEt(u.ad)}</td>
+                  <td>${kacisEt(u.birim || "—")}</td>
+                  <td>${u.minMiktar || "—"}</td>
+                  <td>${kacisEt(u.kategori || "—")}</td>
+                </tr>`).join("")}
+              </tbody>
+            </table>
+          </div>
+          <div class="modal__actions">
+            <button class="btn btn-ghost" data-role="iptal">Vazgeç</button>
+            <button class="btn btn-primary" data-role="onay">✅ ${urunler.length} Ürünü Ekle</button>
+          </div>
+        </div>
+      </div>`;
+
+    const kapat = () => { root.innerHTML = ""; };
+    root.querySelector('[data-role="iptal"]').onclick = kapat;
+    root.querySelector('[data-role="backdrop"]').onclick = (ev) => { if (ev.target.dataset.role === "backdrop") kapat(); };
+    root.querySelector('[data-role="onay"]').onclick = async () => {
+      root.innerHTML = `<div class="modal-backdrop"><div class="modal u-flex" style="justify-content:center;"><span class="spinner spinner-dark"></span><span>&nbsp;Ekleniyor…</span></div></div>`;
+      try {
+        // 450'lik batch'ler halinde ekle
+        const { db } = await import("./firebase.js");
+        const { writeBatch, collection, doc, serverTimestamp } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+        for (let i = 0; i < urunler.length; i += 450) {
+          const grup = urunler.slice(i, i + 450);
+          const batch = writeBatch(db);
+          grup.forEach((u) => {
+            const ref = doc(collection(db, "katalog"));
+            batch.set(ref, { ...u, guncellemeTarihi: serverTimestamp() });
+          });
+          await batch.commit();
+        }
+        root.innerHTML = "";
+        toast(`✅ ${urunler.length} ürün kataloğa eklendi.`, "success");
+      } catch (err) {
+        root.innerHTML = "";
+        console.error(err);
+        toast("Eklenirken hata: " + (err.message || err), "error");
+      }
+    };
+  } catch (err) {
+    root.innerHTML = "";
+    console.error(err);
+    toast("Excel okunurken hata oluştu.", "error");
+  }
+});
