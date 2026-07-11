@@ -41,6 +41,7 @@ document.querySelectorAll("[data-sekme]").forEach((btn) => {
     const aktif = btn.dataset.sekme;
     document.getElementById("kullaniciBloku").classList.toggle("u-hidden", aktif !== "kullanici");
     document.getElementById("katalogBloku").classList.toggle("u-hidden", aktif !== "katalog");
+    document.getElementById("teslimatBloku").classList.toggle("u-hidden", aktif !== "teslimat");
   });
 });
 
@@ -448,5 +449,117 @@ document.getElementById("katalogExcelInput").addEventListener("change", async (e
     root.innerHTML = "";
     console.error(err);
     toast("Excel okunurken hata oluştu.", "error");
+  }
+});
+
+/* ============================================================================
+   TESLİMAT UYUŞMAZLIK RAPORU
+   ============================================================================ */
+import { tumSiparisleriGetir } from "./veri.js";
+
+document.getElementById("teslimatHesaplaBtn").addEventListener("click", async () => {
+  const liste = document.getElementById("teslimatRaporListesi");
+  const bos = document.getElementById("teslimatBosDurum");
+  liste.innerHTML = '<div class="empty-state"><div class="empty-state__icon">⏳</div></div>';
+  bos.classList.add("u-hidden");
+
+  try {
+    let siparisler = await tumSiparisleriGetir();
+    siparisler = siparisler.filter((s) => s.durum === "teslim_edildi" && s.teslimatKalemleri);
+
+    const baslangic = document.getElementById("teslimatBaslangic").value;
+    const bitis = document.getElementById("teslimatBitis").value;
+    if (baslangic) {
+      const s = new Date(baslangic + "T00:00:00").getTime();
+      siparisler = siparisler.filter((x) => !x.teslimatTarihi || x.teslimatTarihi.toMillis() >= s);
+    }
+    if (bitis) {
+      const s = new Date(bitis + "T23:59:59").getTime();
+      siparisler = siparisler.filter((x) => !x.teslimatTarihi || x.teslimatTarihi.toMillis() <= s);
+    }
+
+    if (siparisler.length === 0) {
+      liste.innerHTML = "";
+      bos.classList.remove("u-hidden");
+      return;
+    }
+
+    liste.innerHTML = siparisler.map((s) => {
+      const oz = s.teslimatOzeti || {};
+      const uyusmazlik = (oz.eksik || 0) + (oz.fazla || 0);
+      const rozet = uyusmazlik > 0
+        ? `<span class="badge badge-red">⚠ ${uyusmazlik} uyuşmazlık</span>`
+        : `<span class="badge badge-green">✅ Sorunsuz</span>`;
+      const tarih = s.teslimatTarihi?.toDate ? s.teslimatTarihi.toDate().toLocaleString("tr-TR") : "—";
+      return `
+        <div class="card order-card" data-sid="${s.id}">
+          <div class="order-card__main">
+            <div class="order-card__name">${kacisEt(s.ad)}</div>
+            <div class="order-card__meta">
+              ${rozet}
+              <span>${kacisEt(s.teslimiOnaylayan || s.subeAdi || "—")}</span>
+              ${oz.eksik ? `<span class="u-text-soft">Eksik: ${oz.eksik} kalem (${sayiBicimle(oz.eksikMiktar || 0)})</span>` : ""}
+              ${oz.fazla ? `<span class="u-text-soft">Fazla: ${oz.fazla} kalem (${sayiBicimle(oz.fazlaMiktar || 0)})</span>` : ""}
+              <span>${tarih}</span>
+            </div>
+          </div>
+          <div class="order-card__actions">
+            <button class="btn btn-ghost btn-sm" data-detay="${s.id}">Detay →</button>
+          </div>
+        </div>`;
+    }).join("");
+
+    // Detay modali
+    liste.querySelectorAll("[data-detay]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const s = siparisler.find((x) => x.id === btn.dataset.detay);
+        if (!s) return;
+        const root = document.getElementById("modalRoot");
+        const kalemler = s.teslimatKalemleri || [];
+        root.innerHTML = `
+          <div class="modal-backdrop" data-role="backdrop">
+            <div class="modal" style="max-width:700px;">
+              <h3>🚚 Teslim Detayı — ${kacisEt(s.ad)}</h3>
+              <p>Teslim alan: <b>${kacisEt(s.teslimiOnaylayan || s.subeAdi || "—")}</b></p>
+              <div class="table-wrap" style="max-height:400px;overflow-y:auto;">
+                <table class="data-table">
+                  <thead><tr><th>Kod</th><th>Ürün</th><th>Sipariş</th><th>Gelen</th><th>Fark</th><th>Durum</th><th>Not</th></tr></thead>
+                  <tbody>
+                    ${kalemler.map((k) => {
+                      const fark = (Number(k.gelenMiktar) || 0) - (Number(k.siparisMiktari) || 0);
+                      const farkHtml = fark === 0 ? "—" : fark > 0
+                        ? `<span class="badge badge-blue">+${sayiBicimle(fark)}</span>`
+                        : `<span class="badge badge-red">${sayiBicimle(fark)}</span>`;
+                      const durumHtml = k.durum === "tamam"
+                        ? '<span class="badge badge-green">✅ Tamam</span>'
+                        : k.durum === "eksik"
+                        ? '<span class="badge badge-red">⚠ Eksik</span>'
+                        : '<span class="badge badge-blue">➕ Fazla</span>';
+                      return `<tr>
+                        <td class="cell-code">${kacisEt(k.kod || "—")}</td>
+                        <td>${kacisEt(k.ad)}</td>
+                        <td>${sayiBicimle(k.siparisMiktari)} ${kacisEt(k.birim)}</td>
+                        <td>${sayiBicimle(k.gelenMiktar)} ${kacisEt(k.birim)}</td>
+                        <td>${farkHtml}</td>
+                        <td>${durumHtml}</td>
+                        <td class="u-text-soft" style="font-size:12px;">${kacisEt(k.not || "—")}</td>
+                      </tr>`;
+                    }).join("")}
+                  </tbody>
+                </table>
+              </div>
+              <div class="modal__actions">
+                <button class="btn btn-primary" data-role="kapat">Kapat</button>
+              </div>
+            </div>
+          </div>`;
+        root.querySelector('[data-role="kapat"]').onclick = () => { root.innerHTML = ""; };
+        root.querySelector('[data-role="backdrop"]').onclick = (e) => { if (e.target.dataset.role === "backdrop") root.innerHTML = ""; };
+      });
+    });
+  } catch (err) {
+    console.error(err);
+    toast("Teslim raporu yüklenemedi.", "error");
+    liste.innerHTML = "";
   }
 });

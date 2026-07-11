@@ -2,7 +2,7 @@
 // ŞUBE SİPARİŞ GEÇMİŞİ
 // ============================================================================
 import { auth, signOut, sayfaKorumasi } from "./firebase.js";
-import { subeSiparisleriDinle, urunleriniGetir, urunEkle, katalogDinle, teslimiOnayla } from "./veri.js";
+import { subeSiparisleriDinle, urunleriniGetir, urunEkle, katalogDinle, teslimatKaydet } from "./veri.js";
 import { arayuzHazirla, toast, onayIste, kacisEt, sayiBicimle, ondalikOku, tarihBicimle } from "./utils.js";
 
 arayuzHazirla();
@@ -28,7 +28,7 @@ const DURUM_ETIKETI = {
   toplandi: { etiket: "🔍 Kontrolde", sinif: "badge-blue" },
   kontrol_ediliyor: { etiket: "🔍 Kontrolde", sinif: "badge-blue" },
   tamamlandi: { etiket: "🚚 Sevk Bekliyor", sinif: "badge-amber" },
-  sevk_edildi: { etiket: "🚚 Yolda", sinif: "badge-blue" },
+  sevk_edildi: { etiket: "🚚 Yolda — Teslim Bekliyor", sinif: "badge-blue" },
   teslim_edildi: { etiket: "✅ Teslim Edildi", sinif: "badge-green" }
 };
 
@@ -81,10 +81,8 @@ function renderSiparisler(liste) {
   });
   kapsayici.querySelectorAll("[data-teslim]").forEach((btn) => {
     btn.addEventListener("click", async () => {
-      const onay = await onayIste({ baslik: "Teslim Alındı mı?", metin: "Bu sipariş teslim alındı olarak işaretlenecek.", onayMetni: "Evet, Teslim Aldım" });
-      if (!onay) return;
-      await teslimiOnayla(btn.dataset.teslim, mevcutKullanici.subeAdi || mevcutKullanici.ad);
-      toast("Teslim onaylandı. Teşekkürler!", "success");
+      const siparis = liste.find((x) => x.id === btn.dataset.teslim);
+      await teslimatModalAc(siparis);
     });
   });
 }
@@ -211,6 +209,157 @@ function urunEkleModalAc(siparisId) {
     } catch (err) {
       console.error(err);
       toast("Eklenirken hata: " + (err.message || err), "error");
+    }
+  };
+}
+
+/* ============================================================================
+   AYRINTILI TESLİMAT KONTROL MODALI
+   ============================================================================ */
+async function teslimatModalAc(siparis) {
+  const root = document.getElementById("modalRoot");
+  root.innerHTML = `<div class="modal-backdrop"><div class="modal"><div class="empty-state__icon">⏳</div><p>Ürünler yükleniyor…</p></div></div>`;
+
+  let urunler;
+  try { urunler = await urunleriniGetir(siparis.id); }
+  catch (err) { root.innerHTML = ""; toast("Ürünler yüklenemedi.", "error"); return; }
+
+  // Her ürün için başlangıç durumu: sipariş miktarını gelen miktar olarak önceden doldur (tamam varsayımı)
+  let kalemler = urunler.map((u) => ({
+    urunId: u.id,
+    ad: u.ad,
+    kod: u.kod || "",
+    birim: u.birim || "",
+    siparisMiktari: Number(u.miktar) || 0,
+    gelenMiktar: Number(u.miktar) || 0,
+    durum: "tamam",
+    not: ""
+  }));
+
+  function yenile() {
+    const tbody = root.querySelector("#teslimatGovde");
+    if (!tbody) return;
+    tbody.innerHTML = kalemler.map((k, i) => {
+      const renkSinif = k.durum === "eksik" ? "row-missing" : k.durum === "fazla" ? "row-checked" : "";
+      return `
+        <tr class="${renkSinif}" data-i="${i}">
+          <td class="cell-code">${kacisEt(k.kod || "—")}</td>
+          <td>${kacisEt(k.ad)}</td>
+          <td>${sayiBicimle(k.siparisMiktari)} ${kacisEt(k.birim)}</td>
+          <td>
+            <select class="select" data-rol="durum" style="min-width:90px;">
+              <option value="tamam" ${k.durum === "tamam" ? "selected" : ""}>✅ Tamam</option>
+              <option value="eksik" ${k.durum === "eksik" ? "selected" : ""}>⚠ Eksik</option>
+              <option value="fazla" ${k.durum === "fazla" ? "selected" : ""}>➕ Fazla</option>
+            </select>
+          </td>
+          <td>
+            <input type="text" inputmode="decimal" class="cell-qty-input" data-rol="miktar"
+              value="${k.gelenMiktar}" style="width:72px;"
+              ${k.durum === "tamam" ? "disabled" : ""} />
+          </td>
+          <td>
+            <input type="text" class="input" data-rol="not" value="${kacisEt(k.not)}"
+              placeholder="Not…" style="min-width:110px;font-size:12px;" />
+          </td>
+          <td>
+            <button class="btn btn-danger btn-sm" data-rol="sil" title="Satırı kaldır">✕</button>
+          </td>
+        </tr>`;
+    }).join("");
+
+    // Olayları bağla
+    tbody.querySelectorAll("[data-i]").forEach((satir) => {
+      const i = Number(satir.dataset.i);
+      satir.querySelector('[data-rol="durum"]').addEventListener("change", (e) => {
+        kalemler[i].durum = e.target.value;
+        if (e.target.value === "tamam") kalemler[i].gelenMiktar = kalemler[i].siparisMiktari;
+        yenile();
+      });
+      const miktarInput = satir.querySelector('[data-rol="miktar"]');
+      if (miktarInput) miktarInput.addEventListener("input", (e) => {
+        kalemler[i].gelenMiktar = ondalikOku(e.target.value);
+      });
+      satir.querySelector('[data-rol="not"]').addEventListener("input", (e) => {
+        kalemler[i].not = e.target.value;
+      });
+      satir.querySelector('[data-rol="sil"]').addEventListener("click", () => {
+        kalemler.splice(i, 1);
+        yenile();
+      });
+    });
+  }
+
+  root.innerHTML = `
+    <div class="modal-backdrop" data-role="backdrop">
+      <div class="modal" style="max-width:700px;">
+        <h3>📦 Teslimат Kontrolü — ${kacisEt(siparis.ad)}</h3>
+        <p style="font-size:13px;color:var(--color-ink-soft);">
+          Her ürünü kontrol edin. Eksik veya fazla gelenleri işaretleyip miktarını girin.
+          Listede olmayan ürün geldiyse "➕ Ürün Ekle" ile ekleyin.
+        </p>
+        <div class="table-wrap" style="max-height:360px;overflow-y:auto;margin-bottom:12px;">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Kod</th><th>Ürün Adı</th><th>Sipariş</th>
+                <th>Durum</th><th>Gelen Miktar</th><th>Not</th><th></th>
+              </tr>
+            </thead>
+            <tbody id="teslimatGovde"></tbody>
+          </table>
+        </div>
+        <button class="btn btn-ghost btn-sm" id="ekstraUrunEkleBtn">➕ Listede Olmayan Ürün Ekle</button>
+        <div class="modal__actions" style="margin-top:14px;">
+          <button class="btn btn-ghost" data-role="iptal">Vazgeç</button>
+          <button class="btn btn-green" data-role="onayla">✅ Teslimаtı Onayla</button>
+        </div>
+      </div>
+    </div>`;
+
+  yenile();
+
+  const kapat = () => { root.innerHTML = ""; };
+  root.querySelector('[data-role="iptal"]').onclick = kapat;
+  root.querySelector('[data-role="backdrop"]').onclick = (e) => {
+    if (e.target.dataset.role === "backdrop") kapat();
+  };
+
+  // Listede olmayan ürün ekleme
+  root.querySelector("#ekstraUrunEkleBtn").addEventListener("click", () => {
+    const ad = prompt("Ürün adı:");
+    if (!ad) return;
+    const miktar = ondalikOku(prompt("Gelen miktar:") || "0");
+    const birim = prompt("Birim (KG, Adet vb.)") || "";
+    kalemler.push({
+      urunId: null,
+      ad, kod: "", birim,
+      siparisMiktari: 0,
+      gelenMiktar: miktar,
+      durum: "fazla",
+      not: "Listede olmayan ürün"
+    });
+    yenile();
+  });
+
+  root.querySelector('[data-role="onayla"]').onclick = async () => {
+    const btn = root.querySelector('[data-role="onayla"]');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+    try {
+      const ozet = await teslimatKaydet(siparis.id, {
+        teslimatKalemleri: kalemler,
+        onaylayanKullanici: mevcutKullanici.subeAdi || mevcutKullanici.ad,
+        subeAdi: mevcutKullanici.subeAdi || ""
+      });
+      kapat();
+      const mesaj = `Teslim onaylandı. ${ozet.tamam} tamam${ozet.eksik ? `, ${ozet.eksik} eksik` : ""}${ozet.fazla ? `, ${ozet.fazla} fazla` : ""}.`;
+      toast(mesaj, ozet.eksik || ozet.fazla ? "info" : "success", 6000);
+    } catch (err) {
+      console.error(err);
+      toast("Kayıt sırasında hata oluştu.", "error");
+      btn.disabled = false;
+      btn.innerHTML = "✅ Teslimаtı Onayla";
     }
   };
 }

@@ -242,3 +242,32 @@ export function teslimiOnayla(siparisId, onaylayanKullanici) {
     guncellemeTarihi: serverTimestamp()
   });
 }
+
+/* ============================================================================
+   TESLİM KONTROL KAYDI
+   Sipariş belgesine teslim detaylarını yazar.
+   teslimatKalemleri: [{ urunId, ad, kod, birim, siparisMiktari, gelenMiktar, durum, not }]
+   durum: "tamam" | "eksik" | "fazla"
+   ============================================================================ */
+export async function teslimatKaydet(siparisId, { teslimatKalemleri, onaylayanKullanici, subeAdi }) {
+  const ozet = {
+    tamam: 0, eksik: 0, fazla: 0,
+    eksikMiktar: 0, fazlaMiktar: 0
+  };
+  teslimatKalemleri.forEach((k) => {
+    if (k.durum === "tamam") ozet.tamam++;
+    else if (k.durum === "eksik") { ozet.eksik++; ozet.eksikMiktar += Number(k.siparisMiktari - k.gelenMiktar) || 0; }
+    else if (k.durum === "fazla") { ozet.fazla++; ozet.fazlaMiktar += Number(k.gelenMiktar - k.siparisMiktari) || 0; }
+  });
+
+  await updateDoc(doc(db, SIPARISLER, siparisId), {
+    durum: "teslim_edildi",
+    teslimatTarihi: serverTimestamp(),
+    teslimiOnaylayan: onaylayanKullanici,
+    subeAdi,
+    teslimatKalemleri,
+    teslimatOzeti: ozet,
+    guncellemeTarihi: serverTimestamp()
+  });
+  return ozet;
+}
