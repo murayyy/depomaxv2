@@ -129,12 +129,14 @@ function renderSiparisListesi(liste) {
       tamamlandi: '<span class="badge badge-amber">Sevk Bekliyor</span>',
       sevk_edildi: '<span class="badge badge-green">Sevk Edildi</span>'
     }[s.durum] || "";
+    const aciliyetRozeti = { cok_acil: '<span class="badge badge-red">🔴 Çok Acil</span>', acil: '<span class="badge badge-amber">🟡 Acil</span>' }[s.aciliyet] || "";
     return `
-      <div class="card order-card" data-id="${s.id}">
+      <div class="card order-card${s.aciliyet === "cok_acil" ? " is-aktarildi" : ""}" data-id="${s.id}">
         <div class="order-card__main">
           <div class="order-card__name">${kacisEt(s.ad)}</div>
           <div class="order-card__meta">
             ${durumRozeti}
+            ${aciliyetRozeti}
             <span>${toplam} ürün</span>
             ${s.toplamKg ? `<span>${sayiBicimle(s.toplamKg)} KG</span>` : ""}
             <span>${tarihBicimle(s.olusturulmaTarihi)}</span>
@@ -173,6 +175,14 @@ function yeniSiparisModalAc() {
           <input class="input" id="ysAd" placeholder="örn. Tuğlubey-21Haz-Sevkiyat1" />
         </div>
         <div class="field">
+          <label>Aciliyet</label>
+          <select class="select" id="ysAciliyet">
+            <option value="normal">Normal</option>
+            <option value="acil">🟡 Acil</option>
+            <option value="cok_acil">🔴 Çok Acil</option>
+          </select>
+        </div>
+        <div class="field">
           <label>Excel Dosyası (opsiyonel — sonra da eklenebilir)</label>
           <div class="file-drop">
             📄 Ürün listesini içeren .xlsx dosyasını seçin
@@ -195,7 +205,8 @@ function yeniSiparisModalAc() {
     kapat();
     yukleniyorGoster("Sipariş oluşturuluyor…");
     try {
-      const siparisId = await siparisOlustur({ ad, olusturan: mevcutKullanici.uid });
+      const aciliyet = document.getElementById("ysAciliyet").value || "normal";
+      const siparisId = await siparisOlustur({ ad, olusturan: mevcutKullanici.uid, aciliyet });
       let toplamUrun = 0;
       if (dosya) {
         yukleniyorGoster("Excel okunuyor ve yükleniyor…");
@@ -635,3 +646,40 @@ document.getElementById("tamamlaBtn").addEventListener("click", async () => {
   toast("Toplama tamamlandı. Sipariş kontrol ekibine iletildi.", "success");
   geriDon();
 });
+
+/* ---------------- Barkod tabancası (USB/Bluetooth keyboard wedge) ---------------- */
+// Tabancalar barkodu klavye girişi gibi gönderir ve Enter ile bitirir.
+document.getElementById("barkodTabancaInput").addEventListener("keydown", (e) => {
+  if (e.key !== "Enter") return;
+  e.preventDefault();
+  const kod = e.target.value.trim();
+  e.target.value = "";
+  if (!kod || !aktifSiparis) return;
+  barkodOkundu(kod);
+});
+
+/* ---------------- Gecikme bildirimi ---------------- */
+const GECIKME_ESIGI_SAAT = 4; // 4 saatten fazla "toplaniyor"da kalan siparişler
+let gecikmeKontrolZamanlayici = null;
+
+function gecikmeleriKontrolEt(liste) {
+  const simdi = Date.now();
+  const gecikenler = liste.filter((s) => {
+    if (s.durum !== "toplaniyor") return false;
+    if (!s.olusturulmaTarihi) return false;
+    const gec = simdi - s.olusturulmaTarihi.toMillis();
+    return gec > GECIKME_ESIGI_SAAT * 3600 * 1000;
+  });
+  if (gecikenler.length > 0) {
+    toast(`⏰ ${gecikenler.length} sipariş ${GECIKME_ESIGI_SAAT} saattir toplanmadı: ${gecikenler.map(s => s.ad).join(", ")}`, "error", 8000);
+  }
+}
+
+// Her 30 dakikada bir kontrol et
+function gecikmeZamanlamasiniBaslat() {
+  clearInterval(gecikmeKontrolZamanlayici);
+  gecikmeKontrolZamanlayici = setInterval(() => {
+    if (sonSiparisListesi.length) gecikmeleriKontrolEt(sonSiparisListesi);
+  }, 30 * 60 * 1000);
+}
+gecikmeZamanlamasiniBaslat();

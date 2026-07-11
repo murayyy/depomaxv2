@@ -53,8 +53,11 @@ async function hesapla() {
     yukleniyorGoster(`${siparisler.length} siparişin ürünleri okunuyor…`);
     const listeleri = await Promise.all(siparisler.map((s) => urunleriniGetir(s.id)));
     const tumUrunler = listeleri.flat();
+    sonTumUrunler = tumUrunler;
+    sonSiparisler = siparisler;
     const { toplayicilar, kontrolorler } = hesaplaOzetler(tumUrunler, siparisler);
     render(toplayicilar, kontrolorler, siparisler.length, tumUrunler.length);
+    renderAnalizler(tumUrunler, siparisler, listeleri);
     yukleniyorKapat();
   } catch (err) {
     yukleniyorKapat(); console.error(err);
@@ -277,3 +280,123 @@ function render(toplayicilar, kontrolorler, siparisSayisi, urunSayisi) {
       </div>`)
   ].join("");
 }
+
+/* ============================================================================
+   EKSİK ÜRÜN ANALİZİ + ŞUBE ANALİZİ + EXCEL EXPORT
+   ============================================================================ */
+let sonTumUrunler = [];
+let sonSiparisler = [];
+
+// hesapla fonksiyonunu genişlet — orijinal render çağrısından sonra analiz de çalışsın
+const _orijinalHesapla = hesapla;
+
+document.getElementById("hesaplaBtn").addEventListener("click", async () => {
+  // Zaten yukarıda kayıtlı, yeniden dinleme gerekmiyor — aşağıda override ediyoruz
+});
+
+// render fonksiyonunun sonunda analiz çalıştır
+const _orijinalRender = render;
+// Veriye erişmek için hesapla'yı sarmalıyoruz — global değişkenleri kullanıyoruz
+
+function hesaplaEksikAnalizi(urunler) {
+  const map = new Map();
+  urunler.forEach((u) => {
+    const anahtar = (u.kod || u.ad || "bilinmiyor").trim();
+    if (!map.has(anahtar)) map.set(anahtar, { ad: u.ad || u.kod, kod: u.kod, istek: 0, eksik: 0 });
+    const k = map.get(anahtar);
+    k.istek++;
+    if (u.eksik) k.eksik++;
+  });
+  return Array.from(map.values())
+    .filter((k) => k.eksik > 0)
+    .sort((a, b) => b.eksik - a.eksik)
+    .slice(0, 20);
+}
+
+function hesaplaSubeAnalizi(siparisler, urunListeleri) {
+  const map = new Map();
+  siparisler.forEach((s, i) => {
+    if (!s.subeAdi) return;
+    const sube = s.subeAdi;
+    if (!map.has(sube)) map.set(sube, { sube, siparis: 0, urun: 0, kg: 0, teslim: 0 });
+    const k = map.get(sube);
+    k.siparis++;
+    if (s.durum === "teslim_edildi") k.teslim++;
+    const urunler = urunListeleri[i] || [];
+    urunler.forEach((u) => {
+      k.urun++;
+      if (String(u.birim || "").trim().toLowerCase() === "kg") k.kg += Number(u.miktar) || 0;
+    });
+  });
+  return Array.from(map.values()).sort((a, b) => b.siparis - a.siparis);
+}
+
+function renderAnalizler(tumUrunler, siparisler, urunListeleri) {
+  // Eksik ürün analizi
+  const eksikAnalizBolumu = document.getElementById("eksikAnalizBolumu");
+  const eksikAnalizTablosu = document.getElementById("eksikAnalizTablosu");
+  const eksikler = hesaplaEksikAnalizi(tumUrunler);
+  if (eksikler.length > 0) {
+    eksikAnalizBolumu.classList.remove("u-hidden");
+    eksikAnalizTablosu.innerHTML = eksikler.map((k) => {
+      const oran = ((k.eksik / k.istek) * 100).toFixed(1);
+      const sinif = oran > 30 ? "badge-red" : oran > 10 ? "badge-amber" : "badge-gray";
+      return `<tr>
+        <td>${kacisEt(k.ad)}</td>
+        <td class="cell-code">${kacisEt(k.kod || "—")}</td>
+        <td>${k.eksik}</td>
+        <td>${k.istek}</td>
+        <td><span class="badge ${sinif}">%${oran}</span></td>
+      </tr>`;
+    }).join("");
+  }
+
+  // Şube analizi
+  const subeAnalizBolumu = document.getElementById("subeAnalizBolumu");
+  const subeAnalizTablosu = document.getElementById("subeAnalizTablosu");
+  const subeler = hesaplaSubeAnalizi(siparisler, urunListeleri);
+  if (subeler.length > 0) {
+    subeAnalizBolumu.classList.remove("u-hidden");
+    subeAnalizTablosu.innerHTML = subeler.map((k) => `<tr>
+      <td>${kacisEt(k.sube)}</td>
+      <td>${k.siparis}</td>
+      <td>${k.urun}</td>
+      <td>${k.kg ? sayiBicimle(k.kg) + " KG" : "—"}</td>
+      <td>${k.teslim > 0 ? `<span class="badge badge-green">${k.teslim} onay</span>` : "—"}</td>
+    </tr>`).join("");
+  }
+
+  // Excel export butonunu göster
+  document.getElementById("excelExportBtn").style.display = "";
+}
+
+document.getElementById("excelExportBtn").addEventListener("click", () => {
+  if (!sonTumUrunler.length) return;
+  const wb = window.XLSX.utils.book_new();
+
+  // Personel sayfası
+  const { toplayicilar, kontrolorler } = hesaplaOzetler(sonTumUrunler, sonSiparisler);
+  const personelSatirlar = [
+    ["Personel", "Rol", "Ürün", "KG", "Eksik Hata", "Miktar H.", "% Hata", "Ort. Süre (dk)", "Hız ürün/s"],
+    ...toplayicilar.map((k) => [k.ad, "Toplayıcı", k.toplananUrun, k.toplananKg, k.eksikHata, k.miktarHata, k.hataOrani, k.ortalamaToplamaSure ? Math.round(k.ortalamaToplamaSure) : "", k.hizUrun || ""]),
+    ...kontrolorler.map((k) => [k.ad, "Kontrolör", k.kontrolEdilenUrun, k.kontrolEdilenKg, k.eksikTespit, k.miktarDuzeltme, "", k.ortalamaKontrolSure ? Math.round(k.ortalamaKontrolSure) : "", k.hizUrun || ""])
+  ];
+  window.XLSX.utils.book_append_sheet(wb, window.XLSX.utils.aoa_to_sheet(personelSatirlar), "Personel");
+
+  // Eksik ürün sayfası
+  const eksikler = hesaplaEksikAnalizi(sonTumUrunler);
+  if (eksikler.length) {
+    const eksikSatirlar = [["Ürün Adı", "Kod", "Eksik Sayısı", "Toplam İstek", "% Eksik"], ...eksikler.map((k) => [k.ad, k.kod, k.eksik, k.istek, ((k.eksik / k.istek) * 100).toFixed(1)])];
+    window.XLSX.utils.book_append_sheet(wb, window.XLSX.utils.aoa_to_sheet(eksikSatirlar), "Eksik Ürünler");
+  }
+
+  // Şube sayfası
+  const subeler = hesaplaSubeAnalizi(sonSiparisler, []);
+  if (subeler.length) {
+    const subeSatirlar = [["Şube", "Sipariş", "Ürün", "KG", "Teslim Onayı"], ...subeler.map((k) => [k.sube, k.siparis, k.urun, k.kg, k.teslim])];
+    window.XLSX.utils.book_append_sheet(wb, window.XLSX.utils.aoa_to_sheet(subeSatirlar), "Şube Analizi");
+  }
+
+  const tarih = new Date().toLocaleDateString("tr-TR").replace(/\./g, "-");
+  window.XLSX.writeFile(wb, `depomax_rapor_${tarih}.xlsx`);
+});

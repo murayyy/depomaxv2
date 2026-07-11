@@ -44,10 +44,11 @@ export function tumSiparisleriCanliDinle(callback, gunSayisi = 3) {
   }, (err) => console.error("tumSiparisleriCanliDinle:", err));
 }
 
-export async function siparisOlustur({ ad, olusturan }) {
+export async function siparisOlustur({ ad, olusturan, aciliyet = "normal" }) {
   const ref = await addDoc(collection(db, SIPARISLER), {
     ad,
     durum: "toplaniyor",
+    aciliyet,
     olusturulmaTarihi: serverTimestamp(),
     guncellemeTarihi: serverTimestamp(),
     olusturan,
@@ -231,4 +232,13 @@ export function subeSiparisleriDinle(subeId, callback) {
   return onSnapshot(q, (snap) => {
     callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
   }, (err) => console.error("subeSiparisleriDinle:", err));
+}
+
+export function teslimiOnayla(siparisId, onaylayanKullanici) {
+  return updateDoc(doc(db, SIPARISLER, siparisId), {
+    durum: "teslim_edildi",
+    teslimatTarihi: serverTimestamp(),
+    teslimiOnaylayan: onaylayanKullanici,
+    guncellemeTarihi: serverTimestamp()
+  });
 }

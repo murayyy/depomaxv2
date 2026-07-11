@@ -12,6 +12,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
   getFirestore,
+  enableIndexedDbPersistence,
   doc,
   getDoc
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
@@ -19,6 +20,16 @@ import {
 export const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const db = getFirestore(app);
+
+// Çevrimdışı destek: internet kesilse bile veriler önbellekten okunur,
+// bağlantı gelince otomatik senkronize olur.
+enableIndexedDbPersistence(db).catch((err) => {
+  if (err.code === "failed-precondition") {
+    console.warn("Çevrimdışı mod: birden fazla sekme açık, yalnızca biri aktif olabilir.");
+  } else if (err.code === "unimplemented") {
+    console.warn("Çevrimdışı mod bu tarayıcıda desteklenmiyor.");
+  }
+});
 
 export { onAuthStateChanged, signInWithEmailAndPassword, signOut, doc, getDoc };
 

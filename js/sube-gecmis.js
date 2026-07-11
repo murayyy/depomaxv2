@@ -2,7 +2,7 @@
 // ŞUBE SİPARİŞ GEÇMİŞİ
 // ============================================================================
 import { auth, signOut, sayfaKorumasi } from "./firebase.js";
-import { subeSiparisleriDinle, urunleriniGetir, urunEkle, katalogDinle } from "./veri.js";
+import { subeSiparisleriDinle, urunleriniGetir, urunEkle, katalogDinle, teslimiOnayla } from "./veri.js";
 import { arayuzHazirla, toast, onayIste, kacisEt, sayiBicimle, ondalikOku, tarihBicimle } from "./utils.js";
 
 arayuzHazirla();
@@ -28,11 +28,13 @@ const DURUM_ETIKETI = {
   toplandi: { etiket: "🔍 Kontrolde", sinif: "badge-blue" },
   kontrol_ediliyor: { etiket: "🔍 Kontrolde", sinif: "badge-blue" },
   tamamlandi: { etiket: "🚚 Sevk Bekliyor", sinif: "badge-amber" },
-  sevk_edildi: { etiket: "✅ Yolda / Teslim", sinif: "badge-green" }
+  sevk_edildi: { etiket: "🚚 Yolda", sinif: "badge-blue" },
+  teslim_edildi: { etiket: "✅ Teslim Edildi", sinif: "badge-green" }
 };
 
 // Sadece "toplaniyor" aşamasındaki siparişlere ürün eklenebilir
 const DUZENLENEBILIR = ["toplaniyor"];
+const TESLIM_ONAYLANABILIR = ["sevk_edildi"];
 
 function renderSiparisler(liste) {
   const kapsayici = document.getElementById("siparisListesi");
@@ -61,6 +63,7 @@ function renderSiparisler(liste) {
         </div>
         <div class="order-card__actions">
           ${duzenlenebilir ? `<button class="btn btn-primary btn-sm" data-ekle="${s.id}">+ Ürün Ekle</button>` : ""}
+          ${TESLIM_ONAYLANABILIR.includes(s.durum) ? `<button class="btn btn-green btn-sm" data-teslim="${s.id}">✅ Teslim Aldım</button>` : ""}
           <button class="btn btn-ghost btn-sm" data-detay="${s.id}">Detay →</button>
         </div>
       </div>`;
@@ -74,6 +77,14 @@ function renderSiparisler(liste) {
   kapsayici.querySelectorAll("[data-ekle]").forEach((btn) => {
     btn.addEventListener("click", () => {
       urunEkleModalAc(btn.dataset.ekle);
+    });
+  });
+  kapsayici.querySelectorAll("[data-teslim]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const onay = await onayIste({ baslik: "Teslim Alındı mı?", metin: "Bu sipariş teslim alındı olarak işaretlenecek.", onayMetni: "Evet, Teslim Aldım" });
+      if (!onay) return;
+      await teslimiOnayla(btn.dataset.teslim, mevcutKullanici.subeAdi || mevcutKullanici.ad);
+      toast("Teslim onaylandı. Teşekkürler!", "success");
     });
   });
 }

@@ -616,3 +616,13 @@ document.getElementById("sistemeAktarBtn").addEventListener("click", async () =>
   toast("CSV dosyası indirildi ve sipariş 'Sisteme Aktarıldı' işaretlendi.", "success");
   geriDon();
 });
+
+/* ---------------- Barkod tabancası ---------------- */
+document.getElementById("barkodTabancaInput").addEventListener("keydown", (e) => {
+  if (e.key !== "Enter") return;
+  e.preventDefault();
+  const kod = e.target.value.trim();
+  e.target.value = "";
+  if (!kod || !aktifSiparis) return;
+  barkodOkundu(kod);
+});
