@@ -91,7 +91,7 @@ function renderKatalog() {
           <span class="badge badge-gray">${kacisEt(u.birim || "")}</span>
         </div>
         <div class="row-card__grid" style="margin-top:8px;">
-          ${u.minMiktar ? `<div><div class="row-card__label">Min. Miktar</div>${sayiBicimle(u.minMiktar)} ${kacisEt(u.birim || "")}</div>` : ""}
+          ${u.minMiktar ? `<div><div class="row-card__label">Min. Miktar (ve katları)</div>${sayiBicimle(u.minMiktar)} ${kacisEt(u.birim || "")}</div>` : ""}
           <div>
             <div class="row-card__label">Sipariş Miktarı</div>
             <input type="text" inputmode="decimal" class="cell-qty-input miktar-input" data-id="${u.id}" placeholder="0" style="width:100px;" />
@@ -166,15 +166,27 @@ document.getElementById("siparisGonderBtn").addEventListener("click", async () =
   const miktarMap = miktarlariTopla();
   if (miktarMap.size === 0) { toast("En az bir üründe miktar girin.", "error"); return; }
 
-  const altindaKalan = katalogCache.filter((u) => {
+  // Minimum miktar kontrolü — hem altında olanlar hem de katı olmayanlar
+  const hatalar = [];
+  katalogCache.forEach((u) => {
     const giris = miktarMap.get(u.id) || 0;
-    return giris > 0 && u.minMiktar && giris < u.minMiktar;
+    if (!giris || !u.minMiktar) return;
+    if (giris < u.minMiktar) {
+      hatalar.push(`${u.ad}: min ${sayiBicimle(u.minMiktar)} ${u.birim || ""}`);
+    } else {
+      // Katı mı kontrol et (ondalık tolerans: 0.001)
+      const kat = giris / u.minMiktar;
+      if (Math.abs(kat - Math.round(kat)) > 0.001) {
+        const oncekiKat = Math.floor(kat) * u.minMiktar;
+        const sonrakiKat = Math.ceil(kat) * u.minMiktar;
+        hatalar.push(`${u.ad}: ${sayiBicimle(giris)} yerine ${sayiBicimle(oncekiKat)} veya ${sayiBicimle(sonrakiKat)} olmalı (min ${sayiBicimle(u.minMiktar)} katları)`);
+      }
+    }
   });
-  if (altindaKalan.length > 0) {
-    const uyari = altindaKalan.map((u) => `${u.ad}: min ${sayiBicimle(u.minMiktar)} ${u.birim || ""}`).join(", ");
+  if (hatalar.length > 0) {
     const devam = await onayIste({
-      baslik: "Minimum Miktar Uyarısı",
-      metin: `Şu ürünlerde minimum miktarın altında giriş yaptınız: ${uyari}. Yine de göndermek istiyor musunuz?`,
+      baslik: "Miktar Uyarısı",
+      metin: `Şu ürünlerde minimum miktar veya katı kuralı ihlali var:\n\n${hatalar.join("\n\n")}\n\nYine de göndermek istiyor musunuz?`,
       onayMetni: "Evet, gönder"
     });
     if (!devam) return;

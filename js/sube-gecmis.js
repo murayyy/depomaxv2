@@ -327,19 +327,66 @@ async function teslimatModalAc(siparis) {
 
   // Listede olmayan ürün ekleme
   root.querySelector("#ekstraUrunEkleBtn").addEventListener("click", () => {
-    const ad = prompt("Ürün adı:");
-    if (!ad) return;
-    const miktar = ondalikOku(prompt("Gelen miktar:") || "0");
-    const birim = prompt("Birim (KG, Adet vb.)") || "";
-    kalemler.push({
-      urunId: null,
-      ad, kod: "", birim,
-      siparisMiktari: 0,
-      gelenMiktar: miktar,
-      durum: "fazla",
-      not: "Listede olmayan ürün"
+    // Autocomplete listesi: mevcut siparişin ürünleri + katalog
+    const oneriListesi = [
+      ...urunler.map((u) => ({ kod: u.kod || "", ad: u.ad || "", birim: u.birim || "" })),
+      ...katalogCache.filter((k) => !urunler.find((u) => u.kod && u.kod === k.stokKodu))
+        .map((k) => ({ kod: k.stokKodu || "", ad: k.ad || "", birim: k.birim || "" }))
+    ];
+    const oneriOptions = oneriListesi.map((o, i) =>
+      `<option value="${i}">${o.kod ? o.kod + " — " : ""}${kacisEt(o.ad)}${o.birim ? " (" + o.birim + ")" : ""}</option>`
+    ).join("");
+
+    const ekModal = document.createElement("div");
+    ekModal.innerHTML = `
+      <div class="modal-backdrop" style="z-index:201;" data-role="arka">
+        <div class="modal" style="max-width:380px;">
+          <h3>Listede Olmayan Ürün Ekle</h3>
+          <div class="field">
+            <label>Ürün Seç veya Yaz</label>
+            <select class="select" id="ekUrunSec">
+              <option value="">— Listeden seç —</option>
+              ${oneriOptions}
+            </select>
+          </div>
+          <div class="field"><label>Ürün Adı</label><input class="input" id="ekAd" /></div>
+          <div class="field"><label>Ürün Kodu</label><input class="input" id="ekKod" /></div>
+          <div class="field"><label>Gelen Miktar</label><input class="input" type="text" inputmode="decimal" id="ekMiktar" placeholder="0" /></div>
+          <div class="field"><label>Birim</label><input class="input" id="ekBirim" placeholder="KG, Adet…" /></div>
+          <div class="modal__actions">
+            <button class="btn btn-ghost" id="ekIptal">Vazgeç</button>
+            <button class="btn btn-primary" id="ekOnay">Ekle</button>
+          </div>
+        </div>
+      </div>`;
+    document.body.appendChild(ekModal);
+
+    ekModal.querySelector("#ekUrunSec").addEventListener("change", (e) => {
+      if (!e.target.value) return;
+      const o = oneriListesi[Number(e.target.value)];
+      ekModal.querySelector("#ekAd").value = o.ad;
+      ekModal.querySelector("#ekKod").value = o.kod;
+      ekModal.querySelector("#ekBirim").value = o.birim;
     });
-    yenile();
+    const kapat2 = () => ekModal.remove();
+    ekModal.querySelector("#ekIptal").onclick = kapat2;
+    ekModal.querySelector("#ekOnay").onclick = () => {
+      const ad = ekModal.querySelector("#ekAd").value.trim();
+      const miktar = ondalikOku(ekModal.querySelector("#ekMiktar").value);
+      if (!ad) { toast("Ürün adı zorunlu.", "error"); return; }
+      kalemler.push({
+        urunId: null,
+        ad,
+        kod: ekModal.querySelector("#ekKod").value.trim(),
+        birim: ekModal.querySelector("#ekBirim").value.trim(),
+        siparisMiktari: 0,
+        gelenMiktar: miktar,
+        durum: "fazla",
+        not: "Listede olmayan ürün"
+      });
+      kapat2();
+      yenile();
+    };
   });
 
   root.querySelector('[data-role="onayla"]').onclick = async () => {
