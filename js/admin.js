@@ -222,6 +222,7 @@ function renderKatalog() {
   tbody.innerHTML = katalogListesi.map((u) => `
     <tr data-uid="${u.id}">
       <td class="cell-code">${u.sira || "—"}</td>
+      <td>${kacisEt(u.kategori || "—")}</td>
       <td>${kacisEt(u.ad)}</td>
       <td>${kacisEt(u.birim || "")}</td>
       <td>${u.minMiktar ? sayiBicimle(u.minMiktar) : "—"}</td>
@@ -277,6 +278,7 @@ function katalogModalAc(mevcut) {
           <div class="field"><label>Min. Miktar</label><input class="input" type="text" inputmode="decimal" id="kuMin" value="${mevcut?.minMiktar || ""}" /></div>
           <div class="field"><label>Reyon</label><input class="input" id="kuReyon" value="${kacisEt(mevcut?.reyon || "")}" /></div>
           <div class="field"><label>Sıra No</label><input class="input" type="number" id="kuSira" value="${mevcut?.sira || ""}" placeholder="1, 2, 3…" /></div>
+          <div class="field"><label>Kategori</label><input class="input" id="kuKategori" placeholder="Kuruyemiş, Baharat…" value="${kacisEt(mevcut?.kategori || "")}" /></div>
           <div class="field"><label>Açıklama</label><input class="input" id="kuAciklama" value="${kacisEt(mevcut?.aciklama || "")}" /></div>
         </div>
         <div class="field">
@@ -300,6 +302,7 @@ function katalogModalAc(mevcut) {
     if (!ad) { toast("Ürün adı zorunlu.", "error"); return; }
     const veri = {
       ad,
+      kategori: document.getElementById("kuKategori").value.trim(),
       birim: document.getElementById("kuBirim").value.trim(),
       minMiktar: parseFloat(document.getElementById("kuMin").value.replace(",", ".")) || 0,
       reyon: document.getElementById("kuReyon").value.trim(),
