@@ -207,12 +207,12 @@ export async function subeSimarisiOlustur({ subeAdi, subeId, olusturan, satirlar
   gecerli.forEach((s) => {
     const urunRef = doc(collection(db, SIPARISLER, ref.id, "urunler"));
     batch.set(urunRef, {
-      kod: s.kod || "",
+      kod: s.stokKodu || s.kod || "",
       ad: s.ad || "",
       miktar: ondalikOku(s.miktar),
       birim: s.birim || "",
       reyon: s.reyon || "",
-      aciklama: s.aciklama || "",
+      aciklama: s.subeNotu || s.aciklama || "",
       barkod: s.barkod || "",
       toplandi: false, eksik: false, kontrol: false, kontrolNotu: "",
       guncellemeTarihi: serverTimestamp()

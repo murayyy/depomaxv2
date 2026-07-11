@@ -42,66 +42,84 @@ function renderKatalog() {
   const tbody = document.getElementById("katalogGovde");
   const kartlar = document.getElementById("katalogKartlar");
 
-  tbody.innerHTML = katalogCache.map((u) => `
-    <tr data-uid="${u.id}">
-      <td>
-        <div style="font-weight:600;">${kacisEt(u.ad)}</div>
-        ${u.aciklama ? `<div class="u-text-soft" style="font-size:12px;">${kacisEt(u.aciklama)}</div>` : ""}
-      </td>
-      <td>${kacisEt(u.birim || "")}</td>
-      <td>${u.minMiktar ? sayiBicimle(u.minMiktar) : "—"}</td>
-      <td>
-        <input type="text" inputmode="decimal"
-          class="cell-qty-input miktar-input"
-          data-id="${u.id}"
-          placeholder="0"
-          style="width:80px;"
-        />
-      </td>
-    </tr>`).join("");
+  const gruplar = new Map();
+  katalogCache.forEach((u) => {
+    const kat = (u.kategori || "").trim() || "Diğer";
+    if (!gruplar.has(kat)) gruplar.set(kat, []);
+    gruplar.get(kat).push(u);
+  });
 
-  kartlar.innerHTML = katalogCache.map((u) => `
-    <div class="row-card" data-uid="${u.id}">
-      <div class="row-card__top">
-        <div>
-          <div class="row-card__name">${kacisEt(u.ad)}</div>
-          ${u.aciklama ? `<div class="row-card__code">${kacisEt(u.aciklama)}</div>` : ""}
-        </div>
-        <span class="badge badge-gray">${kacisEt(u.birim || "")}</span>
-      </div>
-      <div class="row-card__grid" style="margin-top:8px;">
-        ${u.minMiktar ? `<div><div class="row-card__label">Min. Miktar</div>${sayiBicimle(u.minMiktar)} ${kacisEt(u.birim || "")}</div>` : ""}
-        <div>
-          <div class="row-card__label">Sipariş Miktarı</div>
-          <input type="text" inputmode="decimal"
-            class="cell-qty-input miktar-input"
-            data-id="${u.id}"
-            placeholder="0"
-            style="width:100px;"
-          />
-        </div>
-      </div>
-    </div>`).join("");
+  let tabloHtml = "";
+  gruplar.forEach((urunler, kategori) => {
+    tabloHtml += `<tr><td colspan="4" style="background:var(--color-surface-2);font-weight:700;font-size:12.5px;text-transform:uppercase;letter-spacing:0.04em;color:var(--color-ink-soft);padding:8px 12px;">${kategori}</td></tr>`;
+    tabloHtml += urunler.map((u) => `
+      <tr data-uid="${u.id}">
+        <td>
+          <div style="font-weight:600;">${kacisEt(u.ad)}</div>
+          ${u.aciklama ? `<div class="u-text-soft" style="font-size:12px;">${kacisEt(u.aciklama)}</div>` : ""}
+        </td>
+        <td>${kacisEt(u.birim || "")}</td>
+        <td>${u.minMiktar ? sayiBicimle(u.minMiktar) : "—"}</td>
+        <td>
+          <input type="text" inputmode="decimal" class="cell-qty-input miktar-input"
+            data-id="${u.id}" placeholder="0" style="width:80px;" />
+        </td>
+        <td>
+          <input type="text" class="input aciklama-input" data-id="${u.id}"
+            placeholder="Not…" style="min-width:120px;font-size:12.5px;" />
+        </td>
+      </tr>`).join("");
+  });
+  tbody.innerHTML = tabloHtml;
 
-  // Herhangi bir miktar girilince butonu aktif et
+  let kartHtml = "";
+  gruplar.forEach((urunler, kategori) => {
+    kartHtml += `<div style="background:var(--color-surface-2);font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:0.04em;color:var(--color-ink-soft);padding:8px 12px;border-radius:var(--radius-sm);margin:14px 0 6px;">${kategori}</div>`;
+    kartHtml += urunler.map((u) => `
+      <div class="row-card" data-uid="${u.id}">
+        <div class="row-card__top">
+          <div>
+            <div class="row-card__name">${kacisEt(u.ad)}</div>
+            ${u.aciklama ? `<div class="row-card__code">${kacisEt(u.aciklama)}</div>` : ""}
+          </div>
+          <span class="badge badge-gray">${kacisEt(u.birim || "")}</span>
+        </div>
+        <div class="row-card__grid" style="margin-top:8px;">
+          ${u.minMiktar ? `<div><div class="row-card__label">Min. Miktar</div>${sayiBicimle(u.minMiktar)} ${kacisEt(u.birim || "")}</div>` : ""}
+          <div>
+            <div class="row-card__label">Sipariş Miktarı</div>
+            <input type="text" inputmode="decimal" class="cell-qty-input miktar-input"
+              data-id="${u.id}" placeholder="0" style="width:100px;" />
+          </div>
+          <div>
+            <div class="row-card__label">Not / Açıklama</div>
+            <input type="text" class="input aciklama-input" data-id="${u.id}"
+              placeholder="İsteğe bağlı not…" style="font-size:12.5px;" />
+          </div>
+        </div>
+      </div>`).join("");
+  });
+  kartlar.innerHTML = kartHtml;
+
   document.querySelectorAll(".miktar-input").forEach((input) => {
     input.addEventListener("input", miktar_degisti);
   });
   miktar_degisti();
 }
-
-function miktar_degisti() {
-  const herhangi = Array.from(document.querySelectorAll(".miktar-input"))
-    .some((i) => ondalikOku(i.value) > 0);
-  document.getElementById("siparisGonderBtn").disabled = !herhangi;
-}
-
 function miktarlariTopla() {
   const map = new Map();
   document.querySelectorAll(".miktar-input[data-id]").forEach((input) => {
     const id = input.dataset.id;
     const miktar = ondalikOku(input.value);
     if (miktar > 0) map.set(id, miktar);
+  });
+  return map;
+}
+
+function aciklamalariTopla() {
+  const map = new Map();
+  document.querySelectorAll(".aciklama-input[data-id]").forEach((input) => {
+    if (input.value.trim()) map.set(input.dataset.id, input.value.trim());
   });
   return map;
 }
@@ -125,9 +143,10 @@ document.getElementById("siparisGonderBtn").addEventListener("click", async () =
     if (!devam) return;
   }
 
+  const aciklamaMap = aciklamalariTopla();
   const satirlar = katalogCache
     .filter((u) => miktarMap.has(u.id))
-    .map((u) => ({ ...u, miktar: miktarMap.get(u.id) }));
+    .map((u) => ({ ...u, miktar: miktarMap.get(u.id), subeNotu: aciklamaMap.get(u.id) || "" }));
 
   const btn = document.getElementById("siparisGonderBtn");
   btn.disabled = true;
