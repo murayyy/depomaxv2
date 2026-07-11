@@ -302,10 +302,17 @@ function hesaplaEksikAnalizi(urunler) {
   const map = new Map();
   urunler.forEach((u) => {
     const anahtar = (u.kod || u.ad || "bilinmiyor").trim();
-    if (!map.has(anahtar)) map.set(anahtar, { ad: u.ad || u.kod, kod: u.kod, istek: 0, eksik: 0 });
+    if (!map.has(anahtar)) map.set(anahtar, {
+      ad: u.ad || u.kod, kod: u.kod, birim: u.birim || "",
+      istek: 0, toplamMiktar: 0, eksik: 0, eksikMiktar: 0
+    });
     const k = map.get(anahtar);
     k.istek++;
-    if (u.eksik) k.eksik++;
+    k.toplamMiktar += Number(u.miktar) || 0;
+    if (u.eksik) {
+      k.eksik++;
+      k.eksikMiktar += Number(u.miktar) || 0;
+    }
   });
   return Array.from(map.values())
     .filter((k) => k.eksik > 0)
@@ -341,10 +348,13 @@ function renderAnalizler(tumUrunler, siparisler, urunListeleri) {
     eksikAnalizTablosu.innerHTML = eksikler.map((k) => {
       const oran = ((k.eksik / k.istek) * 100).toFixed(1);
       const sinif = oran > 30 ? "badge-red" : oran > 10 ? "badge-amber" : "badge-gray";
+      const birim = kacisEt(k.birim || "");
       return `<tr>
-        <td>${kacisEt(k.ad)}</td>
         <td class="cell-code">${kacisEt(k.kod || "—")}</td>
+        <td>${kacisEt(k.ad)}</td>
         <td>${k.eksik}</td>
+        <td>${sayiBicimle(k.eksikMiktar)} ${birim}</td>
+        <td>${sayiBicimle(k.toplamMiktar)} ${birim}</td>
         <td>${k.istek}</td>
         <td><span class="badge ${sinif}">%${oran}</span></td>
       </tr>`;
@@ -386,7 +396,8 @@ document.getElementById("excelExportBtn").addEventListener("click", () => {
   // Eksik ürün sayfası
   const eksikler = hesaplaEksikAnalizi(sonTumUrunler);
   if (eksikler.length) {
-    const eksikSatirlar = [["Ürün Adı", "Kod", "Eksik Sayısı", "Toplam İstek", "% Eksik"], ...eksikler.map((k) => [k.ad, k.kod, k.eksik, k.istek, ((k.eksik / k.istek) * 100).toFixed(1)])];
+    const eksikSatirlar = [["Kod", "Ürün Adı", "Eksik Adet", "Eksik Miktar", "Toplam İstenen Miktar", "Sipariş Sayısı", "% Eksik", "Birim"],
+    ...eksikler.map((k) => [k.kod, k.ad, k.eksik, k.eksikMiktar, k.toplamMiktar, k.istek, ((k.eksik / k.istek) * 100).toFixed(1), k.birim])];
     window.XLSX.utils.book_append_sheet(wb, window.XLSX.utils.aoa_to_sheet(eksikSatirlar), "Eksik Ürünler");
   }
 
