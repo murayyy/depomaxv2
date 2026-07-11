@@ -236,58 +236,96 @@ async function teslimatModalAc(siparis) {
     not: ""
   }));
 
-  function yenile() {
-    const tbody = root.querySelector("#teslimatGovde");
-    if (!tbody) return;
-    tbody.innerHTML = kalemler.map((k, i) => {
-      const renkSinif = k.durum === "eksik" ? "row-missing" : k.durum === "fazla" ? "row-checked" : "";
-      return `
-        <tr class="${renkSinif}" data-i="${i}">
-          <td class="cell-code">${kacisEt(k.kod || "—")}</td>
-          <td>${kacisEt(k.ad)}</td>
-          <td>${sayiBicimle(k.siparisMiktari)} ${kacisEt(k.birim)}</td>
-          <td>
-            <select class="select" data-rol="durum" style="min-width:90px;">
-              <option value="tamam" ${k.durum === "tamam" ? "selected" : ""}>✅ Tamam</option>
-              <option value="eksik" ${k.durum === "eksik" ? "selected" : ""}>⚠ Eksik</option>
-              <option value="fazla" ${k.durum === "fazla" ? "selected" : ""}>➕ Fazla</option>
-            </select>
-          </td>
-          <td>
-            <input type="text" inputmode="decimal" class="cell-qty-input" data-rol="miktar"
-              value="${k.gelenMiktar}" style="width:72px;"
-              ${k.durum === "tamam" ? "disabled" : ""} />
-          </td>
-          <td>
-            <input type="text" class="input" data-rol="not" value="${kacisEt(k.not)}"
-              placeholder="Not…" style="min-width:110px;font-size:12px;" />
-          </td>
-          <td>
-            <button class="btn btn-danger btn-sm" data-rol="sil" title="Satırı kaldır">✕</button>
-          </td>
-        </tr>`;
-    }).join("");
-
-    // Olayları bağla
-    tbody.querySelectorAll("[data-i]").forEach((satir) => {
+  function kalemBagla(kapsayici) {
+    kapsayici.querySelectorAll("[data-i]").forEach((satir) => {
       const i = Number(satir.dataset.i);
-      satir.querySelector('[data-rol="durum"]').addEventListener("change", (e) => {
+      const durumSec = satir.querySelector('[data-rol="durum"]');
+      if (durumSec) durumSec.addEventListener("change", (e) => {
         kalemler[i].durum = e.target.value;
         if (e.target.value === "tamam") kalemler[i].gelenMiktar = kalemler[i].siparisMiktari;
+        if (e.target.value === "gelmedi") { kalemler[i].gelenMiktar = 0; kalemler[i].durum = "eksik"; }
         yenile();
       });
       const miktarInput = satir.querySelector('[data-rol="miktar"]');
       if (miktarInput) miktarInput.addEventListener("input", (e) => {
         kalemler[i].gelenMiktar = ondalikOku(e.target.value);
       });
-      satir.querySelector('[data-rol="not"]').addEventListener("input", (e) => {
-        kalemler[i].not = e.target.value;
-      });
-      satir.querySelector('[data-rol="sil"]').addEventListener("click", () => {
-        kalemler.splice(i, 1);
+      const notInput = satir.querySelector('[data-rol="not"]');
+      if (notInput) notInput.addEventListener("input", (e) => { kalemler[i].not = e.target.value; });
+      const gelmediBtn = satir.querySelector('[data-rol="gelmedi"]');
+      if (gelmediBtn) gelmediBtn.addEventListener("click", () => {
+        kalemler[i].durum = "eksik";
+        kalemler[i].gelenMiktar = 0;
         yenile();
       });
     });
+  }
+
+  function durumSecHtml(k, tamGenislik = false) {
+    const stil = tamGenislik ? "width:100%;" : "min-width:90px;";
+    return `<select class="select" data-rol="durum" style="${stil}">
+      <option value="tamam" ${k.durum === "tamam" ? "selected" : ""}>✅ Tamam</option>
+      <option value="eksik" ${k.durum === "eksik" ? "selected" : ""}>⚠ Eksik</option>
+      <option value="fazla" ${k.durum === "fazla" ? "selected" : ""}>➕ Fazla</option>
+    </select>`;
+  }
+
+  function yenile() {
+    // --- Masaüstü tablo ---
+    const tbody = root.querySelector("#teslimatGovde");
+    if (tbody) {
+      tbody.innerHTML = kalemler.map((k, i) => {
+        const renkSinif = k.durum === "eksik" ? "row-missing" : k.durum === "fazla" ? "row-checked" : "";
+        return `
+          <tr class="${renkSinif}" data-i="${i}">
+            <td class="cell-code">${kacisEt(k.kod || "—")}</td>
+            <td>${kacisEt(k.ad)}</td>
+            <td>${sayiBicimle(k.siparisMiktari)} ${kacisEt(k.birim)}</td>
+            <td>${durumSecHtml(k)}</td>
+            <td>
+              <input type="text" inputmode="decimal" class="cell-qty-input" data-rol="miktar"
+                value="${k.gelenMiktar}" style="width:72px;"
+                ${k.durum === "tamam" ? "disabled" : ""} />
+            </td>
+            <td><input type="text" class="input" data-rol="not" value="${kacisEt(k.not)}"
+              placeholder="Not…" style="min-width:110px;font-size:12px;" /></td>
+            <td><button class="btn btn-danger btn-sm" data-rol="gelmedi">Gelmedi</button></td>
+          </tr>`;
+      }).join("");
+      kalemBagla(tbody);
+    }
+
+    // --- Mobil kartlar ---
+    const kartlar = root.querySelector("#teslimatKartlar");
+    if (kartlar) {
+      kartlar.innerHTML = kalemler.map((k, i) => {
+        const renkSinif = k.durum === "eksik" ? "row-missing" : k.durum === "fazla" ? "row-checked" : "";
+        return `
+          <div class="row-card ${renkSinif}" data-i="${i}" style="margin-bottom:10px;">
+            <div class="row-card__top">
+              <div>
+                <div class="row-card__name">${kacisEt(k.ad)}</div>
+                <div class="row-card__code">${kacisEt(k.kod || "—")} · Sipariş: ${sayiBicimle(k.siparisMiktari)} ${kacisEt(k.birim)}</div>
+              </div>
+              <button class="btn btn-danger btn-sm" data-rol="gelmedi">Gelmedi</button>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;">
+              <div><div class="row-card__label">Durum</div>${durumSecHtml(k, true)}</div>
+              <div><div class="row-card__label">Gelen Miktar</div>
+                <input type="text" inputmode="decimal" class="cell-qty-input" data-rol="miktar"
+                  value="${k.gelenMiktar}" style="width:90px;"
+                  ${k.durum === "tamam" ? "disabled" : ""} />
+              </div>
+            </div>
+            <div style="margin-top:8px;">
+              <div class="row-card__label">Not</div>
+              <input type="text" class="input" data-rol="not" value="${kacisEt(k.not)}"
+                placeholder="İsteğe bağlı not…" style="font-size:12.5px;" />
+            </div>
+          </div>`;
+      }).join("");
+      kalemBagla(kartlar);
+    }
   }
 
   root.innerHTML = `
@@ -309,6 +347,7 @@ async function teslimatModalAc(siparis) {
             <tbody id="teslimatGovde"></tbody>
           </table>
         </div>
+        <div id="teslimatKartlar" class="row-cards" style="max-height:60vh;overflow-y:auto;margin-bottom:12px;"></div>
         <button class="btn btn-ghost btn-sm" id="ekstraUrunEkleBtn">➕ Listede Olmayan Ürün Ekle</button>
         <div class="modal__actions" style="margin-top:14px;">
           <button class="btn btn-ghost" data-role="iptal">Vazgeç</button>
