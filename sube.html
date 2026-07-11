@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
 <div class="app-shell">
@@ -29,7 +30,13 @@
         <div class="page__title">Sipariş Ver</div>
         <div class="page__subtitle" id="altBaslik">İstediğiniz ürünlerin miktarını girin. Boş bıraktıklarınız siparişe eklenmez.</div>
       </div>
-      <button class="btn btn-primary" id="siparisGonderBtn" disabled>Siparişi Gönder</button>
+      <div class="toolbar__group">
+        <label class="btn btn-ghost" style="cursor:pointer;">
+          📄 Excel'den Yükle
+          <input type="file" id="excelYukleInput" accept=".xlsx,.xls,.csv" class="u-hidden" />
+        </label>
+        <button class="btn btn-primary" id="siparisGonderBtn" disabled>Siparişi Gönder</button>
+      </div>
     </div>
 
     <div id="yukleniyorAlani" class="empty-state">
