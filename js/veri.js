@@ -1,12 +1,12 @@
 // ============================================================================
 // VERİ KATMANI (Firestore)
 // Veri modeli:
-//   siparisler/{siparisId}            -> { ad, durum, olusturulmaTarihi, olusturan,
-//                                           toplamUrun, toplananUrun, eksikUrun, kontrolEdilenUrun }
-//   siparisler/{siparisId}/urunler/{urunId} -> { kod, ad, miktar, aciklama, reyon, barkod,
-//                                                toplandi, eksik, kontrol, kontrolNotu,
-//                                                guncelleyen, guncellemeTarihi }
-//   durum: "toplaniyor" -> "toplandi" -> "kontrol_ediliyor" -> "tamamlandi"
+//   siparisler/{siparisId}            -> { ad, subeAdi, subeId, durum, olusturulmaTarihi, ... }
+//   siparisler/{siparisId}/urunler/{urunId} -> { kod, ad, miktar, birim, reyon, barkod, ... }
+//   katalog/{urunKodu}               -> { kod, ad, birim, minMiktar, reyon, aciklama, sira, aktif }
+//   kullanicilar/{uid}               -> { ad, eposta, rol, subeAdi?, subeId? }
+//   stoklar/{urunKodu}               -> { miktar, birim, durum, ... } (köprü script yazar)
+//   durum: "toplaniyor" -> "toplandi" -> "kontrol_ediliyor" -> "tamamlandi" -> "sevk_edildi"
 // ============================================================================
 import { db } from "./firebase.js";
 import { ondalikOku } from "./utils.js";
@@ -151,4 +151,84 @@ export async function tumSiparisleriGetir() {
 export async function urunleriniGetir(siparisId) {
   const snap = await getDocs(collection(db, SIPARISLER, siparisId, "urunler"));
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
+
+/* ============================================================================
+   KATALOG (sabit ürün listesi + minimum miktarlar)
+   katalog/{urunKodu} -> { kod, ad, birim, minMiktar, reyon, aciklama, sira, aktif }
+   ============================================================================ */
+const KATALOG = "katalog";
+
+export function katalogDinle(callback) {
+  const q = query(collection(db, KATALOG), orderBy("sira", "asc"));
+  return onSnapshot(q, (snap) => {
+    callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+  }, (err) => console.error("katalogDinle:", err));
+}
+
+export async function katalogUrunEkle(urun) {
+  return addDoc(collection(db, KATALOG), { ...urun, guncellemeTarihi: serverTimestamp() });
+}
+
+export function katalogUrunGuncelle(id, patch) {
+  return updateDoc(doc(db, KATALOG, id), { ...patch, guncellemeTarihi: serverTimestamp() });
+}
+
+export function katalogUrunSil(id) {
+  return deleteDoc(doc(db, KATALOG, id));
+}
+
+/* ============================================================================
+   ŞUBE SİPARİŞİ OLUŞTURMA
+   Katalogdaki aktif ürünleri, şubenin girdiği miktarlarla birleştirip
+   "siparisler" koleksiyonuna yazar (miktar > 0 olan ürünler dahil edilir).
+   ============================================================================ */
+export async function subeSimarisiOlustur({ subeAdi, subeId, olusturan, satirlar }) {
+  // satirlar: [{ katalogId, kod, ad, birim, reyon, aciklama, miktar }, ...]
+  const gecerli = satirlar.filter((s) => (ondalikOku(s.miktar) || 0) > 0);
+  if (gecerli.length === 0) throw new Error("Hiç ürün seçilmedi.");
+
+  const siparisAd = `${subeAdi} — ${new Date().toLocaleDateString("tr-TR")}`;
+  const ref = await addDoc(collection(db, SIPARISLER), {
+    ad: siparisAd,
+    subeAdi,
+    subeId,
+    durum: "toplaniyor",
+    olusturulmaTarihi: serverTimestamp(),
+    guncellemeTarihi: serverTimestamp(),
+    olusturan,
+    toplamUrun: gecerli.length,
+    toplananUrun: 0,
+    eksikUrun: 0,
+    kontrolEdilenUrun: 0
+  });
+
+  const batch = writeBatch(db);
+  gecerli.forEach((s) => {
+    const urunRef = doc(collection(db, SIPARISLER, ref.id, "urunler"));
+    batch.set(urunRef, {
+      kod: s.kod || "",
+      ad: s.ad || "",
+      miktar: ondalikOku(s.miktar),
+      birim: s.birim || "",
+      reyon: s.reyon || "",
+      aciklama: s.aciklama || "",
+      barkod: s.barkod || "",
+      toplandi: false, eksik: false, kontrol: false, kontrolNotu: "",
+      guncellemeTarihi: serverTimestamp()
+    });
+  });
+  await batch.commit();
+  return ref.id;
+}
+
+export function subeSiparisleriDinle(subeId, callback) {
+  const q = query(
+    collection(db, SIPARISLER),
+    where("subeId", "==", subeId),
+    orderBy("olusturulmaTarihi", "desc")
+  );
+  return onSnapshot(q, (snap) => {
+    callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+  }, (err) => console.error("subeSiparisleriDinle:", err));
 }
