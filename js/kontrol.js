@@ -367,8 +367,19 @@ function baglaSatirOlaylari(kapsayici, saltOkunur) {
     const eksikCb = satir.querySelector('[data-rol="eksik"]');
     if (eksikCb) {
       eksikCb.addEventListener("change", () => {
+        const urun = urunlerCache.find((u) => u.id === uid);
+        const eskiToplandiydi = urun && urun.toplandi;
         const patch = eksikCb.checked ? { eksik: true, toplandi: false } : { eksik: false };
-        if (eksikCb.checked) patch.toplayanKullanici = mevcutKullanici.ad || mevcutKullanici.uid;
+        if (eksikCb.checked) {
+          patch.toplayanKullanici = mevcutKullanici.ad || mevcutKullanici.uid;
+          if (eskiToplandiydi) {
+            // Toplayıcı "toplandı" demişti ama kontrolör "eksik" buldu — kontrolör tespiti
+            patch.kontrolorEksikTespiti = true;
+            patch.kontrolorEksikTespitiKullanici = mevcutKullanici.ad || mevcutKullanici.uid;
+          }
+        } else {
+          patch.kontrolorEksikTespiti = false;
+        }
         urunGuncelle(aktifSiparis.id, uid, patch);
       });
     }
@@ -380,7 +391,7 @@ function baglaSatirOlaylari(kapsayici, saltOkunur) {
         await urunGuncelle(aktifSiparis.id, uid, patch);
         if (aktifSiparis.durum === "toplandi") {
           aktifSiparis.durum = "kontrol_ediliyor";
-          siparisGuncelle(aktifSiparis.id, { durum: "kontrol_ediliyor" });
+          siparisGuncelle(aktifSiparis.id, { durum: "kontrol_ediliyor", kontrolBaslangic: new Date().toISOString(), kontrolBaşlayan: mevcutKullanici.ad || mevcutKullanici.uid });
         }
       });
     }
@@ -457,7 +468,7 @@ function taramaSonucModalAc(urun) {
     await urunGuncelle(aktifSiparis.id, urun.id, { kontrol: true, kontrolNotu: not, kontrolEdenKullanici: mevcutKullanici.ad || mevcutKullanici.uid });
     if (aktifSiparis.durum === "toplandi") {
       aktifSiparis.durum = "kontrol_ediliyor";
-      siparisGuncelle(aktifSiparis.id, { durum: "kontrol_ediliyor" });
+      siparisGuncelle(aktifSiparis.id, { durum: "kontrol_ediliyor", kontrolBaslangic: new Date().toISOString(), kontrolBaşlayan: mevcutKullanici.ad || mevcutKullanici.uid });
     }
     toast(`${urun.ad} kontrol edildi.`, "success");
     devamEt();
@@ -499,7 +510,11 @@ document.getElementById("tamamlaBtn").addEventListener("click", async () => {
     onayMetni: "Tamamla"
   });
   if (!onay) return;
-  await siparisGuncelle(aktifSiparis.id, { durum: "tamamlandi" });
+  await siparisGuncelle(aktifSiparis.id, {
+    durum: "tamamlandi",
+    kontrolBitis: new Date().toISOString(),
+    kontrolTamamlayan: mevcutKullanici.ad || mevcutKullanici.uid
+  });
   toast("Kontrol tamamlandı. Sipariş sevk bekleyene taşındı.", "success");
   geriDon();
 });

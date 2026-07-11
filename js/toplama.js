@@ -627,7 +627,11 @@ document.getElementById("tamamlaBtn").addEventListener("click", async () => {
     onayMetni: "Tamamla"
   });
   if (!onay) return;
-  await siparisGuncelle(aktifSiparis.id, { durum: "toplandi" });
+  await siparisGuncelle(aktifSiparis.id, {
+    durum: "toplandi",
+    toplamaBitis: new Date().toISOString(),
+    toplamayiTamamlayan: mevcutKullanici.ad || mevcutKullanici.uid
+  });
   toast("Toplama tamamlandı. Sipariş kontrol ekibine iletildi.", "success");
   geriDon();
 });
