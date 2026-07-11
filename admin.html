@@ -30,11 +30,20 @@
   <main class="page">
     <div class="page__header">
       <div>
-        <div class="page__title">Kullanıcı Yönetimi</div>
-        <div class="page__subtitle">Personel hesabı ekleyin, rol değiştirin veya erişimi kaldırın.</div>
+        <div class="page__title" id="sayfaBasligi">Kullanıcı Yönetimi</div>
+        <div class="page__subtitle" id="sayfaAltBasligi">Personel hesabı ekleyin, rol değiştirin veya erişimi kaldırın.</div>
       </div>
-      <button class="btn btn-primary" id="yeniKullaniciBtn">+ Yeni Kullanıcı</button>
+      <div class="toolbar__group">
+        <button class="btn btn-ghost btn-sm is-active" data-sekme="kullanici">👥 Kullanıcılar</button>
+        <button class="btn btn-ghost btn-sm" data-sekme="katalog">📦 Katalog</button>
+        <button class="btn btn-primary u-hidden" id="yeniKullaniciBtn">+ Yeni Kullanıcı</button>
+        <button class="btn btn-primary u-hidden" id="yeniKatalogBtn">+ Ürün Ekle</button>
+      </div>
     </div>
+
+    <!-- Kullanıcı yönetimi -->
+    <div id="kullaniciBloku">
+      <button class="btn btn-primary" id="yeniKullaniciBtn2" style="margin-bottom:14px;">+ Yeni Kullanıcı</button>
 
     <div class="table-wrap">
       <table class="data-table">
@@ -51,6 +60,25 @@
       <div class="empty-state__title">Henüz kullanıcı yok</div>
       <div class="empty-state__text">"+ Yeni Kullanıcı" ile personel ekleyin.</div>
     </div>
+    </div><!-- /kullaniciBloku -->
+
+    <!-- Katalog yönetimi -->
+    <div id="katalogBloku" class="u-hidden">
+      <button class="btn btn-primary" id="yeniKatalogBtn2" style="margin-bottom:14px;">+ Ürün Ekle</button>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>Sıra</th><th>Ürün Adı</th><th>Birim</th><th>Min. Miktar</th><th>Reyon</th><th>Durum</th><th></th></tr></thead>
+          <tbody id="katalogTabloGovde"></tbody>
+        </table>
+      </div>
+      <div class="row-cards" id="katalogKartGovde"></div>
+      <div class="empty-state u-hidden" id="katalogBosDurum">
+        <div class="empty-state__icon">📦</div>
+        <div class="empty-state__title">Katalog boş</div>
+        <div class="empty-state__text">"+ Ürün Ekle" ile şube sipariş listesine ürün ekleyin.</div>
+      </div>
+    </div><!-- /katalogBloku -->
+
   </main>
 </div>
 

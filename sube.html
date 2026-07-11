@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Sipariş Ver — Depomax</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+<div class="app-shell">
+  <header class="topbar">
+    <div class="topbar__brand"><span class="topbar__mark">D</span> Depomax</div>
+    <nav class="topbar__nav">
+      <a class="topbar__link is-active" href="sube.html">🛒 Sipariş Ver</a>
+      <a class="topbar__link" href="sube-gecmis.html">📋 Siparişlerim</a>
+    </nav>
+    <div class="topbar__user">
+      <span class="role-chip" id="subeEtiketi">…</span>
+      <span id="kullaniciAdi">…</span>
+      <button class="btn btn-ghost btn-sm" id="cikisBtn">Çıkış</button>
+    </div>
+  </header>
+
+  <main class="page">
+    <div class="page__header">
+      <div>
+        <div class="page__title">Sipariş Ver</div>
+        <div class="page__subtitle" id="altBaslik">İstediğiniz ürünlerin miktarını girin. Boş bıraktıklarınız siparişe eklenmez.</div>
+      </div>
+      <button class="btn btn-primary" id="siparisGonderBtn" disabled>Siparişi Gönder</button>
+    </div>
+
+    <div id="yukleniyorAlani" class="empty-state">
+      <div class="empty-state__icon">⏳</div>
+      <div class="empty-state__title">Ürünler yükleniyor…</div>
+    </div>
+
+    <div id="katalogAlani" class="u-hidden">
+      <div class="table-wrap">
+        <table class="data-table" id="katalogTablo">
+          <thead>
+            <tr>
+              <th>Ürün Adı</th>
+              <th>Birim</th>
+              <th>Min. Miktar</th>
+              <th>Sipariş Miktarı</th>
+            </tr>
+          </thead>
+          <tbody id="katalogGovde"></tbody>
+        </table>
+      </div>
+      <div class="row-cards" id="katalogKartlar"></div>
+    </div>
+
+    <div class="empty-state u-hidden" id="bosKatalog">
+      <div class="empty-state__icon">📦</div>
+      <div class="empty-state__title">Katalog henüz boş</div>
+      <div class="empty-state__text">Yönetici henüz ürün katalogu oluşturmamış.</div>
+    </div>
+  </main>
+</div>
+
+<script type="module" src="js/sube.js"></script>
+</body>
+</html>
