@@ -3,7 +3,7 @@
 // ============================================================================
 import { auth, signOut, sayfaKorumasi } from "./firebase.js";
 import { katalogDinle, subeSimarisiOlustur } from "./veri.js";
-import { arayuzHazirla, toast, onayIste, ondalikOku, sayiBicimle, kacisEt } from "./utils.js";
+import { arayuzHazirla, toast, onayIste, ondalikOku, sayiBicimle, kacisEt, excelDosyasiniOku } from "./utils.js";
 
 arayuzHazirla();
 
@@ -25,7 +25,7 @@ document.getElementById("cikisBtn").addEventListener("click", async () => {
 });
 
 function katalogGuncellendi(liste) {
-  katalogCache = liste.filter((u) => u.aktif !== false); // pasife alınanları gösterme
+  katalogCache = liste.filter((u) => u.aktif !== false);
   document.getElementById("yukleniyorAlani").classList.add("u-hidden");
 
   if (katalogCache.length === 0) {
@@ -37,6 +37,18 @@ function katalogGuncellendi(liste) {
   document.getElementById("katalogAlani").classList.remove("u-hidden");
   renderKatalog();
 }
+
+// ---- Buton durumunu güncelle ----
+function butonGuncelle() {
+  const herhangi = Array.from(document.querySelectorAll(".miktar-input"))
+    .some((i) => ondalikOku(i.value) > 0);
+  document.getElementById("siparisGonderBtn").disabled = !herhangi;
+}
+
+// Event delegation ile miktar değişimini yakala — yeniden render sonrası da çalışır
+document.addEventListener("input", (e) => {
+  if (e.target.classList.contains("miktar-input")) butonGuncelle();
+});
 
 function renderKatalog() {
   const tbody = document.getElementById("katalogGovde");
@@ -51,7 +63,7 @@ function renderKatalog() {
 
   let tabloHtml = "";
   gruplar.forEach((urunler, kategori) => {
-    tabloHtml += `<tr><td colspan="4" style="background:var(--color-surface-2);font-weight:700;font-size:12.5px;text-transform:uppercase;letter-spacing:0.04em;color:var(--color-ink-soft);padding:8px 12px;">${kategori}</td></tr>`;
+    tabloHtml += `<tr><td colspan="5" style="background:var(--color-surface-2);font-weight:700;font-size:12.5px;text-transform:uppercase;letter-spacing:0.04em;color:var(--color-ink-soft);padding:8px 12px;">${kacisEt(kategori)}</td></tr>`;
     tabloHtml += urunler.map((u) => `
       <tr data-uid="${u.id}">
         <td>
@@ -60,21 +72,15 @@ function renderKatalog() {
         </td>
         <td>${kacisEt(u.birim || "")}</td>
         <td>${u.minMiktar ? sayiBicimle(u.minMiktar) : "—"}</td>
-        <td>
-          <input type="text" inputmode="decimal" class="cell-qty-input miktar-input"
-            data-id="${u.id}" placeholder="0" style="width:80px;" />
-        </td>
-        <td>
-          <input type="text" class="input aciklama-input" data-id="${u.id}"
-            placeholder="Not…" style="min-width:120px;font-size:12.5px;" />
-        </td>
+        <td><input type="text" inputmode="decimal" class="cell-qty-input miktar-input" data-id="${u.id}" placeholder="0" style="width:80px;" /></td>
+        <td><input type="text" class="input aciklama-input" data-id="${u.id}" placeholder="Not…" style="min-width:120px;font-size:12.5px;" /></td>
       </tr>`).join("");
   });
   tbody.innerHTML = tabloHtml;
 
   let kartHtml = "";
   gruplar.forEach((urunler, kategori) => {
-    kartHtml += `<div style="background:var(--color-surface-2);font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:0.04em;color:var(--color-ink-soft);padding:8px 12px;border-radius:var(--radius-sm);margin:14px 0 6px;">${kategori}</div>`;
+    kartHtml += `<div style="background:var(--color-surface-2);font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:0.04em;color:var(--color-ink-soft);padding:8px 12px;border-radius:var(--radius-sm);margin:14px 0 6px;">${kacisEt(kategori)}</div>`;
     kartHtml += urunler.map((u) => `
       <div class="row-card" data-uid="${u.id}">
         <div class="row-card__top">
@@ -88,30 +94,24 @@ function renderKatalog() {
           ${u.minMiktar ? `<div><div class="row-card__label">Min. Miktar</div>${sayiBicimle(u.minMiktar)} ${kacisEt(u.birim || "")}</div>` : ""}
           <div>
             <div class="row-card__label">Sipariş Miktarı</div>
-            <input type="text" inputmode="decimal" class="cell-qty-input miktar-input"
-              data-id="${u.id}" placeholder="0" style="width:100px;" />
+            <input type="text" inputmode="decimal" class="cell-qty-input miktar-input" data-id="${u.id}" placeholder="0" style="width:100px;" />
           </div>
           <div>
             <div class="row-card__label">Not / Açıklama</div>
-            <input type="text" class="input aciklama-input" data-id="${u.id}"
-              placeholder="İsteğe bağlı not…" style="font-size:12.5px;" />
+            <input type="text" class="input aciklama-input" data-id="${u.id}" placeholder="İsteğe bağlı not…" style="font-size:12.5px;" />
           </div>
         </div>
       </div>`).join("");
   });
   kartlar.innerHTML = kartHtml;
-
-  document.querySelectorAll(".miktar-input").forEach((input) => {
-    input.addEventListener("input", miktar_degisti);
-  });
-  miktar_degisti();
+  butonGuncelle();
 }
+
 function miktarlariTopla() {
   const map = new Map();
   document.querySelectorAll(".miktar-input[data-id]").forEach((input) => {
-    const id = input.dataset.id;
     const miktar = ondalikOku(input.value);
-    if (miktar > 0) map.set(id, miktar);
+    if (miktar > 0) map.set(input.dataset.id, miktar);
   });
   return map;
 }
@@ -124,11 +124,48 @@ function aciklamalariTopla() {
   return map;
 }
 
+// ---- Excel'den miktarları yükle ----
+// Excel formatı: A sütunu=Stok Kodu veya Ürün Adı, B sütunu=Miktar
+document.getElementById("excelYukleInput").addEventListener("change", async (e) => {
+  const dosya = e.target.files[0];
+  e.target.value = "";
+  if (!dosya) return;
+  try {
+    const satirlar = await excelDosyasiniOku(dosya);
+    let eslesen = 0;
+    satirlar.forEach((satir) => {
+      const kod = String(satir["Stok Kodu"] || satir["stok kodu"] || satir["Kod"] || satir["kod"] || "").trim();
+      const ad = String(satir["Ürün Adı"] || satir["ürün adı"] || satir["Ad"] || satir["ad"] || "").trim().toLowerCase();
+      const miktar = ondalikOku(satir["Miktar"] || satir["miktar"] || satir["Sipariş Miktarı"] || 0);
+      if (!miktar) return;
+
+      // Önce stok koduna göre eşleştir, sonra ada göre
+      const urun = katalogCache.find((u) =>
+        (kod && (u.stokKodu === kod || u.kod === kod)) ||
+        (ad && (u.ad || "").toLowerCase() === ad)
+      );
+      if (!urun) return;
+
+      const input = document.querySelector(`.miktar-input[data-id="${urun.id}"]`);
+      if (input) { input.value = miktar; eslesen++; }
+    });
+    butonGuncelle();
+    if (eslesen > 0) {
+      toast(`✅ Excel'den ${eslesen} ürün miktarı yüklendi.`, "success");
+    } else {
+      toast("Excel okundu ama eşleşen ürün bulunamadı. Stok Kodu veya Ürün Adı sütununu kontrol edin.", "error");
+    }
+  } catch (err) {
+    console.error(err);
+    toast("Excel okunurken hata oluştu.", "error");
+  }
+});
+
+// ---- Siparişi Gönder ----
 document.getElementById("siparisGonderBtn").addEventListener("click", async () => {
   const miktarMap = miktarlariTopla();
   if (miktarMap.size === 0) { toast("En az bir üründe miktar girin.", "error"); return; }
 
-  // Minimum miktar kontrolü
   const altindaKalan = katalogCache.filter((u) => {
     const giris = miktarMap.get(u.id) || 0;
     return giris > 0 && u.minMiktar && giris < u.minMiktar;
@@ -159,8 +196,7 @@ document.getElementById("siparisGonderBtn").addEventListener("click", async () =
       olusturan: mevcutKullanici.uid,
       satirlar
     });
-    // Tüm giriş kutularını sıfırla
-    document.querySelectorAll(".miktar-input").forEach((i) => { i.value = ""; });
+    document.querySelectorAll(".miktar-input, .aciklama-input").forEach((i) => { i.value = ""; });
     btn.disabled = true;
     btn.innerHTML = "Siparişi Gönder";
     toast("✅ Sipariş gönderildi! Depo tarafında hazırlanmaya başlandı.", "success", 5000);
