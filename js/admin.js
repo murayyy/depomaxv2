@@ -78,11 +78,15 @@ function rolSelectHtml(k) {
 }
 
 function satirHtml(k) {
+  const subeAdiGoster = k.rol === "sube";
   return `
     <tr data-uid="${k.uid}">
       <td>${kacisEt(k.ad)}</td>
       <td class="cell-code">${kacisEt(k.eposta)}</td>
-      <td>${rolSelectHtml(k)}</td>
+      <td>
+        ${rolSelectHtml(k)}
+        ${subeAdiGoster ? `<input class="input" data-rol="subeAdi" value="${kacisEt(k.subeAdi || "")}" placeholder="Şube adı…" style="margin-top:4px;font-size:12.5px;" />` : ""}
+      </td>
       <td>${tarihBicimle(k.olusturulmaTarihi)}</td>
       <td>${k.uid === mevcutKullanici.uid ? "" : `<button class="btn btn-danger btn-sm" data-rol="sil">Sil</button>`}</td>
     </tr>`;
@@ -102,6 +106,11 @@ function kartHtml(k) {
         <label class="row-card__label">Rol</label>
         ${rolSelectHtml(k)}
       </div>
+      ${k.rol === "sube" ? `
+      <div class="field">
+        <label class="row-card__label">Şube Adı</label>
+        <input class="input" data-rol="subeAdi" value="${kacisEt(k.subeAdi || "")}" placeholder="Şube adı…" style="font-size:12.5px;" />
+      </div>` : ""}
       <div class="row-card__actions">
         ${k.uid === mevcutKullanici.uid ? "" : `<button class="btn btn-danger btn-sm" data-rol="sil">Sil</button>`}
       </div>
@@ -114,8 +123,16 @@ function baglaOlaylar(kapsayici) {
     const rolSec = satir.querySelector('[data-rol="rolSec"]');
     if (rolSec) {
       rolSec.addEventListener("change", async () => {
-        await kullaniciRolGuncelle(uid, rolSec.value);
+        const subeAdi = satir.querySelector('[data-rol="subeAdi"]')?.value?.trim() || "";
+        await kullaniciRolGuncelle(uid, rolSec.value, rolSec.value === "sube" && subeAdi ? { subeAdi } : {});
         toast("Rol güncellendi.", "success");
+      });
+    }
+    const subeAdiInput = satir.querySelector('[data-rol="subeAdi"]');
+    if (subeAdiInput) {
+      subeAdiInput.addEventListener("change", async () => {
+        await kullaniciRolGuncelle(uid, "sube", { subeAdi: subeAdiInput.value.trim() });
+        toast("Şube adı güncellendi.", "success");
       });
     }
     const silBtn = satir.querySelector('[data-rol="sil"]');

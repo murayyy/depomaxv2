@@ -45,8 +45,8 @@ export async function kullaniciOlustur({ ad, eposta, sifre, rol }) {
   return uid;
 }
 
-export function kullaniciRolGuncelle(uid, rol) {
-  return updateDoc(doc(db, KULLANICILAR, uid), { rol });
+export function kullaniciRolGuncelle(uid, rol, ekstraAlanlar = {}) {
+  return updateDoc(doc(db, KULLANICILAR, uid), { rol, ...ekstraAlanlar });
 }
 
 // Not: Bu sadece Firestore'daki rol belgesini siler — yani kullanıcının
