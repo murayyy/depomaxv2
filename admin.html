@@ -37,6 +37,7 @@
       <div class="toolbar__group">
         <button class="btn btn-ghost btn-sm is-active" data-sekme="kullanici">👥 Kullanıcılar</button>
         <button class="btn btn-ghost btn-sm" data-sekme="katalog">📦 Katalog</button>
+        <button class="btn btn-ghost btn-sm" data-sekme="teslimat">🚚 Teslimat Raporu</button>
         <button class="btn btn-primary u-hidden" id="yeniKullaniciBtn">+ Yeni Kullanıcı</button>
         <button class="btn btn-primary u-hidden" id="yeniKatalogBtn">+ Ürün Ekle</button>
       </div>
@@ -83,6 +84,20 @@
         <div class="empty-state__text">"+ Ürün Ekle" ile şube sipariş listesine ürün ekleyin.</div>
       </div>
     </div><!-- /katalogBloku -->
+
+    <!-- Teslimat uyuşmazlık raporu -->
+    <div id="teslimatBloku" class="u-hidden">
+      <div class="u-flex" style="margin-bottom:14px;gap:8px;flex-wrap:wrap;">
+        <input class="input" type="date" id="teslimatBaslangic" style="max-width:150px;" />
+        <input class="input" type="date" id="teslimatBitis" style="max-width:150px;" />
+        <button class="btn btn-primary btn-sm" id="teslimatHesaplaBtn">Getir</button>
+      </div>
+      <div class="order-grid" id="teslimatRaporListesi"></div>
+      <div class="empty-state u-hidden" id="teslimatBosDurum">
+        <div class="empty-state__icon">🚚</div>
+        <div class="empty-state__title">Bu aralıkta teslim onayı yok</div>
+      </div>
+    </div><!-- /teslimatBloku -->
 
   </main>
 </div>
