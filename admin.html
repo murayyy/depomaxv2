@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
 
@@ -65,6 +66,10 @@
     <!-- Katalog yönetimi -->
     <div id="katalogBloku" class="u-hidden">
       <button class="btn btn-primary" id="yeniKatalogBtn2" style="margin-bottom:14px;">+ Ürün Ekle</button>
+      <label class="btn btn-ghost" style="margin-bottom:14px; cursor:pointer;">
+        📄 Excel'den Toplu Ekle
+        <input type="file" id="katalogExcelInput" accept=".xlsx,.xls,.csv" class="u-hidden" />
+      </label>
       <div class="table-wrap">
         <table class="data-table">
           <thead><tr><th>Sıra</th><th>Stok Kodu</th><th>Kategori</th><th>Ürün Adı</th><th>Birim</th><th>Min. Miktar</th><th>Reyon</th><th>Durum</th><th></th></tr></thead>
