@@ -629,12 +629,31 @@ document.getElementById("sevkeCevirBtn").addEventListener("click", async () => {
     const surucuOpt = surucuSec.options[surucuSec.selectedIndex];
     const surucuAd = surucuOpt?.dataset?.ad || "";
     const plaka = surucuOpt?.dataset?.plaka || "";
+
+    // Şubenin adres/koordinatlarını kullanıcı verisinden al
+    let adres = "", telefon = "", lat = null, lng = null;
+    if (aktifSiparis.subeId) {
+      try {
+        const { db } = await import("./firebase.js");
+        const { getDoc, doc: fsDoc } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+        const snap = await getDoc(fsDoc(db, "kullanicilar", aktifSiparis.subeId));
+        if (snap.exists()) {
+          const d = snap.data();
+          adres = d.adres || ""; telefon = d.telefon || "";
+          lat = d.lat || null; lng = d.lng || null;
+        }
+      } catch (e) { console.warn("Şube verisi alınamadı:", e); }
+    }
+
     await siparisGuncelle(aktifSiparis.id, {
       durum: "sevk_edildi",
       paletSayisi: palet,
       sevkTarihi: serverTimestamp(),
       sevkEden: mevcutKullanici ? (mevcutKullanici.ad || mevcutKullanici.uid) : "",
-      ...(surucuUid ? { surucuUid, surucuAd, plaka } : {})
+      ...(surucuUid ? { surucuUid, surucuAd, plaka } : {}),
+      ...(adres ? { adres } : {}),
+      ...(telefon ? { telefon } : {}),
+      ...(lat ? { lat, lng } : {})
     });
     kapat();
     toast("Sipariş sevk edildi olarak işaretlendi.", "success");

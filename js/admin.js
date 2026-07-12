@@ -3,7 +3,7 @@
 // ============================================================================
 import { auth, signOut, sayfaKorumasi } from "./firebase.js";
 import { kullanicilariDinle, kullaniciOlustur, kullaniciRolGuncelle, kullaniciSil } from "./kullanici-yonetimi.js";
-import { katalogDinle, katalogUrunEkle, katalogUrunGuncelle, katalogUrunSil } from "./veri.js";
+import { katalogDinle, katalogUrunEkle, katalogUrunGuncelle, katalogUrunSil, tumSiparisleriGetir } from "./veri.js";
 import { arayuzHazirla, toast, onayIste, kacisEt, tarihBicimle, ondalikOku, sayiBicimle } from "./utils.js";
 
 arayuzHazirla();
@@ -26,6 +26,7 @@ sayfaKorumasi(["admin"], (kullanici) => {
   kullanicilariDinle((liste) => {
     kullaniciListesi = liste.sort((a, b) => (a.ad || "").localeCompare(b.ad || ""));
     renderKullanicilar();
+    gunlukOzetGoster(liste);
   });
   katalogDinle((liste) => {
     katalogListesi = liste;
@@ -87,7 +88,14 @@ function satirHtml(k) {
       <td class="cell-code">${kacisEt(k.eposta)}</td>
       <td>
         ${rolSelectHtml(k)}
-        ${subeAdiGoster ? `<input class="input" data-rol="subeAdi" value="${kacisEt(k.subeAdi || "")}" placeholder="Şube adı…" style="margin-top:4px;font-size:12.5px;" />` : ""}
+        ${subeAdiGoster ? `
+          <input class="input" data-rol="subeAdi" value="${kacisEt(k.subeAdi || "")}" placeholder="Şube adı…" style="margin-top:4px;font-size:12.5px;" />
+          <input class="input" data-rol="adres" value="${kacisEt(k.adres || "")}" placeholder="Adres…" style="margin-top:4px;font-size:12.5px;" />
+          <input class="input" data-rol="telefon" value="${kacisEt(k.telefon || "")}" placeholder="Telefon…" style="margin-top:4px;font-size:12.5px;" />
+          <div style="display:flex;gap:4px;margin-top:4px;">
+            <input class="input" data-rol="lat" value="${k.lat || ""}" placeholder="Enlem (örn. 39.9)" style="font-size:12.5px;" />
+            <input class="input" data-rol="lng" value="${k.lng || ""}" placeholder="Boylam (örn. 32.8)" style="font-size:12.5px;" />
+          </div>` : ""}
       </td>
       <td>${tarihBicimle(k.olusturulmaTarihi)}</td>
       <td>${k.uid === mevcutKullanici.uid ? "" : `<button class="btn btn-danger btn-sm" data-rol="sil">Sil</button>`}</td>
@@ -132,10 +140,19 @@ function baglaOlaylar(kapsayici) {
     }
     const subeAdiInput = satir.querySelector('[data-rol="subeAdi"]');
     if (subeAdiInput) {
-      subeAdiInput.addEventListener("change", async () => {
-        await kullaniciRolGuncelle(uid, "sube", { subeAdi: subeAdiInput.value.trim() });
-        toast("Şube adı güncellendi.", "success");
-      });
+      const saveSubeFields = async () => {
+        const patch = {
+          subeAdi: satir.querySelector('[data-rol="subeAdi"]')?.value?.trim() || "",
+          adres: satir.querySelector('[data-rol="adres"]')?.value?.trim() || "",
+          telefon: satir.querySelector('[data-rol="telefon"]')?.value?.trim() || "",
+          lat: parseFloat(satir.querySelector('[data-rol="lat"]')?.value) || null,
+          lng: parseFloat(satir.querySelector('[data-rol="lng"]')?.value) || null,
+        };
+        await kullaniciRolGuncelle(uid, "sube", patch);
+        toast("Şube bilgileri güncellendi.", "success");
+      };
+      satir.querySelectorAll('[data-rol="subeAdi"],[data-rol="adres"],[data-rol="telefon"],[data-rol="lat"],[data-rol="lng"]')
+        .forEach((inp) => inp.addEventListener("change", saveSubeFields));
     }
     const silBtn = satir.querySelector('[data-rol="sil"]');
     if (silBtn) {
@@ -721,3 +738,36 @@ document.getElementById("aracHesaplaBtn").addEventListener("click", async () => 
     tbody.innerHTML = "";
   }
 });
+
+/* ============================================================================
+   GÜNLÜK ÖZET BANNER
+   ============================================================================ */
+async function gunlukOzetGoster(kullanicilar) {
+  try {
+    const siparisler = await tumSiparisleriGetir();
+    const bekleyen = siparisler.filter((s) => s.durum === "toplaniyor").length;
+    const kontrolde = siparisler.filter((s) => ["toplandi","kontrol_ediliyor"].includes(s.durum)).length;
+    const sevkte = siparisler.filter((s) => s.durum === "sevk_edildi").length;
+    const surucular = kullanicilar.filter((k) => k.rol === "surucu");
+    const aktifSurucular = surucular.filter((k) =>
+      siparisler.some((s) => s.surucuUid === k.uid && s.durum === "sevk_edildi")
+    );
+
+    const bugun = new Date().toLocaleDateString("tr-TR", { weekday: "long", day: "numeric", month: "long" });
+    const banner = document.getElementById("gunlukOzetBanner");
+    if (!banner) return;
+    banner.classList.remove("u-hidden");
+    banner.innerHTML = `
+      <div style="font-size:13px;font-weight:700;margin-bottom:8px;">📋 Günlük Özet — ${bugun}</div>
+      <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:13px;">
+        <span>⏳ Bekleyen: <b>${bekleyen}</b></span>
+        <span>🔍 Kontrolde: <b>${kontrolde}</b></span>
+        <span>🚚 Sevkte: <b>${sevkte}</b></span>
+        <span>🚛 Aktif sürücü: <b>${aktifSurucular.length}/${surucular.length}</b>${aktifSurucular.length ? " (" + aktifSurucular.map(s => kacisEt(s.ad || s.plaka)).join(", ") + ")" : ""}</span>
+      </div>`;
+  } catch (err) { console.error("Günlük özet:", err); }
+}
+
+/* ============================================================================
+   ROTA OPTİMİZASYONU (surucu.js'de kullanılır — burada yardımcı fonksiyonlar)
+   ============================================================================ */
