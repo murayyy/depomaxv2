@@ -455,7 +455,7 @@ document.getElementById("katalogExcelInput").addEventListener("change", async (e
 /* ============================================================================
    TESLİMAT UYUŞMAZLIK RAPORU
    ============================================================================ */
-import { tumSiparisleriGetir, teslimatDegerlendir, eksiklerdenSiparisOlustur } from "./veri.js";
+import { tumSiparisleriGetir, teslimatDegerlendir } from "./veri.js";
 
 document.getElementById("teslimatHesaplaBtn").addEventListener("click", async () => {
   const liste = document.getElementById("teslimatRaporListesi");
@@ -567,7 +567,7 @@ document.getElementById("teslimatHesaplaBtn").addEventListener("click", async ()
               <div class="modal__actions" style="flex-wrap:wrap;gap:8px;">
                 <button class="btn btn-ghost" data-role="kapat">Kapat</button>
                 <button class="btn btn-green" data-role="onayla">✅ Onayla (Kabul Et)</button>
-                ${eksikKalemler.length ? `<button class="btn btn-primary" data-role="tekrar">🔄 Tekrar Gönder + Yeni Sipariş</button>` : ""}
+                ${eksikKalemler.length ? `<button class="btn btn-primary" data-role="tekrar">🔄 Tekrar Kontrol İşaretle</button>` : ""}
               </div>
             </div>
           </div>`;
@@ -585,20 +585,16 @@ document.getElementById("teslimatHesaplaBtn").addEventListener("click", async ()
         if (tekrarBtn) {
           tekrarBtn.onclick = async () => {
             const not = document.getElementById("degerlendirmeNot").value.trim();
-            tekrarBtn.disabled = true; tekrarBtn.innerHTML = "⏳ Oluşturuluyor…";
+            tekrarBtn.disabled = true; tekrarBtn.innerHTML = "⏳ Kaydediliyor…";
             try {
               await teslimatDegerlendir(s.id, { degerlendirme: "tekrar_kontrol", degerlendiren: mevcutKullanici.uid, not });
-              // Eksik ürünler için otomatik 🔴 Acil yeni sipariş oluştur
-              const yeniId = await eksiklerdenSiparisOlustur({
-                kaynakSiparis: s, eksikKalemler, olusturan: mevcutKullanici.uid
-              });
-              toast(`✅ Değerlendirme kaydedildi. Eksik ${eksikKalemler.length} ürün için 🔴 acil yeni sipariş oluşturuldu.`, "success", 7000);
+              toast(`✅ Kaydedildi. Eksik ${eksikKalemler.length} ürün "📋 Eksikler" sayfasında görünecek.`, "success", 6000);
               kapat();
               document.getElementById("teslimatHesaplaBtn").click();
             } catch (err) {
               console.error(err);
               toast("Hata oluştu: " + (err.message || err), "error");
-              tekrarBtn.disabled = false; tekrarBtn.innerHTML = "🔄 Tekrar Gönder + Yeni Sipariş";
+              tekrarBtn.disabled = false; tekrarBtn.innerHTML = "🔄 Tekrar Kontrol İşaretle";
             }
           };
         }
