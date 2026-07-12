@@ -28,13 +28,27 @@ const DURUM_ETIKETI = {
   toplandi: { etiket: "🔍 Kontrolde", sinif: "badge-blue" },
   kontrol_ediliyor: { etiket: "🔍 Kontrolde", sinif: "badge-blue" },
   tamamlandi: { etiket: "🚚 Sevk Bekliyor", sinif: "badge-amber" },
-  sevk_edildi: { etiket: "🚚 Yolda — Teslim Bekliyor", sinif: "badge-blue" },
+  sevk_edildi: { etiket: "🚚 Yolda", sinif: "badge-blue" },
   teslim_edildi: { etiket: "✅ Teslim Edildi", sinif: "badge-green" }
 };
 
+// sevk_edildi için sistemeAktarildi durumuna göre etiket
+function durumEtiketi(s) {
+  if (s.durum === "sevk_edildi") {
+    return s.sistemeAktarildi
+      ? { etiket: "🚚 Yolda — Teslim Alınabilir", sinif: "badge-green" }
+      : { etiket: "🚚 Yolda", sinif: "badge-blue" };
+  }
+  if (s.durum === "teslim_edildi" && s.merkezdegerlendirmesi === "tekrar_kontrol") {
+    return { etiket: "🔄 Tekrar Kontrol", sinif: "badge-red" };
+  }
+  return DURUM_ETIKETI[s.durum] || { etiket: s.durum, sinif: "badge-gray" };
+}
+
 // Sadece "toplaniyor" aşamasındaki siparişlere ürün eklenebilir
 const DUZENLENEBILIR = ["toplaniyor"];
-const TESLIM_ONAYLANABILIR = ["sevk_edildi"];
+// Teslim alındı butonu: sevk edildi + sisteme aktarılmış olmalı
+const teslimAlinabilir = (s) => s.durum === "sevk_edildi" && s.sistemeAktarildi === true;
 
 function renderSiparisler(liste) {
   const kapsayici = document.getElementById("siparisListesi");
@@ -48,7 +62,7 @@ function renderSiparisler(liste) {
   bos.classList.add("u-hidden");
 
   kapsayici.innerHTML = liste.map((s) => {
-    const d = DURUM_ETIKETI[s.durum] || { etiket: s.durum, sinif: "badge-gray" };
+    const d = durumEtiketi(s);
     const duzenlenebilir = DUZENLENEBILIR.includes(s.durum);
     return `
       <div class="card order-card">
@@ -63,7 +77,7 @@ function renderSiparisler(liste) {
         </div>
         <div class="order-card__actions">
           ${duzenlenebilir ? `<button class="btn btn-primary btn-sm" data-ekle="${s.id}">+ Ürün Ekle</button>` : ""}
-          ${TESLIM_ONAYLANABILIR.includes(s.durum) ? `<button class="btn btn-green btn-sm" data-teslim="${s.id}">✅ Teslim Aldım</button>` : ""}
+          ${teslimAlinabilir(s) ? `<button class="btn btn-green btn-sm" data-teslim="${s.id}">✅ Teslim Aldım</button>` : s.durum === "sevk_edildi" ? `<span class="u-text-soft" style="font-size:12px;">Sisteme aktarılması bekleniyor…</span>` : ""}
           <button class="btn btn-ghost btn-sm" data-detay="${s.id}">Detay →</button>
         </div>
       </div>`;
@@ -91,7 +105,7 @@ async function detayGoster(siparis) {
   const root = document.getElementById("modalRoot");
   root.innerHTML = `<div class="modal-backdrop"><div class="modal"><div class="empty-state__icon">⏳</div><p>Yükleniyor…</p></div></div>`;
   try {
-    const d = DURUM_ETIKETI[siparis.durum] || { etiket: siparis.durum, sinif: "badge-gray" };
+    const d = durumEtiketi(siparis);
     const mobil = window.innerWidth <= 720;
     const teslimEdildi = siparis.durum === "teslim_edildi" && siparis.teslimatKalemleri?.length;
 

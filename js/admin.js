@@ -455,7 +455,7 @@ document.getElementById("katalogExcelInput").addEventListener("change", async (e
 /* ============================================================================
    TESLİMAT UYUŞMAZLIK RAPORU
    ============================================================================ */
-import { tumSiparisleriGetir } from "./veri.js";
+import { tumSiparisleriGetir, teslimatDegerlendir, eksiklerdenSiparisOlustur } from "./veri.js";
 
 document.getElementById("teslimatHesaplaBtn").addEventListener("click", async () => {
   const liste = document.getElementById("teslimatRaporListesi");
@@ -519,12 +519,92 @@ document.getElementById("teslimatHesaplaBtn").addEventListener("click", async ()
             </div>
           </div>
           <div class="order-card__actions">
+            ${(oz.eksik || oz.fazla) && s.merkezdegerlendirmesi !== "onaylandi" ? `<button class="btn btn-primary btn-sm" data-degerlendir="${s.id}">Değerlendir</button>` : ""}
+            ${s.merkezdegerlendirmesi === "onaylandi" ? `<span class="badge badge-green">✅ Onaylandı</span>` : ""}
+            ${s.merkezdegerlendirmesi === "tekrar_kontrol" ? `<span class="badge badge-red">🔄 Tekrar Gönderildi</span>` : ""}
             <button class="btn btn-ghost btn-sm" data-detay="${s.id}">Detay →</button>
           </div>
         </div>`;
     }).join("");
 
     // Detay modali
+    // Değerlendirme butonu
+    liste.querySelectorAll("[data-degerlendir]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const s = gosterilecekler.find((x) => x.id === btn.dataset.degerlendir);
+        if (!s) return;
+        const eksikKalemler = (s.teslimatKalemleri || []).filter((k) => k.durum === "eksik");
+        const fazlaKalemler = (s.teslimatKalemleri || []).filter((k) => k.durum === "fazla");
+        const root = document.getElementById("modalRoot");
+        root.innerHTML = `
+          <div class="modal-backdrop" data-role="backdrop">
+            <div class="modal" style="max-width:500px;">
+              <h3>📋 Teslimat Değerlendirmesi</h3>
+              <p><b>${kacisEt(s.ad)}</b></p>
+              ${eksikKalemler.length ? `
+                <div style="margin-bottom:10px;">
+                  <div class="row-card__label" style="margin-bottom:4px;">Eksik Gelen (${eksikKalemler.length} kalem)</div>
+                  ${eksikKalemler.map((k) => `<div class="row-card" style="margin-bottom:6px;">
+                    <span class="badge badge-red">⚠ Eksik</span>
+                    <b>${kacisEt(k.ad)}</b> —
+                    Sipariş: ${sayiBicimle(k.siparisMiktari)} · Gelen: ${sayiBicimle(k.gelenMiktar || 0)} ${kacisEt(k.birim)}
+                    ${k.not ? `<div class="u-text-soft" style="font-size:12px;">${kacisEt(k.not)}</div>` : ""}
+                  </div>`).join("")}
+                </div>` : ""}
+              ${fazlaKalemler.length ? `
+                <div style="margin-bottom:10px;">
+                  <div class="row-card__label" style="margin-bottom:4px;">Fazla Gelen (${fazlaKalemler.length} kalem)</div>
+                  ${fazlaKalemler.map((k) => `<div class="row-card" style="margin-bottom:6px;">
+                    <span class="badge badge-blue">➕ Fazla</span>
+                    <b>${kacisEt(k.ad)}</b> —
+                    Sipariş: ${sayiBicimle(k.siparisMiktari)} · Gelen: ${sayiBicimle(k.gelenMiktar || 0)} ${kacisEt(k.birim)}
+                  </div>`).join("")}
+                </div>` : ""}
+              <div class="field">
+                <label>Not (isteğe bağlı)</label>
+                <input class="input" id="degerlendirmeNot" placeholder="Neden tekrar gönderiliyor, ne yapılmalı…" />
+              </div>
+              <div class="modal__actions" style="flex-wrap:wrap;gap:8px;">
+                <button class="btn btn-ghost" data-role="kapat">Kapat</button>
+                <button class="btn btn-green" data-role="onayla">✅ Onayla (Kabul Et)</button>
+                ${eksikKalemler.length ? `<button class="btn btn-primary" data-role="tekrar">🔄 Tekrar Gönder + Yeni Sipariş</button>` : ""}
+              </div>
+            </div>
+          </div>`;
+        const kapat = () => { root.innerHTML = ""; };
+        root.querySelector('[data-role="kapat"]').onclick = kapat;
+        root.querySelector('[data-role="backdrop"]').onclick = (e) => { if (e.target.dataset.role === "backdrop") kapat(); };
+        root.querySelector('[data-role="onayla"]').onclick = async () => {
+          const not = document.getElementById("degerlendirmeNot").value.trim();
+          await teslimatDegerlendir(s.id, { degerlendirme: "onaylandi", degerlendiren: mevcutKullanici.uid, not });
+          toast("Teslimat onaylandı.", "success");
+          kapat();
+          document.getElementById("teslimatHesaplaBtn").click();
+        };
+        const tekrarBtn = root.querySelector('[data-role="tekrar"]');
+        if (tekrarBtn) {
+          tekrarBtn.onclick = async () => {
+            const not = document.getElementById("degerlendirmeNot").value.trim();
+            tekrarBtn.disabled = true; tekrarBtn.innerHTML = "⏳ Oluşturuluyor…";
+            try {
+              await teslimatDegerlendir(s.id, { degerlendirme: "tekrar_kontrol", degerlendiren: mevcutKullanici.uid, not });
+              // Eksik ürünler için otomatik 🔴 Acil yeni sipariş oluştur
+              const yeniId = await eksiklerdenSiparisOlustur({
+                kaynakSiparis: s, eksikKalemler, olusturan: mevcutKullanici.uid
+              });
+              toast(`✅ Değerlendirme kaydedildi. Eksik ${eksikKalemler.length} ürün için 🔴 acil yeni sipariş oluşturuldu.`, "success", 7000);
+              kapat();
+              document.getElementById("teslimatHesaplaBtn").click();
+            } catch (err) {
+              console.error(err);
+              toast("Hata oluştu: " + (err.message || err), "error");
+              tekrarBtn.disabled = false; tekrarBtn.innerHTML = "🔄 Tekrar Gönder + Yeni Sipariş";
+            }
+          };
+        }
+      });
+    });
+
     liste.querySelectorAll("[data-detay]").forEach((btn) => {
       btn.addEventListener("click", () => {
         const s = gosterilecekler.find((x) => x.id === btn.dataset.detay);

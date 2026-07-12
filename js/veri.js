@@ -271,3 +271,48 @@ export async function teslimatKaydet(siparisId, { teslimatKalemleri, onaylayanKu
   });
   return ozet;
 }
+
+/* ============================================================================
+   MERKEZİN TESLİMAT DEĞERLENDİRMESİ
+   ============================================================================ */
+export async function teslimatDegerlendir(siparisId, { degerlendirme, degerlendiren, not }) {
+  // degerlendirme: "onaylandi" | "tekrar_kontrol"
+  await updateDoc(doc(db, SIPARISLER, siparisId), {
+    merkezdegerlendirmesi: degerlendirme,
+    merkezdegerlendirmeNotu: not || "",
+    merkezdegerlendirenKisi: degerlendiren,
+    merkezdegerlendirmeTarihi: serverTimestamp(),
+    guncellemeTarihi: serverTimestamp()
+  });
+}
+
+/* ============================================================================
+   OTOMATIK TEKRAR SİPARİŞ (eksik ürünler için yeni sipariş oluştur)
+   ============================================================================ */
+export async function eksiklerdenSiparisOlustur({ kaynakSiparis, eksikKalemler, olusturan }) {
+  const subeAdi = kaynakSiparis.subeAdi || kaynakSiparis.ad.split(" — ")[0] || "Şube";
+  const ad = `${subeAdi} — Eksik Tamamlama — ${new Date().toLocaleDateString("tr-TR")}`;
+  const ref = await addDoc(collection(db, SIPARISLER), {
+    ad, subeAdi, subeId: kaynakSiparis.subeId || "",
+    durum: "toplaniyor", aciliyet: "acil",
+    kaynakSiparisId: kaynakSiparis.id,
+    olusturulmaTarihi: serverTimestamp(),
+    guncellemeTarihi: serverTimestamp(),
+    olusturan,
+    toplamUrun: eksikKalemler.length,
+    toplananUrun: 0, eksikUrun: 0, kontrolEdilenUrun: 0
+  });
+  const batch = writeBatch(db);
+  eksikKalemler.forEach((k) => {
+    const urunRef = doc(collection(db, SIPARISLER, ref.id, "urunler"));
+    batch.set(urunRef, {
+      kod: k.kod || "", ad: k.ad || "",
+      miktar: (k.siparisMiktari || 0) - (k.gelenMiktar || 0),
+      birim: k.birim || "", reyon: "", barkod: "", aciklama: `Eksik tamamlama — Kaynak: ${kaynakSiparis.ad}`,
+      toplandi: false, eksik: false, kontrol: false, kontrolNotu: "",
+      guncellemeTarihi: serverTimestamp()
+    });
+  });
+  await batch.commit();
+  return ref.id;
+}
