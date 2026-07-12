@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Teslimat Listesi — Depomax</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+<div class="app-shell">
+  <header class="topbar">
+    <div class="topbar__brand"><span class="topbar__mark">D</span> Depomax</div>
+    <div class="topbar__user">
+      <span class="role-chip" id="plakaEtiketi">…</span>
+      <span id="kullaniciAdi">…</span>
+      <button class="btn btn-ghost btn-sm" id="cikisBtn">Çıkış</button>
+    </div>
+  </header>
+
+  <main class="page">
+    <div class="page__header">
+      <div>
+        <div class="page__title">Bugünkü Teslimatlar</div>
+        <div class="page__subtitle" id="ozetYazi">Yükleniyor…</div>
+      </div>
+    </div>
+
+    <div class="order-grid" id="siparisList"></div>
+
+    <div class="empty-state u-hidden" id="bosDurum">
+      <div class="empty-state__icon">🚚</div>
+      <div class="empty-state__title">Atanmış teslimat yok</div>
+      <div class="empty-state__text">Bugün için atanmış sipariş bulunmuyor.</div>
+    </div>
+  </main>
+</div>
+
+<script type="module" src="js/surucu.js"></script>
+</body>
+</html>

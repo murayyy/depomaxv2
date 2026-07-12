@@ -38,6 +38,7 @@
         <button class="btn btn-ghost btn-sm is-active" data-sekme="kullanici">👥 Kullanıcılar</button>
         <button class="btn btn-ghost btn-sm" data-sekme="katalog">📦 Katalog</button>
         <button class="btn btn-ghost btn-sm" data-sekme="teslimat">🚚 Teslimat Raporu</button>
+        <button class="btn btn-ghost btn-sm" data-sekme="arac">🚛 Araç Raporu</button>
         <button class="btn btn-primary u-hidden" id="yeniKullaniciBtn">+ Yeni Kullanıcı</button>
         <button class="btn btn-primary u-hidden" id="yeniKatalogBtn">+ Ürün Ekle</button>
       </div>
@@ -102,6 +103,25 @@
         <div class="empty-state__title">Bu aralıkta teslim onayı yok</div>
       </div>
     </div><!-- /teslimatBloku -->
+
+    <!-- Araç bazlı rapor -->
+    <div id="aracBloku" class="u-hidden">
+      <div class="u-flex" style="margin-bottom:14px;gap:8px;flex-wrap:wrap;">
+        <input class="input" type="date" id="aracBaslangic" style="max-width:150px;" />
+        <input class="input" type="date" id="aracBitis" style="max-width:150px;" />
+        <button class="btn btn-primary btn-sm" id="aracHesaplaBtn">Getir</button>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>Sürücü</th><th>Plaka</th><th>Teslimat</th><th>Palet</th><th>KG</th><th>Teslim Edildi</th></tr></thead>
+          <tbody id="aracRaporTablosu"></tbody>
+        </table>
+      </div>
+      <div class="empty-state u-hidden" id="aracBosDurum">
+        <div class="empty-state__icon">🚛</div>
+        <div class="empty-state__title">Bu aralıkta veri yok</div>
+      </div>
+    </div><!-- /aracBloku -->
 
   </main>
 </div>
