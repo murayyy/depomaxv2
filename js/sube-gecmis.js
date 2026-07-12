@@ -322,21 +322,27 @@ async function teslimatModalAc(siparis, yenidenSayim = false) {
   const root = document.getElementById("modalRoot");
   root.innerHTML = `<div class="modal-backdrop"><div class="modal"><div class="empty-state__icon">⏳</div><p>Ürünler yükleniyor…</p></div></div>`;
 
-  let urunler;
-  try { urunler = await urunleriniGetir(siparis.id); }
-  catch (err) { root.innerHTML = ""; toast("Ürünler yüklenemedi.", "error"); return; }
+  let kalemler;
 
-  // Her ürün için başlangıç durumu: sipariş miktarını gelen miktar olarak önceden doldur (tamam varsayımı)
-  let kalemler = urunler.map((u) => ({
-    urunId: u.id,
-    ad: u.ad,
-    kod: u.kod || "",
-    birim: u.birim || "",
-    siparisMiktari: Number(u.miktar) || 0,
-    gelenMiktar: Number(u.miktar) || 0,
-    durum: "tamam",
-    not: ""
-  }));
+  if (yenidenSayim && siparis.teslimatKalemleri?.length) {
+    // Yeniden sayım: önceki teslim onayındaki verileri yükle
+    kalemler = siparis.teslimatKalemleri.map((k) => ({ ...k }));
+  } else {
+    // İlk teslim: orijinal sipariş ürünlerini yükle
+    let urunler;
+    try { urunler = await urunleriniGetir(siparis.id); }
+    catch (err) { root.innerHTML = ""; toast("Ürünler yüklenemedi.", "error"); return; }
+    kalemler = urunler.map((u) => ({
+      urunId: u.id,
+      ad: u.ad,
+      kod: u.kod || "",
+      birim: u.birim || "",
+      siparisMiktari: Number(u.miktar) || 0,
+      gelenMiktar: Number(u.miktar) || 0,
+      durum: "tamam",
+      not: ""
+    }));
+  }
 
   function kalemBagla(kapsayici) {
     kapsayici.querySelectorAll("[data-i]").forEach((satir) => {
