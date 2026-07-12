@@ -2,7 +2,7 @@
 // KONTROL EKRANI MANTIĞI
 // ============================================================================
 import { auth, signOut, sayfaKorumasi } from "./firebase.js";
-import { siparisleriDinle, siparisGuncelle, urunleriDinle, urunGuncelle, urunEkle, tumSiparisleriCanliDinle } from "./veri.js";
+import { siparisleriDinle, siparisGuncelle, urunleriDinle, urunGuncelle, urunEkle, tumSiparisleriCanliDinle, siparisArsivle } from "./veri.js";
 import { stoklariDinle, stokRozetiHtml } from "./stok.js";
 import { serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
@@ -78,6 +78,7 @@ function sekmeYukle(sekme) {
   if (siparisAbonelikIptal) siparisAbonelikIptal();
   const durumlar = sekme === "aktif" ? ["toplandi", "kontrol_ediliyor"]
     : sekme === "sevkbekleyen" ? ["tamamlandi"]
+    : sekme === "arsiv" ? ["arsivlendi"]
     : ["sevk_edildi"];
   siparisAbonelikIptal = siparisleriDinle(durumlar, (liste) => {
     sonSiparisListesi = liste;
@@ -124,7 +125,8 @@ function renderSiparisListesi(liste) {
       ? '<span class="badge badge-red">Sisteme Aktarıldı</span>'
       : ({
           tamamlandi: '<span class="badge badge-amber">Sevk Bekliyor</span>',
-          sevk_edildi: '<span class="badge badge-green">Sevk Edildi</span>'
+          sevk_edildi: '<span class="badge badge-green">Sevk Edildi</span>',
+          arsivlendi: '<span class="badge badge-gray">🗂 Arşiv</span>'
         }[s.durum] || '<span class="badge badge-blue">Kontrol Bekliyor</span>');
     const butonMetni = s.durum === "sevk_edildi" ? "Görüntüle →" : s.durum === "tamamlandi" ? "Sevke Hazırla →" : "Kontrol Et →";
     return `
@@ -146,6 +148,7 @@ function renderSiparisListesi(liste) {
         </div>
         <div class="order-card__actions">
           <button class="btn btn-primary btn-sm" data-ac="${s.id}">${butonMetni}</button>
+          ${s.durum === "sevk_edildi" && s.sistemeAktarildi ? `<button class="btn btn-ghost btn-sm" data-arsivle="${s.id}">🗂 Arşivle</button>` : ""}
         </div>
       </div>`;
   }).join("");
@@ -154,6 +157,19 @@ function renderSiparisListesi(liste) {
     btn.addEventListener("click", () => {
       const siparis = liste.find((s) => s.id === btn.dataset.ac);
       siparisAc(siparis);
+    });
+  });
+
+  kapsayici.querySelectorAll("[data-arsivle]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const onay = await onayIste({
+        baslik: "Arşivle",
+        metin: "Bu sipariş arşive taşınacak ve listeden kalkacak. İstediğinizde arşivden tekrar görüntüleyebilirsiniz.",
+        onayMetni: "Arşivle"
+      });
+      if (!onay) return;
+      await siparisArsivle(btn.dataset.arsivle);
+      toast("Sipariş arşive taşındı.", "success");
     });
   });
 }
@@ -614,7 +630,13 @@ document.getElementById("sistemeAktarBtn").addEventListener("click", async () =>
 
   await siparisGuncelle(aktifSiparis.id, { sistemeAktarildi: true, sistemeAktarTarihi: serverTimestamp() });
   toast("CSV dosyası indirildi ve sipariş 'Sisteme Aktarıldı' işaretlendi.", "success");
-  geriDon();
+  // Sevk Edildi sekmesinde kal
+  document.querySelectorAll("[data-sekme]").forEach((b) => b.classList.remove("is-active"));
+  document.querySelector('[data-sekme="sevkedildi"]').classList.add("is-active");
+  sekmeYukle("sevkedildi");
+  document.getElementById("detayGorunumu").classList.add("u-hidden");
+  document.getElementById("listeGorunumu").classList.remove("u-hidden");
+  aktifSiparis = null; urunlerCache = [];
 });
 
 /* ---------------- Barkod tabancası ---------------- */

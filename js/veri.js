@@ -309,3 +309,11 @@ export async function teslimatDegerlendir(siparisId, { degerlendirme, degerlendi
   });
 }
 
+
+export function siparisArsivle(siparisId) {
+  return updateDoc(doc(db, SIPARISLER, siparisId), {
+    durum: "arsivlendi",
+    arsivTarihi: serverTimestamp(),
+    guncellemeTarihi: serverTimestamp()
+  });
+}
