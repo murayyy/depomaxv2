@@ -363,6 +363,12 @@ async function teslimatModalAc(siparis, yenidenSayim = false) {
     }));
   }
 
+  const MOBIL = () => window.innerWidth <= 720;
+  const renkSinifi = (k) =>
+    k.durum === "eksik" ? "row-missing" :
+    k.durum === "fazla" ? "row-checked" :
+    k.durum === "tamam" ? "row-done" : "";
+
   function kalemBagla(kapsayici) {
     kapsayici.querySelectorAll("[data-i]").forEach((satir) => {
       const i = Number(satir.dataset.i);
@@ -402,11 +408,6 @@ async function teslimatModalAc(siparis, yenidenSayim = false) {
       <option value="fazla" ${k.durum === "fazla" ? "selected" : ""}>➕ Fazla</option>
     </select>`;
   }
-
-  const renkSinifi = (k) =>
-    k.durum === "eksik" ? "row-missing" :
-    k.durum === "fazla" ? "row-checked" :
-    k.durum === "tamam" ? "row-done" : "";
 
   function yenile() {
     const mobil = MOBIL();
