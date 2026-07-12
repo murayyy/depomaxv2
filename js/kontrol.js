@@ -2,7 +2,7 @@
 // KONTROL EKRANI MANTIĞI
 // ============================================================================
 import { auth, signOut, sayfaKorumasi } from "./firebase.js";
-import { siparisleriDinle, siparisGuncelle, urunleriDinle, urunGuncelle, urunEkle, tumSiparisleriCanliDinle, siparisArsivle } from "./veri.js";
+import { siparisleriDinle, siparisGuncelle, urunleriDinle, urunGuncelle, urunEkle, tumSiparisleriCanliDinle, siparisArsivle, suruculeriGetir } from "./veri.js";
 import { stoklariDinle, stokRozetiHtml } from "./stok.js";
 import { serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
@@ -585,23 +585,61 @@ document.getElementById("urunEkleBtn").addEventListener("click", () => {
 
 /* ---------------- Sevke çevir (palet sayısı sorar) ---------------- */
 document.getElementById("sevkeCevirBtn").addEventListener("click", async () => {
-  const palet = await girdiIste({
-    baslik: "Sevke Çevir",
-    metin: "Bu sipariş sevk edildi olarak işaretlenecek ve artık düzenlenemeyecek.",
-    etiket: "Palet Sayısı",
-    placeholder: "Örn. 4",
-    tip: "number",
-    onayMetni: "Sevke Çevir"
-  });
-  if (palet === null) return;
-  await siparisGuncelle(aktifSiparis.id, {
-    durum: "sevk_edildi",
-    paletSayisi: ondalikOku(palet),
-    sevkTarihi: serverTimestamp(),
-    sevkEden: mevcutKullanici ? (mevcutKullanici.ad || mevcutKullanici.uid) : ""
-  });
-  toast("Sipariş sevk edildi olarak işaretlendi.", "success");
-  geriDon();
+  // Sürücüleri yükle
+  let surucular = [];
+  try { surucular = await suruculeriGetir(); } catch (e) { console.error(e); }
+
+  const surucuOptions = surucular.length
+    ? surucular.map((s) => `<option value="${s.uid}" data-plaka="${kacisEt(s.plaka || "")}" data-ad="${kacisEt(s.ad || "")}">${kacisEt(s.ad)}${s.plaka ? " — " + s.plaka : ""}</option>`).join("")
+    : `<option value="">— Sürücü yok, önce admin'den ekleyin —</option>`;
+
+  const root = document.getElementById("modalRoot");
+  root.innerHTML = `
+    <div class="modal-backdrop" data-role="backdrop">
+      <div class="modal">
+        <h3>🚚 Sevke Çevir</h3>
+        <p>Sipariş sevk edildi olarak işaretlenecek ve artık düzenlenemeyecek.</p>
+        <div class="field">
+          <label>Palet Sayısı</label>
+          <input class="input" type="number" id="scPalet" placeholder="Örn. 4" min="0" />
+        </div>
+        <div class="field">
+          <label>Sürücü</label>
+          <select class="select" id="scSurucu">
+            <option value="">— Sürücü seç (isteğe bağlı) —</option>
+            ${surucuOptions}
+          </select>
+        </div>
+        <div class="modal__actions">
+          <button class="btn btn-ghost" data-role="iptal">Vazgeç</button>
+          <button class="btn btn-primary" data-role="onayla">Sevke Çevir</button>
+        </div>
+      </div>
+    </div>`;
+
+  const kapat = () => { root.innerHTML = ""; };
+  root.querySelector('[data-role="iptal"]').onclick = kapat;
+  root.querySelector('[data-role="backdrop"]').onclick = (e) => {
+    if (e.target.dataset.role === "backdrop") kapat();
+  };
+  root.querySelector('[data-role="onayla"]').onclick = async () => {
+    const palet = ondalikOku(document.getElementById("scPalet").value) || 0;
+    const surucuSec = document.getElementById("scSurucu");
+    const surucuUid = surucuSec.value;
+    const surucuOpt = surucuSec.options[surucuSec.selectedIndex];
+    const surucuAd = surucuOpt?.dataset?.ad || "";
+    const plaka = surucuOpt?.dataset?.plaka || "";
+    await siparisGuncelle(aktifSiparis.id, {
+      durum: "sevk_edildi",
+      paletSayisi: palet,
+      sevkTarihi: serverTimestamp(),
+      sevkEden: mevcutKullanici ? (mevcutKullanici.ad || mevcutKullanici.uid) : "",
+      ...(surucuUid ? { surucuUid, surucuAd, plaka } : {})
+    });
+    kapat();
+    toast("Sipariş sevk edildi olarak işaretlendi.", "success");
+    geriDon();
+  };
 });
 
 /* ---------------- Sisteme aktar (kod,miktar CSV) ---------------- */

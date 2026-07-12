@@ -317,3 +317,23 @@ export function siparisArsivle(siparisId) {
     guncellemeTarihi: serverTimestamp()
   });
 }
+
+/* ============================================================================
+   SÜRÜCÜ
+   ============================================================================ */
+export function suruculeriGetir() {
+  return getDocs(query(collection(db, "kullanicilar"), where("rol", "==", "surucu")))
+    .then((snap) => snap.docs.map((d) => ({ uid: d.id, ...d.data() })));
+}
+
+export function surucuSiparisleriDinle(surucuUid, callback) {
+  const q = query(
+    collection(db, SIPARISLER),
+    where("surucuUid", "==", surucuUid),
+    where("durum", "in", ["sevk_edildi", "teslim_edildi"]),
+    orderBy("sevkTarihi", "desc")
+  );
+  return onSnapshot(q, (snap) => {
+    callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+  }, (err) => console.error("surucuSiparisleriDinle:", err));
+}

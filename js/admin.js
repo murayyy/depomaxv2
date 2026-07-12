@@ -8,7 +8,7 @@ import { arayuzHazirla, toast, onayIste, kacisEt, tarihBicimle, ondalikOku, sayi
 
 arayuzHazirla();
 
-const ROL_ETIKETI = { toplayici: "Toplayıcı", kontrolor: "Kontrolör", admin: "Admin", sube: "Şube" };
+const ROL_ETIKETI = { toplayici: "Toplayıcı", kontrolor: "Kontrolör", admin: "Admin", sube: "Şube", surucu: "Sürücü" };
 const HATA_MESAJLARI = {
   "auth/email-already-in-use": "Bu e-posta adresiyle zaten bir hesap var.",
   "auth/invalid-email": "E-posta adresi geçerli değil.",
@@ -42,6 +42,7 @@ document.querySelectorAll("[data-sekme]").forEach((btn) => {
     document.getElementById("kullaniciBloku").classList.toggle("u-hidden", aktif !== "kullanici");
     document.getElementById("katalogBloku").classList.toggle("u-hidden", aktif !== "katalog");
     document.getElementById("teslimatBloku").classList.toggle("u-hidden", aktif !== "teslimat");
+    document.getElementById("aracBloku").classList.toggle("u-hidden", aktif !== "arac");
   });
 });
 
@@ -170,12 +171,17 @@ function yeniKullaniciModalAc() {
             <option value="toplayici">Toplayıcı</option>
             <option value="kontrolor">Kontrolör</option>
             <option value="sube">Şube</option>
+            <option value="surucu">Sürücü</option>
             <option value="admin">Admin</option>
           </select>
         </div>
         <div class="field" id="ykSubeAdiAlani">
           <label>Şube Adı</label>
           <input class="input" id="ykSubeAdi" placeholder="Örn. Bozüyük Şubesi" />
+        </div>
+        <div class="field u-hidden" id="ykPlakaAlani">
+          <label>Araç Plakası</label>
+          <input class="input" id="ykPlaka" placeholder="Örn. 34 ABC 123" />
         </div>
         <p style="font-size:12px;">Bu e-posta ve şifreyi ilgili kişiye siz iletmeniz gerekiyor.</p>
         <div class="modal__actions">
@@ -186,7 +192,10 @@ function yeniKullaniciModalAc() {
     </div>`;
   const rolSec = root.querySelector("#ykRol");
   const subeAdiAlani = root.querySelector("#ykSubeAdiAlani");
-  const guncelle = () => { subeAdiAlani.classList.toggle("u-hidden", rolSec.value !== "sube"); };
+  const guncelle = () => {
+    subeAdiAlani.classList.toggle("u-hidden", rolSec.value !== "sube");
+    root.querySelector("#ykPlakaAlani").classList.toggle("u-hidden", rolSec.value !== "surucu");
+  };
   rolSec.addEventListener("change", guncelle);
   guncelle();
   const kapat = () => { root.innerHTML = ""; };
@@ -202,12 +211,11 @@ function yeniKullaniciModalAc() {
       toast("Lütfen ad, e-posta girin ve en az 6 karakterli bir şifre belirleyin.", "error");
       return;
     }
-    if (rol === "sube" && !subeAdi) {
-      toast("Şube rolü için şube adı girilmeli.", "error");
-      return;
-    }
+    const plaka = document.getElementById("ykPlaka")?.value?.trim() || "";
+    if (rol === "sube" && !subeAdi) { toast("Şube rolü için şube adı girilmeli.", "error"); return; }
+    if (rol === "surucu" && !plaka) { toast("Sürücü rolü için plaka girilmeli.", "error"); return; }
     try {
-      const ekstraAlanlar = rol === "sube" ? { subeAdi } : {};
+      const ekstraAlanlar = rol === "sube" ? { subeAdi } : rol === "surucu" ? { plaka } : {};
       await kullaniciOlustur({ ad, eposta, sifre, rol, ...ekstraAlanlar });
       kapat();
       toast(`${ad} eklendi.`, "success");
@@ -652,5 +660,64 @@ document.getElementById("teslimatHesaplaBtn").addEventListener("click", async ()
     console.error(err);
     toast("Teslim raporu yüklenemedi.", "error");
     liste.innerHTML = "";
+  }
+});
+
+/* ============================================================================
+   ARAÇ BAZLI RAPOR
+   ============================================================================ */
+document.getElementById("aracHesaplaBtn").addEventListener("click", async () => {
+  const tbody = document.getElementById("aracRaporTablosu");
+  const bos = document.getElementById("aracBosDurum");
+  tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">⏳ Yükleniyor…</td></tr>';
+  bos.classList.add("u-hidden");
+
+  try {
+    let siparisler = await tumSiparisleriGetir();
+    siparisler = siparisler.filter((s) => s.surucuUid); // sadece sürücü atanmış olanlar
+
+    const baslangic = document.getElementById("aracBaslangic").value;
+    const bitis = document.getElementById("aracBitis").value;
+    if (baslangic) {
+      const s = new Date(baslangic + "T00:00:00").getTime();
+      siparisler = siparisler.filter((x) => !x.sevkTarihi || x.sevkTarihi.toMillis() >= s);
+    }
+    if (bitis) {
+      const s = new Date(bitis + "T23:59:59").getTime();
+      siparisler = siparisler.filter((x) => !x.sevkTarihi || x.sevkTarihi.toMillis() <= s);
+    }
+
+    if (siparisler.length === 0) {
+      tbody.innerHTML = "";
+      bos.classList.remove("u-hidden");
+      return;
+    }
+
+    // Sürücü bazında grupla
+    const map = new Map();
+    siparisler.forEach((s) => {
+      const uid = s.surucuUid;
+      if (!map.has(uid)) map.set(uid, { ad: s.surucuAd || uid, plaka: s.plaka || "—", siparis: 0, palet: 0, kg: 0, teslim: 0 });
+      const k = map.get(uid);
+      k.siparis++;
+      k.palet += Number(s.paletSayisi) || 0;
+      k.kg += Number(s.toplamKg) || 0;
+      if (s.durum === "teslim_edildi") k.teslim++;
+    });
+
+    tbody.innerHTML = Array.from(map.values())
+      .sort((a, b) => b.siparis - a.siparis)
+      .map((k) => `<tr>
+        <td>${kacisEt(k.ad)}</td>
+        <td class="cell-code">${kacisEt(k.plaka)}</td>
+        <td>${k.siparis}</td>
+        <td>${k.palet}</td>
+        <td>${k.kg ? sayiBicimle(k.kg) + " KG" : "—"}</td>
+        <td>${k.teslim > 0 ? `<span class="badge badge-green">${k.teslim}</span>` : "—"}</td>
+      </tr>`).join("");
+  } catch (err) {
+    console.error(err);
+    toast("Araç raporu yüklenemedi.", "error");
+    tbody.innerHTML = "";
   }
 });
