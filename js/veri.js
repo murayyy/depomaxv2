@@ -275,7 +275,28 @@ export async function teslimatKaydet(siparisId, { teslimatKalemleri, onaylayanKu
 /* ============================================================================
    MERKEZİN TESLİMAT DEĞERLENDİRMESİ
    ============================================================================ */
-export async function teslimatDegerlendir(siparisId, { degerlendirme, degerlendiren, not }) {
+export async function teslimatYenidenOnayla(siparisId, { teslimatKalemleri, onaylayanKullanici, subeAdi }) {
+  // Şube tekrar sayım sonrası teslim detaylarını günceller — durum tekrar teslim_edildi kalır
+  // ama merkezdegerlendirmesi sıfırlanır (admin tekrar bakacak)
+  const ozet = { tamam: 0, eksik: 0, fazla: 0, eksikMiktar: 0, fazlaMiktar: 0 };
+  teslimatKalemleri.forEach((k) => {
+    if (k.durum === "tamam") ozet.tamam++;
+    else if (k.durum === "eksik") { ozet.eksik++; ozet.eksikMiktar += Number(k.siparisMiktari - k.gelenMiktar) || 0; }
+    else if (k.durum === "fazla") { ozet.fazla++; ozet.fazlaMiktar += Number(k.gelenMiktar - k.siparisMiktari) || 0; }
+  });
+  await updateDoc(doc(db, SIPARISLER, siparisId), {
+    durum: "teslim_edildi",
+    teslimatKalemleri,
+    teslimatOzeti: ozet,
+    teslimiOnaylayan: onaylayanKullanici,
+    subeAdi,
+    merkezdegerlendirmesi: null,        // Admin tekrar bakacak
+    merkezdegerlendirmeTarihi: null,
+    teslimatGuncellenmeTarihi: serverTimestamp(),
+    guncellemeTarihi: serverTimestamp()
+  });
+  return ozet;
+}
   // degerlendirme: "onaylandi" | "tekrar_kontrol"
   await updateDoc(doc(db, SIPARISLER, siparisId), {
     merkezdegerlendirmesi: degerlendirme,

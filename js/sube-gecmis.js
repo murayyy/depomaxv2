@@ -2,7 +2,7 @@
 // ŞUBE SİPARİŞ GEÇMİŞİ
 // ============================================================================
 import { auth, signOut, sayfaKorumasi } from "./firebase.js";
-import { subeSiparisleriDinle, urunleriniGetir, urunEkle, katalogDinle, teslimatKaydet } from "./veri.js";
+import { subeSiparisleriDinle, urunleriniGetir, urunEkle, katalogDinle, teslimatKaydet, teslimatYenidenOnayla } from "./veri.js";
 import { arayuzHazirla, toast, onayIste, kacisEt, sayiBicimle, ondalikOku, tarihBicimle } from "./utils.js";
 
 arayuzHazirla();
@@ -68,6 +68,11 @@ function renderSiparisler(liste) {
       <div class="card order-card">
         <div class="order-card__main">
           <div class="order-card__name">${kacisEt(s.ad)}</div>
+          ${s.merkezdegerlendirmesi === "tekrar_kontrol" ? `
+            <div style="background:var(--color-red-bg);border-left:3px solid var(--color-red);padding:8px 10px;border-radius:4px;font-size:12.5px;margin-top:6px;">
+              ⚠ <b>Merkez tekrar sayım istiyor</b>
+              ${s.merkezdegerlendirmeNotu ? `<div style="margin-top:3px;color:var(--color-ink-soft);">${kacisEt(s.merkezdegerlendirmeNotu)}</div>` : ""}
+            </div>` : ""}
           <div class="order-card__meta">
             <span class="badge ${d.sinif}">${d.etiket}</span>
             <span>${s.toplamUrun || 0} ürün</span>
@@ -78,6 +83,7 @@ function renderSiparisler(liste) {
         <div class="order-card__actions">
           ${duzenlenebilir ? `<button class="btn btn-primary btn-sm" data-ekle="${s.id}">+ Ürün Ekle</button>` : ""}
           ${teslimAlinabilir(s) ? `<button class="btn btn-green btn-sm" data-teslim="${s.id}">✅ Teslim Aldım</button>` : s.durum === "sevk_edildi" ? `<span class="u-text-soft" style="font-size:12px;">Sisteme aktarılması bekleniyor…</span>` : ""}
+          ${s.durum === "teslim_edildi" && s.merkezdegerlendirmesi === "tekrar_kontrol" ? `<button class="btn btn-primary btn-sm" data-tekrarsay="${s.id}">🔄 Tekrar Say</button>` : ""}
           <button class="btn btn-ghost btn-sm" data-detay="${s.id}">Detay →</button>
         </div>
       </div>`;
@@ -96,7 +102,14 @@ function renderSiparisler(liste) {
   kapsayici.querySelectorAll("[data-teslim]").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const siparis = liste.find((x) => x.id === btn.dataset.teslim);
-      await teslimatModalAc(siparis);
+      await teslimatModalAc(siparis, false);
+    });
+  });
+
+  kapsayici.querySelectorAll("[data-tekrarsay]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const siparis = liste.find((x) => x.id === btn.dataset.tekrarsay);
+      await teslimatModalAc(siparis, true); // yenidenSayim = true
     });
   });
 }
@@ -305,7 +318,7 @@ function urunEkleModalAc(siparisId) {
 /* ============================================================================
    AYRINTILI TESLİMAT KONTROL MODALI
    ============================================================================ */
-async function teslimatModalAc(siparis) {
+async function teslimatModalAc(siparis, yenidenSayim = false) {
   const root = document.getElementById("modalRoot");
   root.innerHTML = `<div class="modal-backdrop"><div class="modal"><div class="empty-state__icon">⏳</div><p>Ürünler yükleniyor…</p></div></div>`;
 
@@ -460,7 +473,7 @@ async function teslimatModalAc(siparis) {
         <button class="btn btn-ghost btn-sm" id="ekstraUrunEkleBtn">➕ Listede Olmayan Ürün Ekle</button>
         <div class="modal__actions" style="margin-top:14px;">
           <button class="btn btn-ghost" data-role="iptal">Vazgeç</button>
-          <button class="btn btn-green" data-role="onayla">✅ Teslimаtı Onayla</button>
+          <button class="btn btn-green" data-role="onayla">${yenidenSayim ? "🔄 Tekrar Sayımı Onayla" : "✅ Teslimаtı Onayla"}</button>
         </div>
       </div>
     </div>`;
@@ -542,19 +555,22 @@ async function teslimatModalAc(siparis) {
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner"></span>';
     try {
-      const ozet = await teslimatKaydet(siparis.id, {
+      const kaydetFn = yenidenSayim ? teslimatYenidenOnayla : teslimatKaydet;
+      const ozet = await kaydetFn(siparis.id, {
         teslimatKalemleri: kalemler,
         onaylayanKullanici: mevcutKullanici.subeAdi || mevcutKullanici.ad,
         subeAdi: mevcutKullanici.subeAdi || ""
       });
       kapat();
-      const mesaj = `Teslim onaylandı. ${ozet.tamam} tamam${ozet.eksik ? `, ${ozet.eksik} eksik` : ""}${ozet.fazla ? `, ${ozet.fazla} fazla` : ""}.`;
+      const mesaj = yenidenSayim
+        ? `Tekrar sayım onaylandı. ${ozet.tamam} tamam${ozet.eksik ? `, ${ozet.eksik} eksik` : ""}${ozet.fazla ? `, ${ozet.fazla} fazla` : ""}. Merkez tekrar inceleyecek.`
+        : `Teslim onaylandı. ${ozet.tamam} tamam${ozet.eksik ? `, ${ozet.eksik} eksik` : ""}${ozet.fazla ? `, ${ozet.fazla} fazla` : ""}.`;
       toast(mesaj, ozet.eksik || ozet.fazla ? "info" : "success", 6000);
     } catch (err) {
       console.error(err);
       toast("Kayıt sırasında hata oluştu.", "error");
       btn.disabled = false;
-      btn.innerHTML = "✅ Teslimаtı Onayla";
+      btn.innerHTML = yenidenSayim ? "🔄 Tekrar Sayımı Onayla" : "✅ Teslimаtı Onayla";
     }
   };
 }
