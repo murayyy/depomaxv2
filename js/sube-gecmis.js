@@ -270,10 +270,16 @@ async function teslimatModalAc(siparis) {
     </select>`;
   }
 
+  const MOBIL = () => window.innerWidth <= 720;
+
   function yenile() {
+    const mobil = MOBIL();
+
     // --- Masaüstü tablo ---
+    const tableWrap = root.querySelector(".teslimat-table-wrap");
     const tbody = root.querySelector("#teslimatGovde");
-    if (tbody) {
+    if (tableWrap) tableWrap.style.display = mobil ? "none" : "";
+    if (tbody && !mobil) {
       tbody.innerHTML = kalemler.map((k, i) => {
         const renkSinif = k.durum === "eksik" ? "row-missing" : k.durum === "fazla" ? "row-checked" : "";
         return `
@@ -298,33 +304,38 @@ async function teslimatModalAc(siparis) {
     // --- Mobil kartlar ---
     const kartlar = root.querySelector("#teslimatKartlar");
     if (kartlar) {
-      kartlar.innerHTML = kalemler.map((k, i) => {
-        const renkSinif = k.durum === "eksik" ? "row-missing" : k.durum === "fazla" ? "row-checked" : "";
-        return `
-          <div class="row-card ${renkSinif}" data-i="${i}" style="margin-bottom:10px;">
-            <div class="row-card__top">
-              <div>
-                <div class="row-card__name">${kacisEt(k.ad)}</div>
-                <div class="row-card__code">${kacisEt(k.kod || "—")} · Sipariş: ${sayiBicimle(k.siparisMiktari)} ${kacisEt(k.birim)}</div>
+      kartlar.style.display = mobil ? "flex" : "none";
+      kartlar.style.flexDirection = "column";
+      kartlar.style.gap = "10px";
+      if (mobil) {
+        kartlar.innerHTML = kalemler.map((k, i) => {
+          const renkSinif = k.durum === "eksik" ? "row-missing" : k.durum === "fazla" ? "row-checked" : "";
+          return `
+            <div class="row-card ${renkSinif}" data-i="${i}">
+              <div class="row-card__top">
+                <div>
+                  <div class="row-card__name">${kacisEt(k.ad)}</div>
+                  <div class="row-card__code">${kacisEt(k.kod || "—")} · Sipariş: ${sayiBicimle(k.siparisMiktari)} ${kacisEt(k.birim)}</div>
+                </div>
+                <button class="btn btn-danger btn-sm" data-rol="gelmedi">Gelmedi</button>
               </div>
-              <button class="btn btn-danger btn-sm" data-rol="gelmedi">Gelmedi</button>
-            </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;">
-              <div><div class="row-card__label">Durum</div>${durumSecHtml(k, true)}</div>
-              <div><div class="row-card__label">Gelen Miktar</div>
-                <input type="text" inputmode="decimal" class="cell-qty-input" data-rol="miktar"
-                  value="${k.gelenMiktar}" style="width:90px;"
-                  ${k.durum === "tamam" ? "disabled" : ""} />
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;">
+                <div><div class="row-card__label">Durum</div>${durumSecHtml(k, true)}</div>
+                <div><div class="row-card__label">Gelen Miktar</div>
+                  <input type="text" inputmode="decimal" class="cell-qty-input" data-rol="miktar"
+                    value="${k.gelenMiktar}" style="width:80px;"
+                    ${k.durum === "tamam" ? "disabled" : ""} />
+                </div>
               </div>
-            </div>
-            <div style="margin-top:8px;">
-              <div class="row-card__label">Not</div>
-              <input type="text" class="input" data-rol="not" value="${kacisEt(k.not)}"
-                placeholder="İsteğe bağlı not…" style="font-size:12.5px;" />
-            </div>
-          </div>`;
-      }).join("");
-      kalemBagla(kartlar);
+              <div style="margin-top:8px;">
+                <div class="row-card__label">Not</div>
+                <input type="text" class="input" data-rol="not" value="${kacisEt(k.not)}"
+                  placeholder="İsteğe bağlı not…" style="font-size:12.5px;" />
+              </div>
+            </div>`;
+        }).join("");
+        kalemBagla(kartlar);
+      }
     }
   }
 
@@ -336,7 +347,7 @@ async function teslimatModalAc(siparis) {
           Her ürünü kontrol edin. Eksik veya fazla gelenleri işaretleyip miktarını girin.
           Listede olmayan ürün geldiyse "➕ Ürün Ekle" ile ekleyin.
         </p>
-        <div class="table-wrap" style="max-height:360px;overflow-y:auto;margin-bottom:12px;">
+        <div class="table-wrap teslimat-table-wrap" style="max-height:360px;overflow-y:auto;margin-bottom:12px;">
           <table class="data-table">
             <thead>
               <tr>
@@ -347,7 +358,7 @@ async function teslimatModalAc(siparis) {
             <tbody id="teslimatGovde"></tbody>
           </table>
         </div>
-        <div id="teslimatKartlar" class="row-cards" style="max-height:60vh;overflow-y:auto;margin-bottom:12px;"></div>
+        <div id="teslimatKartlar" style="max-height:60vh;overflow-y:auto;margin-bottom:12px;display:none;"></div>
         <button class="btn btn-ghost btn-sm" id="ekstraUrunEkleBtn">➕ Listede Olmayan Ürün Ekle</button>
         <div class="modal__actions" style="margin-top:14px;">
           <button class="btn btn-ghost" data-role="iptal">Vazgeç</button>
