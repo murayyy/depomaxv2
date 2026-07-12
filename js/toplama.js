@@ -201,11 +201,11 @@ function yeniSiparisModalAc() {
   root.querySelector('[data-role="onay"]').onclick = async () => {
     const ad = document.getElementById("ysAd").value.trim();
     const dosya = document.getElementById("ysDosya").files[0];
+    const aciliyet = document.getElementById("ysAciliyet")?.value || "normal";
     if (!ad) { toast("Lütfen sipariş için bir ad girin.", "error"); return; }
     kapat();
     yukleniyorGoster("Sipariş oluşturuluyor…");
     try {
-      const aciliyet = document.getElementById("ysAciliyet").value || "normal";
       const siparisId = await siparisOlustur({ ad, olusturan: mevcutKullanici.uid, aciliyet });
       let toplamUrun = 0;
       if (dosya) {
