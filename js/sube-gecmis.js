@@ -324,11 +324,30 @@ async function teslimatModalAc(siparis, yenidenSayim = false) {
 
   let kalemler;
 
-  if (yenidenSayim && siparis.teslimatKalemleri?.length) {
-    // Yeniden sayım: önceki teslim onayındaki verileri yükle
-    kalemler = siparis.teslimatKalemleri.map((k) => ({ ...k }));
-  } else {
-    // İlk teslim: orijinal sipariş ürünlerini yükle
+  if (yenidenSayim) {
+    if (siparis.teslimatKalemleri?.length) {
+      // Önceki teslim onayındaki verileri kullan
+      kalemler = siparis.teslimatKalemleri.map((k) => ({ ...k }));
+    } else {
+      // teslimatKalemleri gelmemiş — sipariş belgesini direkt Firestore'dan çek
+      try {
+        const { getDoc, doc: fsDoc } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+        const { db } = await import("./firebase.js");
+        const snap = await getDoc(fsDoc(db, "siparisler", siparis.id));
+        const veri = snap.data();
+        if (veri?.teslimatKalemleri?.length) {
+          kalemler = veri.teslimatKalemleri.map((k) => ({ ...k }));
+        }
+      } catch (e) { console.error("teslimatKalemleri yüklenemedi:", e); }
+    }
+    // Hâlâ boşsa orijinal ürünlere dön
+    if (!kalemler?.length) {
+      toast("Önceki teslim verisi bulunamadı, orijinal sipariş yükleniyor.", "info");
+    }
+  }
+
+  if (!kalemler?.length) {
+    // İlk teslim veya fallback: orijinal sipariş ürünlerini yükle
     let urunler;
     try { urunler = await urunleriniGetir(siparis.id); }
     catch (err) { root.innerHTML = ""; toast("Ürünler yüklenemedi.", "error"); return; }
