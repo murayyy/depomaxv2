@@ -267,7 +267,13 @@ async function teslimatModalAc(siparis) {
       });
       const miktarInput = satir.querySelector('[data-rol="miktar"]');
       if (miktarInput) miktarInput.addEventListener("input", (e) => {
-        kalemler[i].gelenMiktar = ondalikOku(e.target.value);
+        const yeni = ondalikOku(e.target.value);
+        kalemler[i].gelenMiktar = yeni;
+        // Miktar değiştirilince durumu otomatik güncelle
+        if (kalemler[i].durum === "tamam" && yeni !== kalemler[i].siparisMiktari) {
+          kalemler[i].durum = yeni < kalemler[i].siparisMiktari ? "eksik" : "fazla";
+          yenile();
+        }
       });
       const notInput = satir.querySelector('[data-rol="not"]');
       if (notInput) notInput.addEventListener("input", (e) => { kalemler[i].not = e.target.value; });
@@ -289,7 +295,10 @@ async function teslimatModalAc(siparis) {
     </select>`;
   }
 
-  const MOBIL = () => window.innerWidth <= 720;
+  const renkSinifi = (k) =>
+    k.durum === "eksik" ? "row-missing" :
+    k.durum === "fazla" ? "row-checked" :
+    k.durum === "tamam" ? "row-done" : "";
 
   function yenile() {
     const mobil = MOBIL();
@@ -300,7 +309,7 @@ async function teslimatModalAc(siparis) {
     if (tableWrap) tableWrap.style.display = mobil ? "none" : "";
     if (tbody && !mobil) {
       tbody.innerHTML = kalemler.map((k, i) => {
-        const renkSinif = k.durum === "eksik" ? "row-missing" : k.durum === "fazla" ? "row-checked" : "";
+        const renkSinif = renkSinifi(k);
         return `
           <tr class="${renkSinif}" data-i="${i}">
             <td class="cell-code">${kacisEt(k.kod || "—")}</td>
@@ -310,7 +319,7 @@ async function teslimatModalAc(siparis) {
             <td>
               <input type="text" inputmode="decimal" class="cell-qty-input" data-rol="miktar"
                 value="${k.gelenMiktar}" style="width:72px;"
-                ${k.durum === "tamam" ? "disabled" : ""} />
+                 />
             </td>
             <td><input type="text" class="input" data-rol="not" value="${kacisEt(k.not)}"
               placeholder="Not…" style="min-width:110px;font-size:12px;" /></td>
@@ -328,7 +337,7 @@ async function teslimatModalAc(siparis) {
       kartlar.style.gap = "10px";
       if (mobil) {
         kartlar.innerHTML = kalemler.map((k, i) => {
-          const renkSinif = k.durum === "eksik" ? "row-missing" : k.durum === "fazla" ? "row-checked" : "";
+          const renkSinif = renkSinifi(k);
           return `
             <div class="row-card ${renkSinif}" data-i="${i}">
               <div class="row-card__top">
@@ -343,7 +352,7 @@ async function teslimatModalAc(siparis) {
                 <div><div class="row-card__label">Gelen Miktar</div>
                   <input type="text" inputmode="decimal" class="cell-qty-input" data-rol="miktar"
                     value="${k.gelenMiktar}" style="width:80px;"
-                    ${k.durum === "tamam" ? "disabled" : ""} />
+                     />
                 </div>
               </div>
               <div style="margin-top:8px;">
