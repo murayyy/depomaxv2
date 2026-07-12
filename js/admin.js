@@ -484,7 +484,22 @@ document.getElementById("teslimatHesaplaBtn").addEventListener("click", async ()
       return;
     }
 
-    liste.innerHTML = siparisler.map((s) => {
+    const sadeceFarklilar = document.getElementById("sadeceFarklilar")?.checked;
+    const gosterilecekler = sadeceFarklilar
+      ? siparisler.filter((s) => (s.teslimatOzeti?.eksik || 0) + (s.teslimatOzeti?.fazla || 0) > 0)
+      : siparisler;
+
+    if (gosterilecekler.length === 0) {
+      liste.innerHTML = `<div class="empty-state__text" style="padding:20px;">Seçili tarih aralığında uyuşmazlık bulunamadı. <a href="#" id="tumunuGoster" style="color:var(--color-blue);">Tümünü göster</a></div>`;
+      document.getElementById("tumunuGoster")?.addEventListener("click", (e) => {
+        e.preventDefault();
+        document.getElementById("sadeceFarklilar").checked = false;
+        document.getElementById("teslimatHesaplaBtn").click();
+      });
+      return;
+    }
+
+    liste.innerHTML = gosterilecekler.map((s) => {
       const oz = s.teslimatOzeti || {};
       const uyusmazlik = (oz.eksik || 0) + (oz.fazla || 0);
       const rozet = uyusmazlik > 0
@@ -512,7 +527,7 @@ document.getElementById("teslimatHesaplaBtn").addEventListener("click", async ()
     // Detay modali
     liste.querySelectorAll("[data-detay]").forEach((btn) => {
       btn.addEventListener("click", () => {
-        const s = siparisler.find((x) => x.id === btn.dataset.detay);
+        const s = gosterilecekler.find((x) => x.id === btn.dataset.detay);
         if (!s) return;
         const root = document.getElementById("modalRoot");
         const kalemler = s.teslimatKalemleri || [];

@@ -91,26 +91,70 @@ async function detayGoster(siparis) {
   const root = document.getElementById("modalRoot");
   root.innerHTML = `<div class="modal-backdrop"><div class="modal"><div class="empty-state__icon">⏳</div><p>Yükleniyor…</p></div></div>`;
   try {
-    const urunler = await urunleriniGetir(siparis.id);
     const d = DURUM_ETIKETI[siparis.durum] || { etiket: siparis.durum, sinif: "badge-gray" };
     const mobil = window.innerWidth <= 720;
+    const teslimEdildi = siparis.durum === "teslim_edildi" && siparis.teslimatKalemleri?.length;
 
-    const durumRozetiHtml = (u) => u.eksik
-      ? '<span class="badge badge-red">Eksik</span>'
-      : u.toplandi ? '<span class="badge badge-green">Toplandı</span>'
-      : '<span class="badge badge-gray">Bekliyor</span>';
+    // Teslim edilmişse → teslimatKalemleri göster (gerçekleşen)
+    // Henüz teslim edilmemişse → orijinal sipariş ürünleri göster
+    let satirlar;
+    if (teslimEdildi) {
+      satirlar = siparis.teslimatKalemleri.map((k) => ({
+        ad: k.ad, kod: k.kod, birim: k.birim,
+        miktar: k.siparisMiktari, gelenMiktar: k.gelenMiktar,
+        durum: k.durum, not: k.not,
+        isTeslim: true
+      }));
+    } else {
+      const urunler = await urunleriniGetir(siparis.id);
+      satirlar = urunler.map((u) => ({
+        ad: u.ad, kod: u.kod, birim: u.birim,
+        miktar: u.miktar, gelenMiktar: null,
+        durum: u.eksik ? "eksik" : u.toplandi ? "tamam" : "bekliyor",
+        not: u.aciklama, isTeslim: false
+      }));
+    }
+
+    const durumRozetiHtml = (s) => {
+      if (!s.isTeslim) {
+        return s.durum === "eksik" ? '<span class="badge badge-red">Eksik</span>'
+          : s.durum === "tamam" ? '<span class="badge badge-green">Toplandı</span>'
+          : '<span class="badge badge-gray">Bekliyor</span>';
+      }
+      return s.durum === "tamam" ? '<span class="badge badge-green">✅ Tamam</span>'
+        : s.durum === "eksik" ? '<span class="badge badge-red">⚠ Eksik</span>'
+        : '<span class="badge badge-blue">➕ Fazla</span>';
+    };
+
+    const farkHtml = (s) => {
+      if (!s.isTeslim || s.gelenMiktar === null) return "";
+      const fark = (s.gelenMiktar || 0) - (s.miktar || 0);
+      if (fark === 0) return "";
+      const sinif = fark < 0 ? "badge-red" : "badge-blue";
+      return `<span class="badge ${sinif}">${fark > 0 ? "+" : ""}${sayiBicimle(fark)}</span>`;
+    };
+
+    const baslik = teslimEdildi
+      ? `Teslim Detayı — ${kacisEt(siparis.ad)}`
+      : kacisEt(siparis.ad);
 
     const tabloHtml = `
       <div style="overflow-x:auto;margin-top:12px;">
         <table class="data-table">
-          <thead><tr><th>Ürün</th><th>İstenen</th><th>Birim</th><th>Not</th><th>Durum</th></tr></thead>
+          <thead><tr>
+            <th>Ürün</th>
+            <th>Sipariş</th>
+            ${teslimEdildi ? "<th>Gelen</th><th>Fark</th>" : ""}
+            <th>Durum</th>
+            ${teslimEdildi ? "<th>Not</th>" : ""}
+          </tr></thead>
           <tbody>
-            ${urunler.map((u) => `<tr>
-              <td>${kacisEt(u.ad)}</td>
-              <td>${sayiBicimle(u.miktar || 0)}</td>
-              <td>${kacisEt(u.birim || "")}</td>
-              <td class="u-text-soft" style="font-size:12px;">${kacisEt(u.aciklama || "—")}</td>
-              <td>${durumRozetiHtml(u)}</td>
+            ${satirlar.map((s) => `<tr>
+              <td>${kacisEt(s.ad)}${s.kod ? ` <span class="cell-code">${kacisEt(s.kod)}</span>` : ""}</td>
+              <td>${sayiBicimle(s.miktar || 0)} ${kacisEt(s.birim || "")}</td>
+              ${teslimEdildi ? `<td>${sayiBicimle(s.gelenMiktar || 0)} ${kacisEt(s.birim || "")}</td><td>${farkHtml(s)}</td>` : ""}
+              <td>${durumRozetiHtml(s)}</td>
+              ${teslimEdildi ? `<td class="u-text-soft" style="font-size:12px;">${kacisEt(s.not || "—")}</td>` : ""}
             </tr>`).join("")}
           </tbody>
         </table>
@@ -118,24 +162,36 @@ async function detayGoster(siparis) {
 
     const kartlarHtml = `
       <div style="display:flex;flex-direction:column;gap:10px;margin-top:12px;max-height:60vh;overflow-y:auto;">
-        ${urunler.map((u) => `
+        ${satirlar.map((s) => `
           <div class="row-card">
             <div class="row-card__top">
               <div>
-                <div class="row-card__name">${kacisEt(u.ad)}</div>
-                <div class="row-card__code">${sayiBicimle(u.miktar || 0)} ${kacisEt(u.birim || "")}</div>
+                <div class="row-card__name">${kacisEt(s.ad)}</div>
+                <div class="row-card__code">
+                  Sipariş: ${sayiBicimle(s.miktar || 0)} ${kacisEt(s.birim || "")}
+                  ${teslimEdildi ? ` · Gelen: ${sayiBicimle(s.gelenMiktar || 0)} ${kacisEt(s.birim || "")}` : ""}
+                  ${farkHtml(s)}
+                </div>
               </div>
-              ${durumRozetiHtml(u)}
+              ${durumRozetiHtml(s)}
             </div>
-            ${u.aciklama ? `<div class="u-text-soft" style="font-size:12px;margin-top:4px;">${kacisEt(u.aciklama)}</div>` : ""}
+            ${s.not ? `<div class="u-text-soft" style="font-size:12px;margin-top:4px;">${kacisEt(s.not)}</div>` : ""}
           </div>`).join("")}
       </div>`;
 
+    const tarihBilgi = teslimEdildi && siparis.teslimatTarihi
+      ? siparis.teslimatTarihi.toDate?.().toLocaleString("tr-TR") || ""
+      : tarihBicimle(siparis.olusturulmaTarihi);
+
     root.innerHTML = `
       <div class="modal-backdrop" data-role="backdrop">
-        <div class="modal" style="max-width:520px;">
-          <h3>${kacisEt(siparis.ad)}</h3>
-          <p><span class="badge ${d.sinif}">${d.etiket}</span> &nbsp; ${tarihBicimle(siparis.olusturulmaTarihi)}</p>
+        <div class="modal" style="max-width:560px;">
+          <h3>${baslik}</h3>
+          <p>
+            <span class="badge ${d.sinif}">${d.etiket}</span>
+            &nbsp; ${tarihBilgi}
+            ${teslimEdildi && siparis.teslimiOnaylayan ? `&nbsp; · Teslim alan: <b>${kacisEt(siparis.teslimiOnaylayan)}</b>` : ""}
+          </p>
           ${mobil ? kartlarHtml : tabloHtml}
           <div class="modal__actions">
             <button class="btn btn-primary" data-role="kapat">Kapat</button>
