@@ -297,6 +297,8 @@ export async function teslimatYenidenOnayla(siparisId, { teslimatKalemleri, onay
   });
   return ozet;
 }
+
+export async function teslimatDegerlendir(siparisId, { degerlendirme, degerlendiren, not }) {
   // degerlendirme: "onaylandi" | "tekrar_kontrol"
   await updateDoc(doc(db, SIPARISLER, siparisId), {
     merkezdegerlendirmesi: degerlendirme,
