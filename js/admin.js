@@ -3,7 +3,7 @@
 // ============================================================================
 import { auth, signOut, sayfaKorumasi } from "./firebase.js";
 import { kullanicilariDinle, kullaniciOlustur, kullaniciRolGuncelle, kullaniciSil } from "./kullanici-yonetimi.js";
-import { katalogDinle, katalogUrunEkle, katalogUrunGuncelle, katalogUrunSil, tumSiparisleriGetir } from "./veri.js";
+import { katalogDinle, katalogUrunEkle, katalogUrunGuncelle, katalogUrunSil, tumSiparisleriGetir, teslimatDegerlendir } from "./veri.js";
 import { arayuzHazirla, toast, onayIste, kacisEt, tarihBicimle, ondalikOku, sayiBicimle } from "./utils.js";
 
 arayuzHazirla();
@@ -480,7 +480,6 @@ document.getElementById("katalogExcelInput").addEventListener("change", async (e
 /* ============================================================================
    TESLİMAT UYUŞMAZLIK RAPORU
    ============================================================================ */
-import { tumSiparisleriGetir, teslimatDegerlendir } from "./veri.js";
 
 document.getElementById("teslimatHesaplaBtn").addEventListener("click", async () => {
   const liste = document.getElementById("teslimatRaporListesi");
