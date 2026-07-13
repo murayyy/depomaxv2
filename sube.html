@@ -2,6 +2,15 @@
 <html lang="tr">
 <head>
 <meta charset="UTF-8" />
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#0F52BA" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Depomax" />
+    <link rel="apple-touch-icon" href="/icon-192.png" />
+<link rel="icon" type="image/svg+xml" href="favicon.svg" />
+
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>Sipariş Ver — Depomax</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -35,6 +44,7 @@
           📄 Excel'den Yükle
           <input type="file" id="excelYukleInput" accept=".xlsx,.xls,.csv" class="u-hidden" />
         </label>
+        <input class="input" id="barkodTabancaInput" placeholder="🔫 Barkod okut…" style="max-width:160px;" autocomplete="off" />
         <button class="btn btn-primary" id="siparisGonderBtn" disabled>Siparişi Gönder</button>
       </div>
     </div>
@@ -71,5 +81,10 @@
 </div>
 
 <script type="module" src="js/sube.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    }
+  </script>
 </body>
 </html>

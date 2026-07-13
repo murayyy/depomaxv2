@@ -2,6 +2,13 @@
 <html lang="tr">
 <head>
 <meta charset="UTF-8" />
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#0F52BA" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Depomax" />
+    <link rel="apple-touch-icon" href="/icon-192.png" />
 <link rel="icon" type="image/svg+xml" href="favicon.svg" />
 
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
@@ -131,5 +138,10 @@
 </div>
 
 <script type="module" src="js/admin.js?v=3"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    }
+  </script>
 </body>
 </html>
