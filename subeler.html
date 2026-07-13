@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Şube Haritası — Depomax</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  #harita { height: calc(100vh - 140px); border-radius: var(--radius-sm); }
+  .leaflet-popup-content { font-family: 'IBM Plex Sans', sans-serif; font-size: 13px; min-width: 180px; }
+  .popup-baslik { font-weight: 700; font-size: 14px; margin-bottom: 6px; }
+  .popup-rozet { display: inline-block; padding: 2px 8px; border-radius: 99px; font-size: 11.5px; font-weight: 600; margin-bottom: 6px; }
+  .popup-meta { color: #666; font-size: 12px; line-height: 1.6; }
+  .legend { background: white; padding: 10px 14px; border-radius: 8px; box-shadow: 0 1px 5px rgba(0,0,0,.15); font-size: 12px; line-height: 1.8; }
+  .legend-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+</style>
+</head>
+<body>
+<div class="app-shell">
+  <header class="topbar">
+    <div class="topbar__brand"><span class="topbar__mark">D</span> Depomax</div>
+    <nav class="topbar__nav">
+      <a class="topbar__link" href="admin.html">⬅ Yönetim</a>
+    </nav>
+    <div class="topbar__user">
+      <span class="role-chip" id="rolEtiketi">…</span>
+      <span id="kullaniciAdi">…</span>
+      <button class="btn btn-ghost btn-sm" id="cikisBtn">Çıkış</button>
+    </div>
+  </header>
+
+  <main class="page" style="padding-bottom:0;">
+    <div class="page__header" style="margin-bottom:12px;">
+      <div>
+        <div class="page__title">Şube Haritası</div>
+        <div class="page__subtitle" id="ozetYazi">Yükleniyor…</div>
+      </div>
+      <button class="btn btn-ghost btn-sm" id="yenileBtn">↻ Yenile</button>
+    </div>
+    <div id="harita"></div>
+  </main>
+</div>
+
+<script type="module" src="js/subeler.js"></script>
+</body>
+</html>
