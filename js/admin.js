@@ -266,10 +266,12 @@ function renderKatalog() {
     <tr data-uid="${u.id}">
       <td class="cell-code">${u.sira || "—"}</td>
       <td class="cell-code">${kacisEt(u.stokKodu || "—")}</td>
+      <td class="cell-code">${kacisEt(u.barkod || "—")}</td>
       <td>${kacisEt(u.kategori || "—")}</td>
       <td>${kacisEt(u.ad)}</td>
       <td>${kacisEt(u.birim || "")}</td>
       <td>${u.minMiktar ? sayiBicimle(u.minMiktar) : "—"}</td>
+      <td>${u.birimAgirlik ? sayiBicimle(u.birimAgirlik) + " KG" : "—"}</td>
       <td>${kacisEt(u.reyon || "")}</td>
       <td><span class="badge ${u.aktif === false ? "badge-gray" : "badge-green"}">${u.aktif === false ? "Pasif" : "Aktif"}</span></td>
       <td style="display:flex;gap:6px;">
@@ -318,9 +320,11 @@ function katalogModalAc(mevcut) {
         <h3>${mevcut ? "Ürünü Düzenle" : "Kataloga Ürün Ekle"}</h3>
         <div class="input-row">
           <div class="field"><label>Stok Kodu</label><input class="input" id="kuStokKodu" placeholder="Mikro stok kodu" value="${kacisEt(mevcut?.stokKodu || "")}" /></div>
+          <div class="field"><label>Barkod</label><input class="input" id="kuBarkod" placeholder="Ürün barkodu" value="${kacisEt(mevcut?.barkod || "")}" /></div>
           <div class="field"><label>Ürün Adı</label><input class="input" id="kuAd" value="${kacisEt(mevcut?.ad || "")}" /></div>
           <div class="field"><label>Birim</label><input class="input" id="kuBirim" placeholder="KG, Adet…" value="${kacisEt(mevcut?.birim || "")}" /></div>
           <div class="field"><label>Min. Miktar</label><input class="input" type="text" inputmode="decimal" id="kuMin" value="${mevcut?.minMiktar || ""}" /></div>
+          <div class="field"><label>Birim Ağırlık (1 barkod = kaç KG)</label><input class="input" type="text" inputmode="decimal" id="kuBirimAgirlik" placeholder="Örn. 5" value="${mevcut?.birimAgirlik || ""}" /></div>
           <div class="field"><label>Reyon</label><input class="input" id="kuReyon" value="${kacisEt(mevcut?.reyon || "")}" /></div>
           <div class="field"><label>Sıra No</label><input class="input" type="number" id="kuSira" value="${mevcut?.sira || ""}" placeholder="1, 2, 3…" /></div>
           <div class="field"><label>Kategori</label><input class="input" id="kuKategori" placeholder="Kuruyemiş, Baharat…" value="${kacisEt(mevcut?.kategori || "")}" /></div>
@@ -348,9 +352,11 @@ function katalogModalAc(mevcut) {
     const veri = {
       ad,
       stokKodu: document.getElementById("kuStokKodu").value.trim(),
+      barkod: document.getElementById("kuBarkod").value.trim(),
       kategori: document.getElementById("kuKategori").value.trim(),
       birim: document.getElementById("kuBirim").value.trim(),
       minMiktar: parseFloat(document.getElementById("kuMin").value.replace(",", ".")) || 0,
+      birimAgirlik: parseFloat(document.getElementById("kuBirimAgirlik").value.replace(",", ".")) || 0,
       reyon: document.getElementById("kuReyon").value.trim(),
       sira: parseInt(document.getElementById("kuSira").value, 10) || 0,
       aciklama: document.getElementById("kuAciklama").value.trim(),
