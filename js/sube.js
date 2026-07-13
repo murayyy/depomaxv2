@@ -219,3 +219,33 @@ document.getElementById("siparisGonderBtn").addEventListener("click", async () =
     btn.innerHTML = "Siparişi Gönder";
   }
 });
+
+/* ============================================================================
+   BARKOD TARAMA (kamera + tabanca) — katalog ürünlerini otomatik ekler
+   ============================================================================ */
+function barkodIsleme(kod) {
+  const urun = katalogCache.find((u) => u.barkod && u.barkod.trim() === kod.trim());
+  if (!urun) {
+    toast(`Barkod katalogda bulunamadı: ${kod}`, "error", 3000);
+    return;
+  }
+  // Mevcut input'u bul ve birimAgirlik kadar miktar ekle
+  const input = document.querySelector(`.miktar-input[data-id="${urun.id}"]`);
+  if (!input) { toast("Ürün listede görünmüyor.", "error"); return; }
+  const eskiMiktar = ondalikOku(input.value) || 0;
+  const eklenecek = urun.birimAgirlik || 1;
+  input.value = eskiMiktar + eklenecek;
+  input.dispatchEvent(new Event("input")); // buton aktifleştir
+  toast(`✅ ${urun.ad} — ${sayiBicimle(eskiMiktar + eklenecek)} ${urun.birim || ""}`, "success", 2000);
+  // Ürünün olduğu yere scroll
+  input.scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+// ---- Tabanca (USB/BT keyboard wedge) ----
+document.getElementById("barkodTabancaInput").addEventListener("keydown", (e) => {
+  if (e.key !== "Enter") return;
+  e.preventDefault();
+  const kod = e.target.value.trim();
+  e.target.value = "";
+  if (kod) barkodIsleme(kod);
+});
