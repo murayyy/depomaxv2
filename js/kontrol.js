@@ -604,6 +604,10 @@ document.getElementById("sevkeCevirBtn").addEventListener("click", async () => {
           <input class="input" type="number" id="scPalet" placeholder="Örn. 4" min="0" />
         </div>
         <div class="field">
+          <label>Teslimat Sırası</label>
+          <input class="input" type="number" id="scSira" placeholder="1, 2, 3… (bu araçtaki kaçıncı durak)" min="1" />
+        </div>
+        <div class="field">
           <label>Sürücü</label>
           <select class="select" id="scSurucu">
             <option value="">— Sürücü seç (isteğe bağlı) —</option>
@@ -624,6 +628,7 @@ document.getElementById("sevkeCevirBtn").addEventListener("click", async () => {
   };
   root.querySelector('[data-role="onayla"]').onclick = async () => {
     const palet = ondalikOku(document.getElementById("scPalet").value) || 0;
+    const teslimatSirasi = parseInt(document.getElementById("scSira").value) || 0;
     const surucuSec = document.getElementById("scSurucu");
     const surucuUid = surucuSec.value;
     const surucuOpt = surucuSec.options[surucuSec.selectedIndex];
@@ -648,6 +653,7 @@ document.getElementById("sevkeCevirBtn").addEventListener("click", async () => {
     await siparisGuncelle(aktifSiparis.id, {
       durum: "sevk_edildi",
       paletSayisi: palet,
+      teslimatSirasi: teslimatSirasi || 0,
       sevkTarihi: serverTimestamp(),
       sevkEden: mevcutKullanici ? (mevcutKullanici.ad || mevcutKullanici.uid) : "",
       ...(surucuUid ? { surucuUid, surucuAd, plaka } : {}),
