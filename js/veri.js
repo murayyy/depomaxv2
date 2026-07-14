@@ -12,7 +12,8 @@ import { db } from "./firebase.js";
 import { ondalikOku } from "./utils.js";
 import {
   collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot,
-  query, where, orderBy, serverTimestamp, writeBatch, getDocs
+  query, where, orderBy, serverTimestamp, writeBatch, getDocs,
+  setDoc, getDoc
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const SIPARISLER = "siparisler";
@@ -457,4 +458,29 @@ export async function uretimGecmisGetir() {
   const paketlemeler = pk.docs.map(d => ({ id: d.id, tip: "paketleme", ...d.data() }));
   return [...uretimler, ...paketlemeler]
     .sort((a, b) => (b.tarih?.toMillis?.() || 0) - (a.tarih?.toMillis?.() || 0));
+}
+
+/* ============================================================================
+   PALETLEMEر
+   ============================================================================ */
+const PALETLEMELER = "paletlemeler";
+
+export function paletlemeyiDinle(siparisId, callback) {
+  return onSnapshot(doc(db, PALETLEMELER, siparisId), (snap) => {
+    callback(snap.exists() ? { id: snap.id, ...snap.data() } : null);
+  }, (err) => console.error(err));
+}
+
+export function paletlemeKaydet2(siparisId, veri) {
+  return updateDoc(doc(db, PALETLEMELER, siparisId), { ...veri, guncellemeTarihi: serverTimestamp() })
+    .catch(() => setDoc(doc(db, PALETLEMELER, siparisId), { ...veri, olusturulmaTarihi: serverTimestamp(), guncellemeTarihi: serverTimestamp() }));
+}
+
+export async function paletlemeYardimciEkle(siparisId, yardimci) {
+  const snap = await getDoc(doc(db, PALETLEMELER, siparisId));
+  const mevcutYardimcilar = snap.exists() ? (snap.data().yardimcilar || []) : [];
+  if (!mevcutYardimcilar.includes(yardimci)) {
+    mevcutYardimcilar.push(yardimci);
+  }
+  return paletlemeKaydet2(siparisId, { yardimcilar: mevcutYardimcilar });
 }
