@@ -2,20 +2,16 @@
 <html lang="tr">
 <head>
 <meta charset="UTF-8" />
-<link rel="manifest" href="/manifest.json" />
-<meta name="theme-color" content="#0F52BA" />
-<meta name="mobile-web-app-capable" content="yes" />
-<meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>Paletleme — Depomax</title>
+<title>Paletçi — Depomax</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css" />
 <style>
-  .palet-chip { display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:99px;font-size:12px;font-weight:700;cursor:pointer;border:2px solid transparent;transition:all .15s; }
-  .palet-chip.aktif { border-color:var(--color-blue);background:var(--color-blue-bg);color:var(--color-blue); }
-  .palet-chip.bos  { border-color:var(--color-border);background:var(--color-surface-2);color:var(--color-ink-soft); }
-  .urun-palet-satir { display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--color-border); }
-  .ai-kutu { background:linear-gradient(135deg,#EFF6FF,#F0FDF4);border:1px solid #BFDBFE;border-radius:10px;padding:14px;margin-top:12px;font-size:13px;line-height:1.6; }
+  .palet-kart { background:var(--color-surface-1);border:2px solid var(--color-border);border-radius:var(--radius-sm);padding:14px;margin-bottom:10px; }
+  .palet-kart.aktif { border-color:var(--color-blue); }
+  .palet-no { font-size:18px;font-weight:700;color:var(--color-blue); }
+  .palet-urun-satir { display:flex;justify-content:space-between;align-items:center;font-size:13px;padding:4px 8px;background:var(--color-surface-2);border-radius:4px;margin-top:4px; }
+  .ai-sonuc { background:var(--color-blue-bg);border:1px solid var(--color-blue);border-radius:8px;padding:14px;margin-top:12px;font-size:13px;line-height:1.6;white-space:pre-wrap; }
 </style>
 </head>
 <body>
@@ -30,64 +26,80 @@
   </header>
 
   <main class="page">
-    <!-- Liste görünümü -->
+    <!-- SİPARİŞ LİSTESİ -->
     <div id="listeGorunumu">
       <div class="page__header">
-        <div>
-          <div class="page__title">Paletleme</div>
-          <div class="page__subtitle">Kontrole alınan siparişler</div>
-        </div>
+        <div class="page__title">📦 Paletçi Ekranı</div>
       </div>
-      <div class="order-grid" id="siparisList"></div>
+      <div id="siparisList"></div>
       <div class="empty-state u-hidden" id="bosDurum">
         <div class="empty-state__icon">📦</div>
         <div class="empty-state__title">Paletlenecek sipariş yok</div>
-        <div class="empty-state__text">Kontrole alınan sipariş bulunmuyor.</div>
+        <div class="empty-state__text">Kontrol aşamasında sipariş bekleniyor.</div>
       </div>
     </div>
 
-    <!-- Detay görünümü -->
+    <!-- DETAY -->
     <div id="detayGorunumu" class="u-hidden">
-      <div class="page__header">
+      <div class="page__header" style="flex-wrap:wrap;gap:8px;">
+        <div>
+          <div class="page__title" id="detayBaslik">—</div>
+          <div class="page__subtitle" id="detayMeta">—</div>
+        </div>
         <button class="btn btn-ghost" id="geriBtn">← Geri</button>
-        <div style="flex:1;">
-          <div class="page__title" id="detayBaslik"></div>
-          <div class="page__subtitle" id="detayAlt"></div>
-        </div>
-        <button class="btn btn-primary" id="tamamlaBtn">✅ Paletleme Tamam</button>
-      </div>
-
-      <!-- Araç çubuğu -->
-      <div class="toolbar" style="margin-bottom:14px;">
-        <div class="toolbar__group">
-          <input class="input" id="barkodInput" placeholder="🔫 Barkod okut…" style="max-width:180px;" autocomplete="off" />
-          <button class="btn btn-ghost btn-sm" id="yardimciEkleBtn">👤 Yardımcı Ekle</button>
-          <button class="btn btn-ghost btn-sm" id="aiTahminBtn">📷 AI Palet Tahmini</button>
-        </div>
-        <div class="toolbar__group" id="paletSecRow" style="flex-wrap:wrap;gap:6px;">
-          <!-- Palet chipları buraya -->
-        </div>
       </div>
 
       <!-- Yardımcılar -->
-      <div id="yardimcilar" style="margin-bottom:10px;font-size:12.5px;color:var(--color-ink-soft);"></div>
+      <div class="card" style="margin-bottom:14px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <b style="font-size:13px;">👥 Yardımcılar</b>
+          <button class="btn btn-ghost btn-sm" id="yardimciEkleBtn">+ Ekle</button>
+        </div>
+        <div id="yardimciListesi" style="display:flex;gap:8px;flex-wrap:wrap;min-height:24px;"></div>
+      </div>
 
-      <!-- AI sonucu -->
-      <div id="aiSonuc" class="u-hidden ai-kutu"></div>
+      <!-- AI Analiz -->
+      <div class="card" style="margin-bottom:14px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <b style="font-size:13px;">🤖 AI ile Palet Tahmini</b>
+          <label class="btn btn-primary btn-sm" style="cursor:pointer;">
+            📷 Fotoğraf Çek / Seç
+            <input type="file" id="fotografInput" accept="image/*" capture="environment" class="u-hidden" />
+          </label>
+        </div>
+        <img id="fotografImg" style="max-width:100%;max-height:200px;border-radius:8px;object-fit:cover;display:none;" />
+        <div id="aiYukleniyor" class="u-hidden" style="padding:16px;text-align:center;color:var(--color-ink-soft);">🤖 AI analiz ediyor…</div>
+        <div id="aiSonuc" class="ai-sonuc u-hidden"></div>
+      </div>
 
-      <!-- Ürün listesi -->
-      <div id="urunListesi"></div>
+      <!-- Paletler -->
+      <div class="card" style="margin-bottom:14px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+          <b style="font-size:13px;">🪵 Paletler</b>
+          <button class="btn btn-primary btn-sm" id="yeniPaletBtn">+ Yeni Palet</button>
+        </div>
+        <div id="paletListesi"></div>
+      </div>
+
+      <!-- Barkod -->
+      <div class="card" style="margin-bottom:14px;">
+        <b style="font-size:13px;display:block;margin-bottom:8px;">🔫 Barkod ile Palet'e Ekle</b>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+          <input class="input" id="barkodInput" placeholder="Barkod okut…" style="max-width:200px;" autocomplete="off" />
+          <select class="select" id="hedefPaletSec" style="max-width:150px;">
+            <option value="">Palet seç…</option>
+          </select>
+          <span id="barkodSonuc" style="font-size:12.5px;color:var(--color-green);font-weight:600;"></span>
+        </div>
+      </div>
+
+      <div style="display:flex;justify-content:flex-end;">
+        <button class="btn btn-primary" id="tamamlaBtn">✅ Paletleme Tamamlandı</button>
+      </div>
     </div>
   </main>
 </div>
-
 <div id="modalRoot"></div>
-<input type="file" id="kameraInput" accept="image/*" capture="environment" class="u-hidden" />
-<script>
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.getRegistrations().then(r => r.forEach(x => x.unregister()));
-  }
-</script>
 <script type="module" src="js/paletci.js"></script>
 </body>
 </html>
