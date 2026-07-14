@@ -139,8 +139,11 @@
 
 <script type="module" src="js/admin.js?v=3"></script>
   <script>
+    // Eski service worker'ı temizle
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').catch(() => {});
+      navigator.serviceWorker.getRegistrations().then((regs) => {
+        regs.forEach((r) => r.unregister());
+      });
     }
   </script>
 </body>

@@ -99,10 +99,13 @@
 <div id="modalRoot"></div>
 
 <script>
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/sw.js').catch(() => {});
-  }
-</script>
+    // Eski service worker'ı temizle
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then((regs) => {
+        regs.forEach((r) => r.unregister());
+      });
+    }
+  </script>
 <script type="module" src="js/raf.js"></script>
 </body>
 </html>

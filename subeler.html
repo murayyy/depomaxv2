@@ -54,8 +54,11 @@
 
 <script type="module" src="js/subeler.js"></script>
   <script>
+    // Eski service worker'ı temizle
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').catch(() => {});
+      navigator.serviceWorker.getRegistrations().then((regs) => {
+        regs.forEach((r) => r.unregister());
+      });
     }
   </script>
 </body>
