@@ -13,7 +13,7 @@ import { ondalikOku } from "./utils.js";
 import {
   collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot,
   query, where, orderBy, serverTimestamp, writeBatch, getDocs,
-  setDoc, getDoc
+  setDoc, getDoc, increment
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const SIPARISLER = "siparisler";
@@ -483,4 +483,33 @@ export async function paletlemeYardimciEkle(siparisId, yardimci) {
     mevcutYardimcilar.push(yardimci);
   }
   return paletlemeKaydet2(siparisId, { yardimcilar: mevcutYardimcilar });
+}
+
+/* ============================================================================
+   STOK DÜŞME / GERİ EKLEME
+   Toplayıcı "toplandı" işaretlediğinde stoktan düşer.
+   İşareti kaldırırsa geri eklenir.
+   ============================================================================ */
+export async function stokDusur(stokKodu, miktar) {
+  if (!stokKodu || !miktar) return;
+  try {
+    await updateDoc(doc(db, "stoklar", stokKodu), {
+      miktar: increment(-Number(miktar)),
+      sonGuncelleme: serverTimestamp()
+    });
+  } catch (e) {
+    console.warn("Stok düşme başarısız:", stokKodu, e.message);
+  }
+}
+
+export async function stokGeriEkle(stokKodu, miktar) {
+  if (!stokKodu || !miktar) return;
+  try {
+    await updateDoc(doc(db, "stoklar", stokKodu), {
+      miktar: increment(Number(miktar)),
+      sonGuncelleme: serverTimestamp()
+    });
+  } catch (e) {
+    console.warn("Stok geri ekleme başarısız:", stokKodu, e.message);
+  }
 }

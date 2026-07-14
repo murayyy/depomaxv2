@@ -4,7 +4,8 @@
 import { auth, signOut, sayfaKorumasi } from "./firebase.js";
 import {
   siparisleriDinle, siparisOlustur, siparisGuncelle, tumSiparisleriCanliDinle,
-  urunleriDinle, urunleriTopluEkle, urunEkle, urunGuncelle, urunSil
+  urunleriDinle, urunleriTopluEkle, urunEkle, urunGuncelle, urunSil,
+  stokDusur, stokGeriEkle
 } from "./veri.js";
 import { stoklariDinle, stokRozetiHtml } from "./stok.js";
 import {
@@ -437,8 +438,16 @@ function baglaSatirOlaylari(kapsayici, saltOkunur) {
     const toplandiCb = satir.querySelector('[data-rol="toplandi"]');
     if (toplandiCb) {
       toplandiCb.addEventListener("change", () => {
+        const urun = urunlerCache.find((u) => u.id === uid);
         const patch = toplandiCb.checked ? { toplandi: true, eksik: false } : { toplandi: false };
-        if (toplandiCb.checked) patch.toplayanKullanici = mevcutKullanici.ad || mevcutKullanici.uid;
+        if (toplandiCb.checked) {
+          patch.toplayanKullanici = mevcutKullanici.ad || mevcutKullanici.uid;
+          // Stoktan düş — sadece stok kodu varsa
+          if (urun?.kod) stokDusur(urun.kod, urun.miktar);
+        } else {
+          // İşaret kaldırıldı — stoğu geri ekle
+          if (urun?.kod && urun?.toplandi) stokGeriEkle(urun.kod, urun.miktar);
+        }
         urunGuncelle(aktifSiparis.id, uid, patch);
       });
     }
@@ -593,7 +602,9 @@ function taramaSonucModalAc(urun) {
   root.querySelector('[data-role="toplandi"]').onclick = async () => {
     const miktar = ondalikOku(document.getElementById("tsMiktar").value);
     await urunGuncelle(aktifSiparis.id, urun.id, { toplandi: true, eksik: false, miktar, toplayanKullanici: mevcutKullanici.ad || mevcutKullanici.uid });
-    toast(`${urun.ad} toplandı olarak işaretlendi.`, "success");
+    // Stoktan düş
+    if (urun.kod) stokDusur(urun.kod, miktar);
+    toast(`${urun.ad} toplandı. Stok güncellendi.`, "success");
     devamEt();
   };
   root.querySelector('[data-role="eksik"]').onclick = async () => {
