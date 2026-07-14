@@ -414,3 +414,47 @@ export async function tumRaflariGetir() {
   const snap = await getDocs(query(collection(db, RAFLAR), orderBy("ad")));
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
+
+/* ============================================================================
+   ÜRETİM MODÜLܺ — Reçeteler, Kokteyl Üretimi, Paketleme
+   ============================================================================ */
+const RECETELER = "receteler";
+const URETIM = "uretimKayitlari";
+const PAKETLEME = "paketlemeKayitlari";
+
+export function receteleriDinle(callback) {
+  return onSnapshot(query(collection(db, RECETELER), orderBy("ad")), (snap) => {
+    callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+  }, (err) => console.error(err));
+}
+
+export function receteOlustur(veri) {
+  return addDoc(collection(db, RECETELER), { ...veri, olusturulmaTarihi: serverTimestamp() });
+}
+
+export function receteGuncelle(id, veri) {
+  return updateDoc(doc(db, RECETELER, id), { ...veri, guncellemeTarihi: serverTimestamp() });
+}
+
+export function recedeSil(id) {
+  return deleteDoc(doc(db, RECETELER, id));
+}
+
+export function uretimKaydet(veri) {
+  return addDoc(collection(db, URETIM), { ...veri, tarih: serverTimestamp() });
+}
+
+export function paketlemeKaydet(veri) {
+  return addDoc(collection(db, PAKETLEME), { ...veri, tarih: serverTimestamp() });
+}
+
+export async function uretimGecmisGetir() {
+  const [ur, pk] = await Promise.all([
+    getDocs(query(collection(db, URETIM), orderBy("tarih", "desc"))),
+    getDocs(query(collection(db, PAKETLEME), orderBy("tarih", "desc")))
+  ]);
+  const uretimler = ur.docs.map(d => ({ id: d.id, tip: "uretim", ...d.data() }));
+  const paketlemeler = pk.docs.map(d => ({ id: d.id, tip: "paketleme", ...d.data() }));
+  return [...uretimler, ...paketlemeler]
+    .sort((a, b) => (b.tarih?.toMillis?.() || 0) - (a.tarih?.toMillis?.() || 0));
+}
