@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8" />
+<link rel="manifest" href="/manifest.json" />
+<meta name="theme-color" content="#0F52BA" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-title" content="Depomax" />
+<link rel="apple-touch-icon" href="/icon-192.png" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Raf Yönetimi — Depomax</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  .raf-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+  .raf-card { background: var(--color-surface-1); border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: 14px; }
+  .raf-card__header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .raf-card__isim { font-weight: 700; font-size: 15px; }
+  .raf-card__meta { font-size: 12px; color: var(--color-ink-soft); margin-top: 2px; }
+  .kapasite-bar { height: 8px; background: var(--color-surface-2); border-radius: 4px; margin: 8px 0; overflow: hidden; }
+  .kapasite-bar__ic { height: 100%; border-radius: 4px; transition: width .3s; }
+  .doluluk-bos    { background: #10B981; }
+  .doluluk-az     { background: #3B82F6; }
+  .doluluk-orta   { background: #F59E0B; }
+  .doluluk-dolu   { background: #EF4444; }
+  .kalem-liste { margin-top: 10px; border-top: 1px solid var(--color-border); padding-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+  .kalem-satir { display: flex; align-items: center; gap: 8px; font-size: 12.5px; }
+  .kalem-satir__ad { flex: 1; }
+  .kalem-satir__miktar { font-weight: 600; color: var(--color-ink); }
+  .hareket-satir { display: flex; gap: 10px; font-size: 12.5px; padding: 8px 0; border-bottom: 1px solid var(--color-border); }
+  .hareket-tip { font-weight: 700; }
+  .hareket-tip.giris { color: #10B981; }
+  .hareket-tip.cikis { color: #EF4444; }
+  .hareket-tip.tasima { color: #3B82F6; }
+  .legend-row { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; font-size: 12px; }
+  .legend-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; }
+</style>
+</head>
+<body>
+<div class="app-shell">
+  <header class="topbar">
+    <div class="topbar__brand"><span class="topbar__mark">D</span> Depomax</div>
+    <nav class="topbar__nav">
+      <a class="topbar__link" href="index.html">⬅ Ana Sayfa</a>
+    </nav>
+    <div class="topbar__user">
+      <span class="role-chip" id="rolEtiketi">…</span>
+      <span id="kullaniciAdi">…</span>
+      <button class="btn btn-ghost btn-sm" id="cikisBtn">Çıkış</button>
+    </div>
+  </header>
+
+  <main class="page">
+    <div class="page__header">
+      <div>
+        <div class="page__title">Raf Yönetimi</div>
+        <div class="page__subtitle" id="ozetYazi">Yükleniyor…</div>
+      </div>
+      <div class="u-flex" style="gap:8px;flex-wrap:wrap;">
+        <button class="btn btn-ghost" id="hareketGecmisBtn">📋 Geçmiş</button>
+        <button class="btn btn-ghost" id="excelBtn">⬇ Excel</button>
+        <button class="btn btn-primary" id="yeniRafBtn">+ Yeni Raf</button>
+      </div>
+    </div>
+
+    <!-- Sekme -->
+    <div class="toolbar" style="margin-bottom:16px;">
+      <div class="toolbar__group">
+        <button class="btn btn-ghost btn-sm is-active" data-sekme="raflar">📦 Raflar</button>
+        <button class="btn btn-ghost btn-sm" data-sekme="ozet">🗺 Doluluk Özeti</button>
+      </div>
+    </div>
+
+    <!-- Legend -->
+    <div class="legend-row">
+      <span><span class="legend-dot" style="background:#10B981;"></span> Boş (&lt;%25)</span>
+      <span><span class="legend-dot" style="background:#3B82F6;"></span> Az dolu (%25–50)</span>
+      <span><span class="legend-dot" style="background:#F59E0B;"></span> Yarı dolu (%50–80)</span>
+      <span><span class="legend-dot" style="background:#EF4444;"></span> Dolu (&gt;%80)</span>
+    </div>
+
+    <div id="raflarBloku">
+      <div class="raf-grid" id="rafGrid"></div>
+      <div class="empty-state u-hidden" id="bosDurum">
+        <div class="empty-state__icon">🗄</div>
+        <div class="empty-state__title">Henüz raf tanımlanmamış</div>
+        <div class="empty-state__text">"+ Yeni Raf" ile başlayın.</div>
+      </div>
+    </div>
+
+    <div id="ozetBloku" class="u-hidden">
+      <div id="ozetGrid"></div>
+    </div>
+  </main>
+</div>
+
+<div id="modalRoot"></div>
+
+<script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  }
+</script>
+<script type="module" src="js/raf.js"></script>
+</body>
+</html>
