@@ -337,3 +337,80 @@ export function surucuSiparisleriDinle(surucuUid, callback) {
     callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
   }, (err) => console.error("surucuSiparisleriDinle:", err));
 }
+
+/* ============================================================================
+   RAF SİSTEMİ
+   ============================================================================ */
+const RAFLAR = "raflar";
+const RAF_HAREKETLERI = "rafHareketleri";
+
+export function raflariDinle(callback) {
+  const q = query(collection(db, RAFLAR), orderBy("ad"));
+  return onSnapshot(q, (snap) => {
+    callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+  }, (err) => console.error("raflariDinle:", err));
+}
+
+export async function rafOlustur({ ad, kat, bolme, kapasite, aciklama }) {
+  return addDoc(collection(db, RAFLAR), {
+    ad, kat: Number(kat), bolme: Number(bolme),
+    kapasite: Number(kapasite) || 0,
+    aciklama: aciklama || "",
+    olusturulmaTarihi: serverTimestamp()
+  });
+}
+
+export async function rafGuncelle(rafId, patch) {
+  return updateDoc(doc(db, RAFLAR, rafId), { ...patch, guncellemeTarihi: serverTimestamp() });
+}
+
+export async function rafSil(rafId) {
+  return deleteDoc(doc(db, RAFLAR, rafId));
+}
+
+export function rafKalemleriDinle(rafId, callback) {
+  return onSnapshot(
+    collection(db, RAFLAR, rafId, "kalemler"),
+    (snap) => callback(snap.docs.map((d) => ({ id: d.id, ...d.data() }))),
+    (err) => console.error("rafKalemleriDinle:", err)
+  );
+}
+
+export async function rafKalemiEkle(rafId, { stokKodu, ad, miktar, palet, birim, not }) {
+  return addDoc(collection(db, RAFLAR, rafId, "kalemler"), {
+    stokKodu: stokKodu || "", ad, miktar: Number(miktar) || 0,
+    palet: Number(palet) || 0, birim: birim || "KG", not: not || "",
+    eklenmeTarihi: serverTimestamp()
+  });
+}
+
+export async function rafKalemiGuncelle(rafId, kalemId, patch) {
+  return updateDoc(doc(db, RAFLAR, rafId, "kalemler", kalemId), patch);
+}
+
+export async function rafKalemiSil(rafId, kalemId) {
+  return deleteDoc(doc(db, RAFLAR, rafId, "kalemler", kalemId));
+}
+
+export async function rafHareketiKaydet({ rafId, rafAd, tip, stokKodu, ad, miktar, palet, birim, yapan, not }) {
+  // tip: "giris" | "cikis" | "tasima"
+  return addDoc(collection(db, RAF_HAREKETLERI), {
+    rafId, rafAd, tip, stokKodu: stokKodu || "", ad,
+    miktar: Number(miktar) || 0, palet: Number(palet) || 0,
+    birim: birim || "KG", yapan, not: not || "",
+    tarih: serverTimestamp()
+  });
+}
+
+export async function rafHareketleriniGetir(limit = 100) {
+  const snap = await getDocs(query(
+    collection(db, RAF_HAREKETLERI),
+    orderBy("tarih", "desc")
+  ));
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
+
+export async function tumRaflariGetir() {
+  const snap = await getDocs(query(collection(db, RAFLAR), orderBy("ad")));
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
