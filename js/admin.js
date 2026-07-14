@@ -191,6 +191,7 @@ function yeniKullaniciModalAc() {
             <option value="surucu">Sürücü</option>
             <option value="depocu">Depocu</option>
             <option value="paletci">Paletçi</option>
+            <option value="paletci">Paletçi</option>
             <option value="admin">Admin</option>
           </select>
         </div>
