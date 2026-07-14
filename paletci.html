@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8" />
+<link rel="manifest" href="/manifest.json" />
+<meta name="theme-color" content="#0F52BA" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Paletleme — Depomax</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css" />
+<style>
+  .palet-chip { display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:99px;font-size:12px;font-weight:700;cursor:pointer;border:2px solid transparent;transition:all .15s; }
+  .palet-chip.aktif { border-color:var(--color-blue);background:var(--color-blue-bg);color:var(--color-blue); }
+  .palet-chip.bos  { border-color:var(--color-border);background:var(--color-surface-2);color:var(--color-ink-soft); }
+  .urun-palet-satir { display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--color-border); }
+  .ai-kutu { background:linear-gradient(135deg,#EFF6FF,#F0FDF4);border:1px solid #BFDBFE;border-radius:10px;padding:14px;margin-top:12px;font-size:13px;line-height:1.6; }
+</style>
+</head>
+<body>
+<div class="app-shell">
+  <header class="topbar">
+    <div class="topbar__brand"><span class="topbar__mark">D</span> Depomax</div>
+    <div class="topbar__user">
+      <span class="role-chip" id="rolEtiketi">…</span>
+      <span id="kullaniciAdi">…</span>
+      <button class="btn btn-ghost btn-sm" id="cikisBtn">Çıkış</button>
+    </div>
+  </header>
+
+  <main class="page">
+    <!-- Liste görünümü -->
+    <div id="listeGorunumu">
+      <div class="page__header">
+        <div>
+          <div class="page__title">Paletleme</div>
+          <div class="page__subtitle">Kontrole alınan siparişler</div>
+        </div>
+      </div>
+      <div class="order-grid" id="siparisList"></div>
+      <div class="empty-state u-hidden" id="bosDurum">
+        <div class="empty-state__icon">📦</div>
+        <div class="empty-state__title">Paletlenecek sipariş yok</div>
+        <div class="empty-state__text">Kontrole alınan sipariş bulunmuyor.</div>
+      </div>
+    </div>
+
+    <!-- Detay görünümü -->
+    <div id="detayGorunumu" class="u-hidden">
+      <div class="page__header">
+        <button class="btn btn-ghost" id="geriBtn">← Geri</button>
+        <div style="flex:1;">
+          <div class="page__title" id="detayBaslik"></div>
+          <div class="page__subtitle" id="detayAlt"></div>
+        </div>
+        <button class="btn btn-primary" id="tamamlaBtn">✅ Paletleme Tamam</button>
+      </div>
+
+      <!-- Araç çubuğu -->
+      <div class="toolbar" style="margin-bottom:14px;">
+        <div class="toolbar__group">
+          <input class="input" id="barkodInput" placeholder="🔫 Barkod okut…" style="max-width:180px;" autocomplete="off" />
+          <button class="btn btn-ghost btn-sm" id="yardimciEkleBtn">👤 Yardımcı Ekle</button>
+          <button class="btn btn-ghost btn-sm" id="aiTahminBtn">📷 AI Palet Tahmini</button>
+        </div>
+        <div class="toolbar__group" id="paletSecRow" style="flex-wrap:wrap;gap:6px;">
+          <!-- Palet chipları buraya -->
+        </div>
+      </div>
+
+      <!-- Yardımcılar -->
+      <div id="yardimcilar" style="margin-bottom:10px;font-size:12.5px;color:var(--color-ink-soft);"></div>
+
+      <!-- AI sonucu -->
+      <div id="aiSonuc" class="u-hidden ai-kutu"></div>
+
+      <!-- Ürün listesi -->
+      <div id="urunListesi"></div>
+    </div>
+  </main>
+</div>
+
+<div id="modalRoot"></div>
+<input type="file" id="kameraInput" accept="image/*" capture="environment" class="u-hidden" />
+<script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.getRegistrations().then(r => r.forEach(x => x.unregister()));
+  }
+</script>
+<script type="module" src="js/paletci.js"></script>
+</body>
+</html>
