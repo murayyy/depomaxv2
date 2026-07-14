@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8" />
+<link rel="manifest" href="/manifest.json" />
+<meta name="theme-color" content="#0F52BA" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-title" content="Depomax" />
+<link rel="apple-touch-icon" href="/icon-192.png" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Üretim & Paketleme — Depomax</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body>
+<div class="app-shell">
+  <header class="topbar">
+    <div class="topbar__brand"><span class="topbar__mark">D</span> Depomax</div>
+    <nav class="topbar__nav">
+      <a class="topbar__link" href="index.html">⬅ Ana Sayfa</a>
+      <a class="topbar__link" href="raf.html">🗄 Raflar</a>
+    </nav>
+    <div class="topbar__user">
+      <span class="role-chip" id="rolEtiketi">…</span>
+      <span id="kullaniciAdi">…</span>
+      <button class="btn btn-ghost btn-sm" id="cikisBtn">Çıkış</button>
+    </div>
+  </header>
+
+  <main class="page">
+    <div class="page__header">
+      <div>
+        <div class="page__title">Üretim & Paketleme</div>
+        <div class="page__subtitle" id="ozetYazi">Kayıt takibi</div>
+      </div>
+      <button class="btn btn-ghost" id="excelBtn">⬇ Excel</button>
+    </div>
+
+    <!-- Sekmeler -->
+    <div class="toolbar" style="margin-bottom:20px;">
+      <div class="toolbar__group">
+        <button class="btn btn-ghost btn-sm is-active" data-sekme="kokteyl">🧪 Kokteyl Üretimi</button>
+        <button class="btn btn-ghost btn-sm" data-sekme="paketleme">📦 Paketleme</button>
+        <button class="btn btn-ghost btn-sm" data-sekme="recete">📋 Reçeteler</button>
+        <button class="btn btn-ghost btn-sm" data-sekme="gecmis">🕐 Geçmiş</button>
+      </div>
+    </div>
+
+    <!-- Kokteyl Üretimi -->
+    <div id="kokteylBloku">
+      <div class="card" style="max-width:560px;">
+        <h3 style="margin-bottom:16px;">🧪 Kokteyl Üretim Kaydı</h3>
+        <div class="field">
+          <label>Reçete Seç</label>
+          <select class="select" id="kokRecete">
+            <option value="">— Reçete seç —</option>
+          </select>
+        </div>
+        <div id="kokReceteIcerik" class="u-hidden" style="background:var(--color-surface-2);padding:12px;border-radius:8px;margin-bottom:12px;font-size:13px;"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <div class="field">
+            <label>Üretilen Miktar (KG)</label>
+            <input class="input" type="text" inputmode="decimal" id="kokMiktar" placeholder="0" />
+          </div>
+          <div class="field">
+            <label>Palet Sayısı</label>
+            <input class="input" type="number" id="kokPalet" placeholder="0" min="0" />
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <div class="field">
+            <label>Tarih</label>
+            <input class="input" type="date" id="kokTarih" />
+          </div>
+          <div class="field">
+            <label>Parti No (isteğe bağlı)</label>
+            <input class="input" id="kokParti" placeholder="LOT-001" />
+          </div>
+        </div>
+        <div class="field">
+          <label>Not</label>
+          <input class="input" id="kokNot" placeholder="İsteğe bağlı…" />
+        </div>
+        <button class="btn btn-primary" id="kokKaydetBtn">✅ Üretimi Kaydet</button>
+      </div>
+    </div>
+
+    <!-- Paketleme -->
+    <div id="paketlemeBloku" class="u-hidden">
+      <div class="card" style="max-width:560px;">
+        <h3 style="margin-bottom:16px;">📦 Paketleme Kaydı</h3>
+        <div class="field">
+          <label>Ürün Adı / Stok Kodu</label>
+          <input class="input" id="pkUrun" placeholder="Örn. Antep Fıstığı, 25 kg çuval" />
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <div class="field">
+            <label>Açılan Çuval / Kap Sayısı</label>
+            <input class="input" type="number" id="pkCuval" placeholder="0" min="0" />
+          </div>
+          <div class="field">
+            <label>Çıkan Poşet / Paket Sayısı</label>
+            <input class="input" type="number" id="pkPoset" placeholder="0" min="0" />
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <div class="field">
+            <label>Toplam KG</label>
+            <input class="input" type="text" inputmode="decimal" id="pkKg" placeholder="0" />
+          </div>
+          <div class="field">
+            <label>Tarih</label>
+            <input class="input" type="date" id="pkTarih" />
+          </div>
+        </div>
+        <div class="field">
+          <label>Yapan Kişi</label>
+          <input class="input" id="pkYapan" placeholder="Ad Soyad" />
+        </div>
+        <div class="field">
+          <label>Not</label>
+          <input class="input" id="pkNot" placeholder="İsteğe bağlı…" />
+        </div>
+        <button class="btn btn-primary" id="pkKaydetBtn">✅ Paketlemeyi Kaydet</button>
+      </div>
+    </div>
+
+    <!-- Reçeteler -->
+    <div id="receteBloku" class="u-hidden">
+      <div style="display:flex;justify-content:flex-end;margin-bottom:12px;">
+        <button class="btn btn-primary" id="yeniReceteBtn">+ Yeni Reçete</button>
+      </div>
+      <div class="order-grid" id="receteGrid"></div>
+      <div class="empty-state u-hidden" id="receteBosDurum">
+        <div class="empty-state__icon">📋</div>
+        <div class="empty-state__title">Henüz reçete yok</div>
+        <div class="empty-state__text">"+ Yeni Reçete" ile kokteyl karışımını tanımlayın.</div>
+      </div>
+    </div>
+
+    <!-- Geçmiş -->
+    <div id="gecmisBloku" class="u-hidden">
+      <div style="display:flex;justify-content:flex-end;margin-bottom:12px;">
+        <button class="btn btn-ghost btn-sm" id="gecmisYenileBtn">↻ Yenile</button>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Tarih</th><th>Tip</th><th>Ürün / Reçete</th>
+              <th>Miktar</th><th>Palet</th><th>Yapan</th><th>Not</th>
+            </tr>
+          </thead>
+          <tbody id="gecmisTablosu"></tbody>
+        </table>
+      </div>
+      <div class="row-cards" id="gecmisKartlar"></div>
+      <div class="empty-state u-hidden" id="gecmisBosDurum">
+        <div class="empty-state__icon">🕐</div>
+        <div class="empty-state__title">Henüz kayıt yok</div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div id="modalRoot"></div>
+<script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.getRegistrations().then((regs) => {
+      regs.forEach((r) => r.unregister());
+    });
+  }
+</script>
+<script type="module" src="js/uretim.js"></script>
+</body>
+</html>
