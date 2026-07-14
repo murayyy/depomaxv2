@@ -136,7 +136,13 @@ function render() {
               <div class="kalem-satir" data-kalem="${k.id}" data-raf="${raf.id}">
                 <div class="kalem-satir__ad">
                   <div style="font-weight:600;">${kacisEt(k.ad)}</div>
-                  ${k.stokKodu ? `<div style="font-size:11px;color:var(--color-ink-soft);">${kacisEt(k.stokKodu)}</div>` : ""}
+                  <div style="font-size:11px;color:var(--color-ink-soft);">
+                    ${k.stokKodu ? kacisEt(k.stokKodu) + " · " : ""}
+                    ${k.kat ? "Kat " + k.kat + " Böl." + k.bolme + " · " : ""}
+                    ${k.cari ? kacisEt(k.cari) + " · " : ""}
+                    ${k.girisTarihi ? "Giriş: " + k.girisTarihi : ""}
+                    ${k.skt ? " · SKT: " + k.skt : ""}
+                  </div>
                 </div>
                 <div class="kalem-satir__miktar">${sayiBicimle(k.miktar)} ${kacisEt(k.birim)}</div>
                 <div style="font-size:11px;color:var(--color-ink-soft);">${k.palet || 0} plt</div>
@@ -251,16 +257,26 @@ async function rafSilOnay(rafId) {
 function urunEkleModalAc(rafId) {
   const raf = rafListesi.find((r) => r.id === rafId);
   const root = document.getElementById("modalRoot");
+  const bugun = new Date().toISOString().slice(0,10);
   root.innerHTML = `
     <div class="modal-backdrop" data-role="backdrop">
       <div class="modal">
         <h3>📦 Ürün Ekle — ${kacisEt(raf?.ad)}</h3>
         <div class="field"><label>Ürün Adı</label><input class="input" id="ueAd" placeholder="Ürün adı" /></div>
         <div class="field"><label>Stok Kodu</label><input class="input" id="ueKod" placeholder="Mikro stok kodu" /></div>
+        <div class="field"><label>Cari Adı (Tedarikçi)</label><input class="input" id="ueCari" placeholder="Tedarikçi / cari adı" /></div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
           <div class="field"><label>Miktar</label><input class="input" type="text" inputmode="decimal" id="ueMiktar" placeholder="0" /></div>
           <div class="field"><label>Birim</label><input class="input" id="ueBirim" value="KG" placeholder="KG, Adet…" /></div>
           <div class="field"><label>Palet Sayısı</label><input class="input" type="number" id="uePalet" placeholder="0" min="0" /></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <div class="field"><label>Kat</label><input class="input" type="number" id="ueKat" placeholder="1" min="1" /></div>
+          <div class="field"><label>Bölme</label><input class="input" type="number" id="ueBolme" placeholder="1" min="1" /></div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <div class="field"><label>Giriş Tarihi</label><input class="input" type="date" id="ueGirisTarihi" value="${bugun}" /></div>
+          <div class="field"><label>SKT (Son Kullanma Tarihi)</label><input class="input" type="date" id="ueSkt" /></div>
         </div>
         <div class="field"><label>Not</label><input class="input" id="ueNot" placeholder="İsteğe bağlı…" /></div>
         <div class="modal__actions">
@@ -277,9 +293,14 @@ function urunEkleModalAc(rafId) {
     if (!ad) { toast("Ürün adı zorunlu.", "error"); return; }
     const veri = {
       ad, stokKodu: document.getElementById("ueKod").value.trim(),
+      cari: document.getElementById("ueCari").value.trim(),
       miktar: ondalikOku(document.getElementById("ueMiktar").value),
       birim: document.getElementById("ueBirim").value.trim() || "KG",
       palet: parseInt(document.getElementById("uePalet").value) || 0,
+      kat: parseInt(document.getElementById("ueKat").value) || 1,
+      bolme: parseInt(document.getElementById("ueBolme").value) || 1,
+      girisTarihi: document.getElementById("ueGirisTarihi").value || new Date().toISOString().slice(0,10),
+      skt: document.getElementById("ueSkt").value || "",
       not: document.getElementById("ueNot").value.trim()
     };
     await rafKalemiEkle(rafId, veri);
@@ -332,11 +353,16 @@ function kalemCikisModalAc(rafId, kalemId) {
   const kalem = (rafKalemleriMap.get(rafId) || []).find((k) => k.id === kalemId);
   if (!kalem) return;
   const root = document.getElementById("modalRoot");
+  const hedefRafOptions = rafListesi.filter(r => r.id !== rafId)
+    .map(r => `<option value="${r.id}">${kacisEt(r.ad)}</option>`).join("");
   root.innerHTML = `
     <div class="modal-backdrop" data-role="backdrop">
       <div class="modal">
         <h3>↗ Çıkış / Taşı — ${kacisEt(kalem.ad)}</h3>
-        <p>Mevcut: ${sayiBicimle(kalem.miktar)} ${kacisEt(kalem.birim)}, ${kalem.palet || 0} palet</p>
+        <p style="font-size:13px;">
+          Mevcut: <b>${sayiBicimle(kalem.miktar)} ${kacisEt(kalem.birim)}, ${kalem.palet || 0} palet</b>
+          ${kalem.kat ? ` · Kat ${kalem.kat} Böl.${kalem.bolme}` : ""}
+        </p>
         <div class="field">
           <label>İşlem Tipi</label>
           <select class="select" id="cikTip">
@@ -345,40 +371,83 @@ function kalemCikisModalAc(rafId, kalemId) {
             <option value="fire">Fire / Kullanıldı</option>
           </select>
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
-          <div class="field"><label>Çıkan Miktar</label><input class="input" type="text" inputmode="decimal" id="cikMiktar" value="${kalem.miktar}" /></div>
-          <div class="field"><label>Çıkan Palet</label><input class="input" type="number" id="cikPalet" value="${kalem.palet || 0}" /></div>
+        <!-- Taşıma hedefi — sadece "tasima" seçilince göster -->
+        <div id="tasımaHedef" style="display:none;background:var(--color-surface-2);padding:10px;border-radius:8px;margin-bottom:8px;">
+          <div class="field"><label>Hedef Raf</label>
+            <select class="select" id="hedefRaf">${hedefRafOptions || '<option value="">Başka raf yok</option>'}</select>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+            <div class="field"><label>Hedef Kat</label><input class="input" type="number" id="hedefKat" placeholder="1" min="1" /></div>
+            <div class="field"><label>Hedef Bölme</label><input class="input" type="number" id="hedefBolme" placeholder="1" min="1" /></div>
+          </div>
         </div>
-        <div class="field"><label>Not</label><input class="input" id="cikNot" placeholder="Toplama alanına taşındı…" /></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <div class="field"><label>Çıkan / Taşınan Miktar</label><input class="input" type="text" inputmode="decimal" id="cikMiktar" value="${kalem.miktar}" /></div>
+          <div class="field"><label>Palet</label><input class="input" type="number" id="cikPalet" value="${kalem.palet || 0}" /></div>
+        </div>
+        <div class="field"><label>Not</label><input class="input" id="cikNot" placeholder="Açıklama…" /></div>
         <div class="modal__actions">
           <button class="btn btn-ghost" data-role="iptal">Vazgeç</button>
-          <button class="btn btn-danger" data-role="tamam">↗ Çıkışı Kaydet</button>
+          <button class="btn btn-danger" data-role="tamam">↗ Kaydet</button>
         </div>
       </div>
     </div>`;
   const kapat = () => { root.innerHTML = ""; };
   root.querySelector('[data-role="iptal"]').onclick = kapat;
   root.querySelector('[data-role="backdrop"]').onclick = (e) => { if (e.target.dataset.role === "backdrop") kapat(); };
+
+  // Tip değişince taşıma hedefini göster/gizle
+  document.getElementById("cikTip").addEventListener("change", (e) => {
+    document.getElementById("tasımaHedef").style.display = e.target.value === "tasima" ? "" : "none";
+  });
+
   root.querySelector('[data-role="tamam"]').onclick = async () => {
     const tip = document.getElementById("cikTip").value;
     const not = document.getElementById("cikNot").value.trim();
     const cikanMiktar = ondalikOku(document.getElementById("cikMiktar").value);
     const cikanPalet = parseInt(document.getElementById("cikPalet").value) || 0;
+
     await rafHareketiKaydet({
       rafId, rafAd: raf?.ad, tip,
       stokKodu: kalem.stokKodu, ad: kalem.ad,
       miktar: cikanMiktar, palet: cikanPalet, birim: kalem.birim,
       yapan: mevcutKullanici.ad || mevcutKullanici.uid, not
     });
-    // Kalan miktar hesapla
+
+    // Kaynaktan düş
     const kalanMiktar = (kalem.miktar || 0) - cikanMiktar;
     const kalanPalet = (kalem.palet || 0) - cikanPalet;
-    if (kalanMiktar <= 0 || kalanPalet <= 0) {
+    if (kalanMiktar <= 0 && kalanPalet <= 0) {
       await rafKalemiSil(rafId, kalemId);
-      toast("Ürün raftan tamamen çıkarıldı.", "success");
     } else {
-      await rafKalemiGuncelle(rafId, kalemId, { miktar: kalanMiktar, palet: kalanPalet });
-      toast(`Kalan: ${sayiBicimle(kalanMiktar)} ${kalem.birim}, ${kalanPalet} palet`, "success");
+      await rafKalemiGuncelle(rafId, kalemId, { miktar: Math.max(0, kalanMiktar), palet: Math.max(0, kalanPalet) });
+    }
+
+    // Taşıma ise hedef rafa ekle
+    if (tip === "tasima") {
+      const hedefRafId = document.getElementById("hedefRaf")?.value;
+      const hedefRaf = rafListesi.find(r => r.id === hedefRafId);
+      if (hedefRafId && hedefRaf) {
+        await rafKalemiEkle(hedefRafId, {
+          ad: kalem.ad, stokKodu: kalem.stokKodu || "",
+          cari: kalem.cari || "",
+          miktar: cikanMiktar, birim: kalem.birim, palet: cikanPalet,
+          kat: parseInt(document.getElementById("hedefKat").value) || 1,
+          bolme: parseInt(document.getElementById("hedefBolme").value) || 1,
+          girisTarihi: new Date().toISOString().slice(0,10),
+          skt: kalem.skt || "", not
+        });
+        await rafHareketiKaydet({
+          rafId: hedefRafId, rafAd: hedefRaf.ad, tip: "giris",
+          stokKodu: kalem.stokKodu, ad: kalem.ad,
+          miktar: cikanMiktar, palet: cikanPalet, birim: kalem.birim,
+          yapan: mevcutKullanici.ad || mevcutKullanici.uid,
+          not: `${raf?.ad || ""}dan taşındı. ${not}`
+        });
+        toast(`✅ ${kacisEt(hedefRaf.ad)} rafına taşındı.`, "success");
+      }
+    } else {
+      toast(tip === "cikis" ? "Raftan çıkarıldı." : "Fire kaydedildi.", "success");
     }
     kapat();
   };
@@ -445,11 +514,11 @@ document.getElementById("excelBtn").addEventListener("click", async () => {
     window.XLSX.utils.book_append_sheet(wb, window.XLSX.utils.aoa_to_sheet(ozetSatirlar), "Raf Özeti");
 
     // Ürün envanteri sayfası
-    const envSatirlar = [["Raf", "Stok Kodu", "Ürün Adı", "Miktar", "Birim", "Palet", "Not"]];
+    const envSatirlar = [["Raf", "Kat", "Bölme", "Stok Kodu", "Ürün Adı", "Miktar", "Birim", "Palet", "Cari", "Giriş Tarihi", "SKT", "Not"]];
     raflar.forEach((r) => {
       const kalemler = rafKalemleriMap.get(r.id) || [];
       kalemler.forEach((k) => {
-        envSatirlar.push([r.ad, k.stokKodu || "—", k.ad, k.miktar, k.birim, k.palet || 0, k.not || ""]);
+        envSatirlar.push([r.ad, k.kat || "—", k.bolme || "—", k.stokKodu || "—", k.ad, k.miktar, k.birim, k.palet || 0, k.cari || "—", k.girisTarihi || "—", k.skt || "—", k.not || ""]);
       });
     });
     window.XLSX.utils.book_append_sheet(wb, window.XLSX.utils.aoa_to_sheet(envSatirlar), "Ürün Envanteri");
