@@ -110,27 +110,29 @@ function render() {
 
     return `
       <div class="raf-card" data-rafid="${raf.id}">
-        <div class="raf-card__header">
-          <div>
+        <!-- Tıklanabilir başlık -->
+        <div class="raf-card__header" data-toggle="${raf.id}">
+          <div style="flex:1;">
             <div class="raf-card__isim">🗄 ${kacisEt(raf.ad)}</div>
-            <div class="raf-card__meta">${raf.kat} kat · ${raf.bolme} bölme · ${kapasite} palet kap.</div>
+            <div class="raf-card__meta">
+              ${raf.kat} kat · ${raf.bolme} bölme · ${kapasite} palet kap. ·
+              <span style="font-weight:600;color:${bosKalan === 0 ? "#EF4444" : "#10B981"};">${bosKalan} boş</span>
+              · ${kalemler.length} ürün çeşidi
+            </div>
+            <!-- Mini doluluk bar başlıkta -->
+            <div class="kapasite-bar" style="margin-top:6px;height:5px;">
+              <div class="kapasite-bar__ic ${sinif}" style="width:${yuzdePct}%;"></div>
+            </div>
           </div>
-          <div class="u-flex" style="gap:6px;">
-            <button class="btn btn-ghost btn-sm" data-duzenle="${raf.id}">✏</button>
-            <button class="btn btn-danger btn-sm" data-sil="${raf.id}">✕</button>
+          <div class="u-flex" style="gap:6px;align-items:center;">
+            <button class="btn btn-ghost btn-sm" data-duzenle="${raf.id}" onclick="event.stopPropagation()">✏</button>
+            <button class="btn btn-danger btn-sm" data-sil="${raf.id}" onclick="event.stopPropagation()">✕</button>
+            <span class="raf-card__chevron">▶</span>
           </div>
         </div>
 
-        <!-- Doluluk bar -->
-        <div class="kapasite-bar">
-          <div class="kapasite-bar__ic ${sinif}" style="width:${yuzdePct}%;"></div>
-        </div>
-        <div class="u-flex" style="justify-content:space-between;font-size:12px;color:var(--color-ink-soft);">
-          <span>${kullanilanPalet} palet dolu</span>
-          <span style="font-weight:600;color:${bosKalan === 0 ? "#EF4444" : "#10B981"};">
-            ${bosKalan} palet boş · %${yuzdePct}
-          </span>
-        </div>
+        <!-- Açılır içerik -->
+        <div class="raf-card__body">
 
         <!-- Ürün listesi -->
         ${kalemler.length > 0 ? `
@@ -157,11 +159,20 @@ function render() {
         <div style="margin-top:10px;">
           <button class="btn btn-primary btn-sm" data-urunekle="${raf.id}">+ Ürün Ekle</button>
         </div>
-        ${raf.aciklama ? `<div style="font-size:11.5px;color:var(--color-ink-soft);margin-top:6px;">📝 ${kacisEt(raf.aciklama)}</div>` : ""}
+        ${raf.aciklama ? `<div style="font-size:11.5px;color:var(--color-ink-soft);margin-top:10px;">📝 ${kacisEt(raf.aciklama)}</div>` : ""}
+        </div><!-- /raf-card__body -->
       </div>`;
   }).join("");
 
   // Event listener'lar
+  // Accordion toggle
+  grid.querySelectorAll("[data-toggle]").forEach((header) => {
+    header.addEventListener("click", () => {
+      const kart = header.closest(".raf-card");
+      kart.classList.toggle("acik");
+    });
+  });
+
   grid.querySelectorAll("[data-urunekle]").forEach((btn) => {
     btn.addEventListener("click", () => urunEkleModalAc(btn.dataset.urunekle));
   });
