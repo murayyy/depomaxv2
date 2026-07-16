@@ -485,6 +485,9 @@ function kalemCikisModalAc(rafId, kalemId) {
       kapat();
       return;
     }
+
+    await rafHareketiKaydet({
+      rafId, rafAd: raf?.ad, tip,
       stokKodu: kalem.stokKodu, ad: kalem.ad,
       miktar: cikanMiktar, palet: cikanPalet, birim: kalem.birim,
       yapan: mevcutKullanici.ad || mevcutKullanici.uid, not
