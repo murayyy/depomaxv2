@@ -5,7 +5,8 @@ import { auth, signOut, sayfaKorumasi } from "./firebase.js";
 import {
   raflariDinle, rafOlustur, rafGuncelle, rafSil,
   rafKalemleriDinle, rafKalemiEkle, rafKalemiGuncelle, rafKalemiSil,
-  rafHareketiKaydet, rafHareketleriniGetir, tumRaflariGetir
+  rafHareketiKaydet, rafHareketleriniGetir, tumRaflariGetir,
+  katalogDinle
 } from "./veri.js";
 import { arayuzHazirla, toast, onayIste, kacisEt, sayiBicimle, ondalikOku } from "./utils.js";
 
@@ -14,6 +15,7 @@ arayuzHazirla();
 let mevcutKullanici = null;
 let rafListesi = [];
 let rafKalemleriMap = new Map(); // rafId → kalemler[]
+let katalogCache = []; // Katalog ürünleri — autocomplete için
 let kalemleriDinleMap = new Map(); // rafId → unsubscribe fn
 let aktifSekme = "raflar";
 
@@ -26,6 +28,7 @@ sayfaKorumasi(["depocu", "admin"], (kullanici) => {
     dinlemeGuncelle(liste);
     render();
   });
+  katalogDinle((liste) => { katalogCache = liste.filter((u) => u.aktif !== false); });
 });
 
 document.getElementById("cikisBtn").addEventListener("click", async () => {
@@ -137,17 +140,17 @@ function render() {
                 <div class="kalem-satir__ad">
                   <div style="font-weight:600;">${kacisEt(k.ad)}</div>
                   <div style="font-size:11px;color:var(--color-ink-soft);">
-                    ${k.stokKodu ? kacisEt(k.stokKodu) + " · " : ""}
-                    ${k.kat ? "Kat " + k.kat + " Böl." + k.bolme + " · " : ""}
-                    ${k.cari ? kacisEt(k.cari) + " · " : ""}
-                    ${k.girisTarihi ? "Giriş: " + k.girisTarihi : ""}
-                    ${k.skt ? " · SKT: " + k.skt : ""}
+                    ${k.stokKodu ? `<span class="cell-code">${kacisEt(k.stokKodu)}</span> · ` : ""}
+                    ${k.kat ? `Kat ${k.kat} / Böl.${k.bolme}` : '<span style="color:#F59E0B;">⚠ Kat/bölme belirsiz</span>'}
+                    ${k.cari ? ` · ${kacisEt(k.cari)}` : ""}
+                    ${k.skt ? ` · SKT: ${k.skt}` : ""}
                   </div>
                 </div>
                 <div class="kalem-satir__miktar">${sayiBicimle(k.miktar)} ${kacisEt(k.birim)}</div>
                 <div style="font-size:11px;color:var(--color-ink-soft);">${k.palet || 0} plt</div>
-                <button class="btn btn-ghost btn-sm" data-kalemduzenle="${k.id}" data-kalemraf="${raf.id}" title="Düzenle">✏</button>
-                <button class="btn btn-danger btn-sm" data-kalemsil="${k.id}" data-kalemraf="${raf.id}" title="Çıkış/Taşı">↗</button>
+                <button class="btn btn-ghost btn-sm" data-kalemduzenle="${k.id}" data-kalemraf="${raf.id}" title="Düzenle / Taşı">✏</button>
+                <button class="btn btn-ghost btn-sm" data-kalemsil="${k.id}" data-kalemraf="${raf.id}" title="Çıkış / Taşı">↗</button>
+                <button class="btn btn-danger btn-sm" data-kalemkaldir="${k.id}" data-kalemraf="${raf.id}" title="Sil">🗑</button>
               </div>`).join("")}
           </div>` : `<div style="font-size:12px;color:var(--color-ink-soft);margin-top:8px;">Rafta ürün yok</div>`}
 
@@ -173,6 +176,27 @@ function render() {
   });
   grid.querySelectorAll("[data-kalemsil]").forEach((btn) => {
     btn.addEventListener("click", () => kalemCikisModalAc(btn.dataset.kalemraf, btn.dataset.kalemsil));
+  });
+  grid.querySelectorAll("[data-kalemkaldir]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const raf = rafListesi.find((r) => r.id === btn.dataset.kalemraf);
+      const kalem = (rafKalemleriMap.get(btn.dataset.kalemraf) || []).find((k) => k.id === btn.dataset.kalemkaldir);
+      if (!kalem) return;
+      const onay = await onayIste({
+        baslik: "Ürünü Sil",
+        metin: `"${kalem.ad}" raftan silinecek. Bu işlem geri alınamaz.`,
+        onayMetni: "Sil"
+      });
+      if (!onay) return;
+      await rafHareketiKaydet({
+        rafId: btn.dataset.kalemraf, rafAd: raf?.ad, tip: "silindi",
+        stokKodu: kalem.stokKodu, ad: kalem.ad,
+        miktar: kalem.miktar, palet: kalem.palet, birim: kalem.birim,
+        yapan: mevcutKullanici.ad || mevcutKullanici.uid, not: "Manuel silme"
+      });
+      await rafKalemiSil(btn.dataset.kalemraf, btn.dataset.kalemkaldir);
+      toast(`${kalem.ad} raftan silindi.`, "success");
+    });
   });
 
   if (aktifSekme === "ozet") renderOzet();
@@ -258,12 +282,27 @@ function urunEkleModalAc(rafId) {
   const raf = rafListesi.find((r) => r.id === rafId);
   const root = document.getElementById("modalRoot");
   const bugun = new Date().toISOString().slice(0,10);
+  // Katalog ürünleri datalist için
+  const katalogOptions = katalogCache
+    .map((u) => `<option data-kod="${kacisEt(u.stokKodu || "")}" data-ad="${kacisEt(u.ad)}" value="${kacisEt(u.ad)}">Kod: ${kacisEt(u.stokKodu || "—")}</option>`)
+    .join("");
+  const kodOptions = katalogCache
+    .map((u) => `<option data-ad="${kacisEt(u.ad)}" value="${kacisEt(u.stokKodu || "")}">İsim: ${kacisEt(u.ad)}</option>`)
+    .join("");
   root.innerHTML = `
     <div class="modal-backdrop" data-role="backdrop">
       <div class="modal">
         <h3>📦 Ürün Ekle — ${kacisEt(raf?.ad)}</h3>
-        <div class="field"><label>Ürün Adı</label><input class="input" id="ueAd" placeholder="Ürün adı" /></div>
-        <div class="field"><label>Stok Kodu</label><input class="input" id="ueKod" placeholder="Mikro stok kodu" /></div>
+        <div class="field">
+          <label>Ürün Adı</label>
+          <input class="input" id="ueAd" placeholder="Ürün adı" list="katAdList" autocomplete="off" />
+          <datalist id="katAdList">${katalogOptions}</datalist>
+        </div>
+        <div class="field">
+          <label>Stok Kodu</label>
+          <input class="input" id="ueKod" placeholder="Mikro stok kodu" list="katKodList" autocomplete="off" />
+          <datalist id="katKodList">${kodOptions}</datalist>
+        </div>
         <div class="field"><label>Cari Adı (Tedarikçi)</label><input class="input" id="ueCari" placeholder="Tedarikçi / cari adı" /></div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
           <div class="field"><label>Miktar</label><input class="input" type="text" inputmode="decimal" id="ueMiktar" placeholder="0" /></div>
@@ -288,6 +327,19 @@ function urunEkleModalAc(rafId) {
   const kapat = () => { root.innerHTML = ""; };
   root.querySelector('[data-role="iptal"]').onclick = kapat;
   root.querySelector('[data-role="backdrop"]').onclick = (e) => { if (e.target.dataset.role === "backdrop") kapat(); };
+
+  // Autocomplete: ad yazılınca kod, kod yazılınca ad otomatik dolar
+  const ueAdEl = root.querySelector("#ueAd");
+  const ueKodEl = root.querySelector("#ueKod");
+  ueAdEl?.addEventListener("change", () => {
+    const s = katalogCache.find((u) => u.ad === ueAdEl.value);
+    if (s && !ueKodEl.value) ueKodEl.value = s.stokKodu || "";
+  });
+  ueKodEl?.addEventListener("change", () => {
+    const s = katalogCache.find((u) => u.stokKodu === ueKodEl.value);
+    if (s) { ueAdEl.value = s.ad || ""; }
+  });
+
   root.querySelector('[data-role="ekle"]').onclick = async () => {
     const ad = document.getElementById("ueAd").value.trim();
     if (!ad) { toast("Ürün adı zorunlu.", "error"); return; }
@@ -367,6 +419,7 @@ function kalemCikisModalAc(rafId, kalemId) {
           <label>İşlem Tipi</label>
           <select class="select" id="cikTip">
             <option value="cikis">Raftan çıktı (toplama alanına)</option>
+            <option value="kat_tasima">Aynı rafta farklı kat/bölmeye taşı</option>
             <option value="tasima">Başka rafa taşındı</option>
             <option value="fire">Fire / Kullanıldı</option>
           </select>
@@ -379,6 +432,14 @@ function kalemCikisModalAc(rafId, kalemId) {
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
             <div class="field"><label>Hedef Kat</label><input class="input" type="number" id="hedefKat" placeholder="1" min="1" /></div>
             <div class="field"><label>Hedef Bölme</label><input class="input" type="number" id="hedefBolme" placeholder="1" min="1" /></div>
+          </div>
+        </div>
+        <!-- Aynı rafta kat/bölme değişimi -->
+        <div id="katTasimaHedef" style="display:none;background:var(--color-surface-2);padding:10px;border-radius:8px;margin-bottom:8px;">
+          <div style="font-size:12.5px;color:var(--color-ink-soft);margin-bottom:8px;">Mevcut: Kat ${kalem.kat || "?"} / Bölme ${kalem.bolme || "?"}</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+            <div class="field"><label>Yeni Kat</label><input class="input" type="number" id="yeniKat" placeholder="${kalem.kat || 1}" min="1" value="${kalem.kat || ""}" /></div>
+            <div class="field"><label>Yeni Bölme</label><input class="input" type="number" id="yeniBolme" placeholder="${kalem.bolme || 1}" min="1" value="${kalem.bolme || ""}" /></div>
           </div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
@@ -399,6 +460,7 @@ function kalemCikisModalAc(rafId, kalemId) {
   // Tip değişince taşıma hedefini göster/gizle
   document.getElementById("cikTip").addEventListener("change", (e) => {
     document.getElementById("tasımaHedef").style.display = e.target.value === "tasima" ? "" : "none";
+    document.getElementById("katTasimaHedef").style.display = e.target.value === "kat_tasima" ? "" : "none";
   });
 
   root.querySelector('[data-role="tamam"]').onclick = async () => {
@@ -407,8 +469,22 @@ function kalemCikisModalAc(rafId, kalemId) {
     const cikanMiktar = ondalikOku(document.getElementById("cikMiktar").value);
     const cikanPalet = parseInt(document.getElementById("cikPalet").value) || 0;
 
-    await rafHareketiKaydet({
-      rafId, rafAd: raf?.ad, tip,
+    // Aynı rafta kat/bölme değişimi
+    if (tip === "kat_tasima") {
+      const yeniKat = parseInt(document.getElementById("yeniKat").value) || kalem.kat || 1;
+      const yeniBolme = parseInt(document.getElementById("yeniBolme").value) || kalem.bolme || 1;
+      await rafKalemiGuncelle(rafId, kalemId, { kat: yeniKat, bolme: yeniBolme });
+      await rafHareketiKaydet({
+        rafId, rafAd: raf?.ad, tip: "kat_degisimi",
+        stokKodu: kalem.stokKodu, ad: kalem.ad,
+        miktar: kalem.miktar, palet: kalem.palet, birim: kalem.birim,
+        yapan: mevcutKullanici.ad || mevcutKullanici.uid,
+        not: `Kat ${kalem.kat}/${kalem.bolme} → Kat ${yeniKat}/${yeniBolme}`
+      });
+      toast(`Taşındı: Kat ${yeniKat} / Bölme ${yeniBolme}`, "success");
+      kapat();
+      return;
+    }
       stokKodu: kalem.stokKodu, ad: kalem.ad,
       miktar: cikanMiktar, palet: cikanPalet, birim: kalem.birim,
       yapan: mevcutKullanici.ad || mevcutKullanici.uid, not
