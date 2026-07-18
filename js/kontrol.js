@@ -2,7 +2,7 @@
 // KONTROL EKRANI MANTIĞI
 // ============================================================================
 import { auth, signOut, sayfaKorumasi } from "./firebase.js";
-import { siparisleriDinle, siparisGuncelle, urunleriDinle, urunGuncelle, urunEkle, tumSiparisleriCanliDinle, siparisArsivle, suruculeriGetir, stokDusur, stokGeriEkle } from "./veri.js";
+import { siparisleriDinle, siparisGuncelle, urunleriDinle, urunGuncelle, urunEkle, tumSiparisleriCanliDinle, siparisArsivle, suruculeriGetir, stokDusur, stokGeriEkle, stokGozaltiSifirla } from "./veri.js";
 import { stoklariDinle, stokRozetiHtml } from "./stok.js";
 import { serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
@@ -696,6 +696,13 @@ document.getElementById("sistemeAktarBtn").addEventListener("click", async () =>
   a.click();
 
   await siparisGuncelle(aktifSiparis.id, { sistemeAktarildi: true, sistemeAktarTarihi: serverTimestamp() });
+
+  // Toplanan ürünlerin gözaltı miktarını sıfırla — artık Mikro'ya işlendi
+  const toplamananKodlar = urunlerCache
+    .filter((u) => u.toplandi && u.kod)
+    .map((u) => u.kod);
+  if (toplamananKodlar.length) await stokGozaltiSifirla(toplamananKodlar);
+
   toast("CSV dosyası indirildi ve sipariş 'Sisteme Aktarıldı' işaretlendi.", "success");
   // Sevk Edildi sekmesinde kal
   document.querySelectorAll("[data-sekme]").forEach((b) => b.classList.remove("is-active"));

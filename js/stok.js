@@ -68,5 +68,11 @@ export const DURUM_RENK = {
 export function stokRozetiHtml(stokKaydi) {
   if (!stokKaydi) return '<span class="badge badge-gray">Stok verisi yok</span>';
   const sinif = DURUM_RENK[stokKaydi.durum] || "badge-gray";
-  return `<span class="badge ${sinif}">${stokKaydi.durum || "—"}</span>`;
+  const miktar = Number(stokKaydi.miktar) || 0;
+  const gozalti = Number(stokKaydi.gozaltiMiktar) || 0;
+  const kullanilabilir = miktar - gozalti;
+  const gozaltiEtiketi = gozalti > 0
+    ? ` <span class="badge badge-amber" title="Toplama alanında">-${gozalti} toplmda</span>`
+    : "";
+  return `<span class="badge ${sinif}">${stokKaydi.durum || "—"} · ${kullanilabilir} ${stokKaydi.birim || ""}</span>${gozaltiEtiketi}`;
 }

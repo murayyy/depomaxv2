@@ -490,15 +490,23 @@ export async function paletlemeYardimciEkle(siparisId, yardimci) {
    Toplayıcı "toplandı" işaretlediğinde stoktan düşer.
    İşareti kaldırırsa geri eklenir.
    ============================================================================ */
+// ============================================================================
+// STOK GÖZETLEME (gözaltı/rezerv sistemi)
+// Köprü script miktar alanını her 600s'de Mikro'dan üzerine yazar.
+// Bu yüzden miktar alanına dokunmuyoruz — ayrı "gozaltiMiktar" alanı kullanıyoruz.
+// Köprü bu alanı yazmadığı için kalıcı kalır.
+// Ekranda gösterilen: miktar - gozaltiMiktar
+// ============================================================================
 export async function stokDusur(stokKodu, miktar) {
   if (!stokKodu || !miktar) return;
   try {
-    await updateDoc(doc(db, "stoklar", stokKodu), {
-      miktar: increment(-Number(miktar)),
-      sonGuncelleme: serverTimestamp()
-    });
+    const ref = doc(db, "stoklar", stokKodu);
+    await updateDoc(ref, { gozaltiMiktar: increment(Number(miktar)) });
   } catch (e) {
-    console.warn("Stok düşme başarısız:", stokKodu, e.message);
+    // Belge yoksa oluştur
+    try {
+      await setDoc(doc(db, "stoklar", stokKodu), { gozaltiMiktar: Number(miktar) }, { merge: true });
+    } catch (e2) { console.warn("Stok gözaltı başarısız:", stokKodu, e2.message); }
   }
 }
 
@@ -506,10 +514,19 @@ export async function stokGeriEkle(stokKodu, miktar) {
   if (!stokKodu || !miktar) return;
   try {
     await updateDoc(doc(db, "stoklar", stokKodu), {
-      miktar: increment(Number(miktar)),
-      sonGuncelleme: serverTimestamp()
+      gozaltiMiktar: increment(-Number(miktar))
     });
   } catch (e) {
-    console.warn("Stok geri ekleme başarısız:", stokKodu, e.message);
+    console.warn("Stok gözaltı geri alma başarısız:", stokKodu, e.message);
   }
+}
+
+// Sisteme aktarıldıktan sonra gözaltıyı sıfırla
+export async function stokGozaltiSifirla(stokKodlari) {
+  if (!stokKodlari?.length) return;
+  const batch = writeBatch(db);
+  stokKodlari.forEach((kod) => {
+    if (kod) batch.update(doc(db, "stoklar", kod), { gozaltiMiktar: 0 });
+  });
+  await batch.commit();
 }
