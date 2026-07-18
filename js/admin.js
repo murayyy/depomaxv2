@@ -414,6 +414,7 @@ document.getElementById("katalogExcelInput").addEventListener("change", async (e
 
     const urunler = satirlar.map((satir, i) => ({
       stokKodu: String(bul(satir, ["stok kodu", "kod"]) || "").trim(),
+      barkod: String(bul(satir, ["barkod", "barkod no", "ean"]) || "").trim(),
       ad: String(bul(satir, ["ürün adı", "urun adi", "ad", "isim", "stok adı"]) || "").trim(),
       birim: String(bul(satir, ["birim"]) || "").trim(),
       minMiktar: parseFloat(String(bul(satir, ["min. miktar", "min miktar", "minimum miktar", "minimum"]) || "0").replace(",", ".")) || 0,
