@@ -442,11 +442,10 @@ function baglaSatirOlaylari(kapsayici, saltOkunur) {
         const patch = toplandiCb.checked ? { toplandi: true, eksik: false } : { toplandi: false };
         if (toplandiCb.checked) {
           patch.toplayanKullanici = mevcutKullanici.ad || mevcutKullanici.uid;
-          // Stoktan düş — sadece stok kodu varsa
           if (urun?.kod) stokDusur(urun.kod, urun.miktar);
         } else {
-          // İşaret kaldırıldı — stoğu geri ekle
-          if (urun?.kod && urun?.toplandi) stokGeriEkle(urun.kod, urun.miktar);
+          // Cache'e bakmadan her zaman geri ekle — cache gecikmeli olabilir
+          if (urun?.kod) stokGeriEkle(urun.kod, urun.miktar);
         }
         urunGuncelle(aktifSiparis.id, uid, patch);
       });

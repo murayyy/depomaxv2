@@ -373,13 +373,12 @@ function baglaSatirOlaylari(kapsayici, saltOkunur) {
           if (eskiEksikti) {
             patch.duzeltildi = true;
             patch.duzeltenkKullanici = mevcutKullanici.ad || mevcutKullanici.uid;
-            // Eksik işaretliydi, şimdi toplandı → stoktan düş
             if (urun?.kod) stokDusur(urun.kod, urun.miktar);
           }
         } else {
           patch.duzeltildi = false;
-          // Toplandı işareti kaldırıldı → stoğu geri ekle
-          if (urun?.kod && urun?.toplandi) stokGeriEkle(urun.kod, urun.miktar);
+          // Cache'e bakmadan her zaman geri ekle
+          if (urun?.kod) stokGeriEkle(urun.kod, urun.miktar);
         }
         urunGuncelle(aktifSiparis.id, uid, patch);
       });
