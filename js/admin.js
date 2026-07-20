@@ -257,7 +257,29 @@ function renderKatalog() {
   const bos = document.getElementById("katalogBosDurum");
   if (!tbody) return;
 
-  if (katalogListesi.length === 0) {
+  // Kategori dropdown'ı güncelle
+  const katSel = document.getElementById("katalogKategoriFiltre");
+  if (katSel) {
+    const kategoriler = [...new Set(katalogListesi.map((u) => (u.kategori || "").trim()).filter(Boolean))].sort();
+    const mevcut = katSel.value;
+    katSel.innerHTML = '<option value="">Tüm Kategoriler</option>' +
+      kategoriler.map((k) => `<option value="${kacisEt(k)}">${kacisEt(k)}</option>`).join("");
+    if (mevcut) katSel.value = mevcut;
+  }
+
+  // Filtrele
+  const ara = (document.getElementById("katalogAraInput")?.value || "").toLowerCase().trim();
+  const seciliKat = (document.getElementById("katalogKategoriFiltre")?.value || "").trim();
+  const liste = katalogListesi.filter((u) => {
+    const katEsles = !seciliKat || (u.kategori || "").trim() === seciliKat;
+    const araEsles = !ara ||
+      (u.ad || "").toLowerCase().includes(ara) ||
+      (u.stokKodu || "").toLowerCase().includes(ara) ||
+      (u.barkod || "").toLowerCase().includes(ara);
+    return katEsles && araEsles;
+  });
+
+  if (liste.length === 0) {
     tbody.innerHTML = "";
     kartGovde.innerHTML = "";
     bos.classList.remove("u-hidden");
@@ -265,7 +287,7 @@ function renderKatalog() {
   }
   bos.classList.add("u-hidden");
 
-  tbody.innerHTML = katalogListesi.map((u) => `
+  tbody.innerHTML = liste.map((u) => `
     <tr data-uid="${u.id}">
       <td class="cell-code">${u.sira || "—"}</td>
       <td class="cell-code">${kacisEt(u.stokKodu || "—")}</td>
@@ -283,7 +305,7 @@ function renderKatalog() {
       </td>
     </tr>`).join("");
 
-  kartGovde.innerHTML = katalogListesi.map((u) => `
+  kartGovde.innerHTML = liste.map((u) => `
     <div class="row-card" data-uid="${u.id}">
       <div class="row-card__top">
         <div>
@@ -382,6 +404,36 @@ function katalogModalAc(mevcut) {
 }
 
 document.getElementById("yeniKatalogBtn2").addEventListener("click", () => katalogModalAc(null));
+
+// Arama + kategori filtresi
+document.getElementById("katalogAraInput")?.addEventListener("input", () => renderKatalog());
+document.getElementById("katalogKategoriFiltre")?.addEventListener("change", () => renderKatalog());
+
+// Excel'e al — filtrelenmiş listeyi indir
+document.getElementById("katalogExcelIndir")?.addEventListener("click", async () => {
+  const { excelOlarakIndir } = await import("./utils.js");
+  const ara = (document.getElementById("katalogAraInput")?.value || "").toLowerCase().trim();
+  const seciliKat = (document.getElementById("katalogKategoriFiltre")?.value || "").trim();
+  const liste = katalogListesi.filter((u) => {
+    const katEsles = !seciliKat || (u.kategori || "").trim() === seciliKat;
+    const araEsles = !ara ||
+      (u.ad || "").toLowerCase().includes(ara) ||
+      (u.stokKodu || "").toLowerCase().includes(ara) ||
+      (u.barkod || "").toLowerCase().includes(ara);
+    return katEsles && araEsles;
+  });
+  if (!liste.length) { toast("İndirilecek ürün yok.", "error"); return; }
+  const basliklar = ["Sıra", "Stok Kodu", "Barkod", "Kategori", "Ürün Adı", "Birim", "Min. Miktar", "Birim Ağırlık", "Reyon", "Durum"];
+  const satirlar = liste.map((u) => [
+    u.sira || "", u.stokKodu || "", u.barkod || "", u.kategori || "",
+    u.ad || "", u.birim || "", u.minMiktar || "", u.birimAgirlik || "",
+    u.reyon || "", u.aktif === false ? "Pasif" : "Aktif"
+  ]);
+  const tarih = new Date().toLocaleDateString("tr-TR").replace(/\./g, "-");
+  const etiket = seciliKat ? `_${seciliKat.replace(/\s/g, "_")}` : "";
+  excelOlarakIndir([basliklar, ...satirlar], `katalog${etiket}_${tarih}.xlsx`);
+  toast(`${liste.length} ürün indirildi.`, "success");
+});
 
 /* ============================================================================
    EXCEL'DEN TOPLU KATALOG EKLEMESİ
