@@ -35,6 +35,15 @@ function katalogGuncellendi(liste) {
   }
   document.getElementById("bosKatalog").classList.add("u-hidden");
   document.getElementById("katalogAlani").classList.remove("u-hidden");
+
+  // Kategori dropdown'ını doldur
+  const kategoriler = [...new Set(katalogCache.map((u) => (u.kategori || "").trim() || "Diğer"))].sort();
+  const sel = document.getElementById("kategoriFiltre");
+  const mevcutSec = sel.value;
+  sel.innerHTML = '<option value="">Tüm Kategoriler</option>' +
+    kategoriler.map((k) => `<option value="${kacisEt(k)}">${kacisEt(k)}</option>`).join("");
+  if (mevcutSec) sel.value = mevcutSec;
+
   renderKatalog();
 }
 
@@ -48,14 +57,28 @@ function butonGuncelle() {
 // Event delegation ile miktar değişimini yakala — yeniden render sonrası da çalışır
 document.addEventListener("input", (e) => {
   if (e.target.classList.contains("miktar-input")) butonGuncelle();
+  if (e.target.id === "urunAraInput") renderKatalog();
 });
+document.getElementById("kategoriFiltre")?.addEventListener("change", () => renderKatalog());
 
 function renderKatalog() {
   const tbody = document.getElementById("katalogGovde");
   const kartlar = document.getElementById("katalogKartlar");
 
+  // Filtrele
+  const ara = (document.getElementById("urunAraInput")?.value || "").toLowerCase().trim();
+  const seciliKat = (document.getElementById("kategoriFiltre")?.value || "").trim();
+
+  const filtrelenmis = katalogCache.filter((u) => {
+    const katEsles = !seciliKat || ((u.kategori || "").trim() || "Diğer") === seciliKat;
+    const araEsles = !ara || (u.ad || "").toLowerCase().includes(ara) ||
+      (u.stokKodu || "").toLowerCase().includes(ara) ||
+      (u.barkod || "").toLowerCase().includes(ara);
+    return katEsles && araEsles;
+  });
+
   const gruplar = new Map();
-  katalogCache.forEach((u) => {
+  filtrelenmis.forEach((u) => {
     const kat = (u.kategori || "").trim() || "Diğer";
     if (!gruplar.has(kat)) gruplar.set(kat, []);
     gruplar.get(kat).push(u);
