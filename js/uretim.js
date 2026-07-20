@@ -12,6 +12,60 @@ arayuzHazirla();
 
 let mevcutKullanici = null;
 let receteListesi = [];
+let kokYardimcilar = [];
+let pkYardimcilar = [];
+
+function yardimciChip(ad, index, tip) {
+  return `<span style="display:inline-flex;align-items:center;gap:5px;background:var(--color-surface-2);border-radius:99px;padding:3px 10px;font-size:12.5px;">
+    👤 ${kacisEt(ad)}
+    <button onclick="kaldir${tip}Yardimci(${index})" style="background:none;border:none;cursor:pointer;color:#999;font-size:14px;line-height:1;">✕</button>
+  </span>`;
+}
+
+function renderKokYardimcilar() {
+  const div = document.getElementById("kokYardimcilar");
+  if (!div) return;
+  div.innerHTML = kokYardimcilar.map((ad, i) => yardimciChip(ad, i, "Kok")).join("") +
+    '<button class="btn btn-ghost btn-sm" id="kokYardimciEkleBtn">+ Yardımcı Ekle</button>';
+  document.getElementById("kokYardimciEkleBtn")?.addEventListener("click", yardimciEkleModal.bind(null, "kok"));
+}
+
+function renderPkYardimcilar() {
+  const div = document.getElementById("pkYardimcilar");
+  if (!div) return;
+  div.innerHTML = pkYardimcilar.map((ad, i) => yardimciChip(ad, i, "Pk")).join("") +
+    '<button class="btn btn-ghost btn-sm" id="pkYardimciEkleBtn">+ Yardımcı Ekle</button>';
+  document.getElementById("pkYardimciEkleBtn")?.addEventListener("click", yardimciEkleModal.bind(null, "pk"));
+}
+
+window.kaldirKokYardimci = (i) => { kokYardimcilar.splice(i, 1); renderKokYardimcilar(); };
+window.kaldirPkYardimci = (i) => { pkYardimcilar.splice(i, 1); renderPkYardimcilar(); };
+
+function yardimciEkleModal(tip) {
+  const root = document.getElementById("modalRoot");
+  root.innerHTML = `
+    <div class="modal-backdrop" data-role="backdrop">
+      <div class="modal" style="max-width:360px;">
+        <h3>👤 Yardımcı Ekle</h3>
+        <div class="field"><label>Ad Soyad</label><input class="input" id="yardimciAdInput" placeholder="Ad Soyad" /></div>
+        <div class="modal__actions">
+          <button class="btn btn-ghost" data-role="iptal">Vazgeç</button>
+          <button class="btn btn-primary" data-role="ekle">Ekle</button>
+        </div>
+      </div>
+    </div>`;
+  const kapat = () => { root.innerHTML = ""; };
+  root.querySelector('[data-role="iptal"]').onclick = kapat;
+  root.querySelector('[data-role="backdrop"]').onclick = (e) => { if (e.target.dataset.role === "backdrop") kapat(); };
+  root.querySelector('[data-role="ekle"]').onclick = () => {
+    const ad = document.getElementById("yardimciAdInput").value.trim();
+    if (!ad) { toast("Ad girin.", "error"); return; }
+    if (tip === "kok") { kokYardimcilar.push(ad); renderKokYardimcilar(); }
+    else { pkYardimcilar.push(ad); renderPkYardimcilar(); }
+    kapat();
+  };
+  document.getElementById("yardimciAdInput").focus();
+}
 let aktifSekme = "kokteyl";
 
 // Bugünün tarihini giriş alanlarına yaz
@@ -19,11 +73,13 @@ const bugun = new Date().toISOString().slice(0, 10);
 document.getElementById("kokTarih").value = bugun;
 document.getElementById("pkTarih").value = bugun;
 
-sayfaKorumasi(["depocu", "admin"], (kullanici) => {
+sayfaKorumasi(["uretici", "admin"], (kullanici) => {
   mevcutKullanici = kullanici;
   document.getElementById("kullaniciAdi").textContent = kullanici.ad || kullanici.uid;
   document.getElementById("rolEtiketi").textContent = kullanici.rol;
   document.getElementById("pkYapan").value = kullanici.ad || "";
+  renderKokYardimcilar();
+  renderPkYardimcilar();
   receteleriDinle((liste) => {
     receteListesi = liste;
     renderReceteler();
@@ -89,13 +145,16 @@ document.getElementById("kokKaydetBtn").addEventListener("click", async () => {
     tarihStr: document.getElementById("kokTarih").value,
     parti: document.getElementById("kokParti").value.trim(),
     not: document.getElementById("kokNot").value.trim(),
-    yapan: mevcutKullanici.ad || mevcutKullanici.uid
+    yapan: mevcutKullanici.ad || mevcutKullanici.uid,
+    yardimcilar: [...kokYardimcilar]
   });
   toast(`✅ ${recete.ad} — ${sayiBicimle(miktar)} KG üretim kaydedildi.`, "success");
   document.getElementById("kokMiktar").value = "";
   document.getElementById("kokPalet").value = "";
   document.getElementById("kokParti").value = "";
   document.getElementById("kokNot").value = "";
+  kokYardimcilar = [];
+  renderKokYardimcilar();
 });
 
 /* ---- Paketleme Kaydet ---- */
@@ -113,7 +172,8 @@ document.getElementById("pkKaydetBtn").addEventListener("click", async () => {
     miktar: kg,
     tarihStr: document.getElementById("pkTarih").value,
     not: document.getElementById("pkNot").value.trim(),
-    yapan: document.getElementById("pkYapan").value.trim() || mevcutKullanici.ad || mevcutKullanici.uid
+    yapan: document.getElementById("pkYapan").value.trim() || mevcutKullanici.ad || mevcutKullanici.uid,
+    yardimcilar: [...pkYardimcilar]
   });
   toast(`✅ ${urun} — paketleme kaydedildi.`, "success");
   document.getElementById("pkUrun").value = "";
@@ -121,6 +181,8 @@ document.getElementById("pkKaydetBtn").addEventListener("click", async () => {
   document.getElementById("pkPoset").value = "";
   document.getElementById("pkKg").value = "";
   document.getElementById("pkNot").value = "";
+  pkYardimcilar = [];
+  renderPkYardimcilar();
 });
 
 /* ---- Reçeteler ---- */
@@ -303,7 +365,7 @@ async function gecmisYukle() {
             ${tipRozet}
           </div>
           <div class="u-text-soft" style="font-size:12px;margin-top:4px;">
-            👤 ${kacisEt(k.yapan || "—")} · 🕐 ${tarih}
+            👤 ${kacisEt(k.yapan || "—")}${k.yardimcilar?.length ? " + " + k.yardimcilar.map(y => kacisEt(y)).join(", ") : ""} · 🕐 ${tarih}
             ${k.not ? " · " + kacisEt(k.not) : ""}
             ${k.parti ? " · LOT: " + kacisEt(k.parti) : ""}
           </div>
