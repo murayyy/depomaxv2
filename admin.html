@@ -80,11 +80,18 @@
 
     <!-- Katalog yönetimi -->
     <div id="katalogBloku" class="u-hidden">
-      <button class="btn btn-primary" id="yeniKatalogBtn2" style="margin-bottom:14px;">+ Ürün Ekle</button>
-      <label class="btn btn-ghost" style="margin-bottom:14px; cursor:pointer;">
-        📄 Excel'den Toplu Ekle
-        <input type="file" id="katalogExcelInput" accept=".xlsx,.xls,.csv" class="u-hidden" />
-      </label>
+      <div class="toolbar" style="margin-bottom:14px;gap:8px;flex-wrap:wrap;">
+        <button class="btn btn-primary" id="yeniKatalogBtn2">+ Ürün Ekle</button>
+        <label class="btn btn-ghost" style="cursor:pointer;">
+          📄 Excel'den Toplu Ekle
+          <input type="file" id="katalogExcelInput" accept=".xlsx,.xls,.csv" class="u-hidden" />
+        </label>
+        <button class="btn btn-ghost" id="katalogExcelIndir">⬇ Excel'e Al</button>
+        <input class="input" id="katalogAraInput" placeholder="🔍 Ürün adı, kod, barkod…" style="max-width:240px;" autocomplete="off" />
+        <select class="select" id="katalogKategoriFiltre" style="max-width:200px;">
+          <option value="">Tüm Kategoriler</option>
+        </select>
+      </div>
       <div class="table-wrap">
         <table class="data-table">
           <thead><tr><th>Sıra</th><th>Stok Kodu</th><th>Barkod</th><th>Kategori</th><th>Ürün Adı</th><th>Birim</th><th>Min. Miktar</th><th>Birim Ağ.</th><th>Reyon</th><th>Durum</th><th></th></tr></thead>
