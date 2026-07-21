@@ -7,6 +7,10 @@ import { arayuzHazirla, toast, kacisEt, sayiBicimle, yukleniyorGoster, yukleniyo
 
 arayuzHazirla();
 
+let sonTumUrunler = [];
+let sonSiparisler = [];
+let sonUrunListeleri = [];
+
 sayfaKorumasi(["admin"], (kullanici) => {
   document.getElementById("kullaniciAdi").textContent = kullanici.ad || kullanici.uid;
   document.getElementById("rolEtiketi").textContent = kullanici.rol;
@@ -17,6 +21,7 @@ document.getElementById("cikisBtn").addEventListener("click", async () => {
   await signOut(auth); window.location.href = "index.html";
 });
 
+/* ---- Tarih kısayolları ---- */
 function tarihGiris(d) { return d.toISOString().slice(0, 10); }
 document.getElementById("butGun7").addEventListener("click", () => {
   const b = new Date();
@@ -33,9 +38,8 @@ document.getElementById("butTumZamanlar").addEventListener("click", () => {
   document.getElementById("tarihBitis").value = "";
 });
 
-document.getElementById("hesaplaBtn").addEventListener("click", hesapla);
-
-async function hesapla() {
+/* ---- Ana hesaplama ---- */
+document.getElementById("hesaplaBtn").addEventListener("click", async () => {
   document.getElementById("baslangicDurum").classList.add("u-hidden");
   yukleniyorGoster("Siparişler okunuyor…");
   try {
@@ -55,21 +59,22 @@ async function hesapla() {
     const tumUrunler = listeleri.flat();
     sonTumUrunler = tumUrunler;
     sonSiparisler = siparisler;
+    sonUrunListeleri = listeleri;
     const { toplayicilar, kontrolorler } = hesaplaOzetler(tumUrunler, siparisler);
     render(toplayicilar, kontrolorler, siparisler.length, tumUrunler.length);
     renderAnalizler(tumUrunler, siparisler, listeleri);
     yukleniyorKapat();
   } catch (err) {
     yukleniyorKapat(); console.error(err);
-    toast("Hesaplanırken hata oluştu.", "error");
+    toast("Hesaplanırken hata oluştu: " + (err.message || err), "error");
   }
-}
+});
 
-/* ---- Süre hesaplama ---- */
+/* ---- Süre yardımcıları ---- */
 function dakikaFarki(baslangicIso, bitisIso) {
   if (!baslangicIso || !bitisIso) return null;
   const fark = (new Date(bitisIso) - new Date(baslangicIso)) / 60000;
-  return fark > 0 ? fark : null;
+  return fark > 0 && fark < 1440 ? fark : null; // 24 saatten büyükse geçersiz say
 }
 
 function sureBicimle(dakika) {
@@ -80,62 +85,45 @@ function sureBicimle(dakika) {
   return kalanDk > 0 ? `${saat}s ${kalanDk}dk` : `${saat}s`;
 }
 
-/* ---- Aktif saat hesaplama (sipariş bazlı yaklaşım) ---- */
-// Her kullanıcının sipariş üzerinde geçirdiği süreleri gün bazında toplar.
-// Aynı günde birden fazla sipariş varsa üst üste geldiği varsayılır.
-function aktifSaatHesapla(sureListesi) {
-  if (!sureListesi.length) return "—";
-  const toplamDk = sureListesi.reduce((t, d) => t + d, 0);
-  return sureBicimle(toplamDk);
-}
-
+/* ---- Özet hesaplama ---- */
 function hesaplaOzetler(urunler, siparisler) {
-  const tMap = new Map(); // toplayıcılar
-  const kMap = new Map(); // kontrolörler
+  const tMap = new Map();
+  const kMap = new Map();
 
   const tGetir = (ad) => {
     if (!tMap.has(ad)) tMap.set(ad, {
       ad, toplananUrun: 0, toplananKg: 0,
-      eksikHata: 0, miktarHata: 0, toplamaSureleri: []
+      eksikHata: 0, miktarHata: 0, toplamaSureleri: [], siparisSeti: new Set()
     });
     return tMap.get(ad);
   };
   const kGetir = (ad) => {
     if (!kMap.has(ad)) kMap.set(ad, {
       ad, kontrolEdilenUrun: 0, kontrolEdilenKg: 0,
-      eksikTespit: 0, miktarDuzeltme: 0, kontrolSureleri: []
+      eksikTespit: 0, miktarDuzeltme: 0, kontrolSureleri: [], siparisSeti: new Set()
     });
     return kMap.get(ad);
   };
 
   const kgMi = (u) => String(u.birim || "").trim().toLowerCase() === "kg";
 
-  // Sipariş bazlı süreler
   siparisler.forEach((s) => {
-    // Toplama süresi
     if (s.toplamayiTamamlayan && s.olusturulmaTarihi && s.toplamaBitis) {
       const baslangic = s.olusturulmaTarihi.toDate?.().toISOString?.() || s.olusturulmaTarihi;
       const sure = dakikaFarki(baslangic, s.toplamaBitis);
-      if (sure) {
-        const kayit = tGetir(s.toplamayiTamamlayan);
-        kayit.toplamaSureleri.push(sure);
-      }
+      if (sure) tGetir(s.toplamayiTamamlayan).toplamaSureleri.push(sure);
     }
-    // Kontrol süresi
     if (s.kontrolTamamlayan && s.kontrolBaslangic && s.kontrolBitis) {
       const sure = dakikaFarki(s.kontrolBaslangic, s.kontrolBitis);
-      if (sure) {
-        const kayit = kGetir(s.kontrolTamamlayan);
-        kayit.kontrolSureleri.push(sure);
-      }
+      if (sure) kGetir(s.kontrolTamamlayan).kontrolSureleri.push(sure);
     }
   });
 
-  // Ürün bazlı metrikler
   urunler.forEach((u) => {
     if (u.toplayanKullanici) {
       const k = tGetir(u.toplayanKullanici);
       k.toplananUrun++;
+      k.siparisSeti.add(u.siparisId || "");
       if (kgMi(u)) k.toplananKg += Number(u.miktar) || 0;
       if (u.duzeltildi) k.eksikHata++;
       if (u.miktarDuzeltildi && u.orijinalMiktar !== undefined && u.orijinalMiktar !== u.miktar) k.miktarHata++;
@@ -143,45 +131,35 @@ function hesaplaOzetler(urunler, siparisler) {
     if (u.kontrolEdenKullanici) {
       const k = kGetir(u.kontrolEdenKullanici);
       k.kontrolEdilenUrun++;
+      k.siparisSeti.add(u.siparisId || "");
       if (kgMi(u)) k.kontrolEdilenKg += Number(u.miktar) || 0;
-      if (u.kontrolorEksikTespiti && u.kontrolorEksikTespitiKullanici === u.kontrolEdenKullanici) k.eksikTespit++;
+      if (u.kontrolorEksikTespiti) k.eksikTespit++;
       if (u.miktarDuzeltildi && u.miktarDuzeltenKullanici === u.kontrolEdenKullanici) k.miktarDuzeltme++;
     }
   });
 
-  // Ortalama ve hız hesapla
   const toplayicilar = Array.from(tMap.values()).map((k) => {
-    const topOrt = k.toplamaSureleri.length ? k.toplamaSureleri.reduce((a, b) => a + b, 0) / k.toplamaSureleri.length : null;
     const toplamSure = k.toplamaSureleri.reduce((a, b) => a + b, 0);
+    const ortSure = k.toplamaSureleri.length ? toplamSure / k.toplamaSureleri.length : null;
     const hizUrun = toplamSure > 0 ? (k.toplananUrun / toplamSure * 60).toFixed(1) : null;
     const hizKg = toplamSure > 0 && k.toplananKg ? (k.toplananKg / toplamSure * 60).toFixed(1) : null;
-    const hataOrani = k.toplananUrun > 0 ? (((k.eksikHata + k.miktarHata) / k.toplananUrun) * 100).toFixed(1) : null;
-    return {
-      ...k,
-      ortalamaToplamaSure: topOrt,
-      toplamAktifSure: toplamSure || null,
-      siparisSayisi: k.toplamaSureleri.length,
-      hizUrun, hizKg, hataOrani
-    };
+    const toplamHata = k.eksikHata + k.miktarHata;
+    const hataOrani = k.toplananUrun > 0 ? ((toplamHata / k.toplananUrun) * 100).toFixed(1) : null;
+    return { ...k, ortalamaToplamaSure: ortSure, toplamSure, siparisSayisi: k.toplamaSureleri.length, hizUrun, hizKg, hataOrani, toplamHata };
   }).sort((a, b) => b.toplananUrun - a.toplananUrun);
 
   const kontrolorler = Array.from(kMap.values()).map((k) => {
-    const konOrt = k.kontrolSureleri.length ? k.kontrolSureleri.reduce((a, b) => a + b, 0) / k.kontrolSureleri.length : null;
     const toplamSure = k.kontrolSureleri.reduce((a, b) => a + b, 0);
+    const ortSure = k.kontrolSureleri.length ? toplamSure / k.kontrolSureleri.length : null;
     const hizUrun = toplamSure > 0 ? (k.kontrolEdilenUrun / toplamSure * 60).toFixed(1) : null;
-    return {
-      ...k,
-      ortalamaKontrolSure: konOrt,
-      toplamAktifSure: toplamSure || null,
-      siparisSayisi: k.kontrolSureleri.length,
-      hizUrun
-    };
+    const toplamDuzeltme = k.eksikTespit + k.miktarDuzeltme;
+    return { ...k, ortalamaKontrolSure: ortSure, toplamSure, siparisSayisi: k.kontrolSureleri.length, hizUrun, toplamDuzeltme };
   }).sort((a, b) => b.kontrolEdilenUrun - a.kontrolEdilenUrun);
 
   return { toplayicilar, kontrolorler };
 }
 
-/* ---- Yardımcı render fonksiyonları ---- */
+/* ---- Rozet yardımcıları ---- */
 function hataRozetiHtml(sayi) {
   if (!sayi) return '<span class="u-text-soft">—</span>';
   const sinif = sayi > 10 ? "badge-red" : sayi > 3 ? "badge-amber" : "badge-gray";
@@ -198,6 +176,7 @@ function tespitRozetiHtml(sayi) {
   return `<span class="badge badge-blue">${sayi}</span>`;
 }
 
+/* ---- Personel render ---- */
 function render(toplayicilar, kontrolorler, siparisSayisi, urunSayisi) {
   document.getElementById("ozetAlani").textContent =
     `${siparisSayisi} sipariş, ${urunSayisi} ürün üzerinden hesaplandı.`;
@@ -214,14 +193,12 @@ function render(toplayicilar, kontrolorler, siparisSayisi, urunSayisi) {
 
   tbody.innerHTML = `
     <tr style="background:var(--color-surface-2);">
-      <td colspan="9" style="font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:0.04em;color:var(--color-ink-soft);padding:8px 12px;">
-        📦 Toplayıcılar
-      </td>
+      <td colspan="9" style="font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:0.04em;color:var(--color-ink-soft);padding:8px 12px;">📦 Toplayıcılar</td>
     </tr>
     ${toplayicilar.map((k) => `
     <tr>
-      <td>${kacisEt(k.ad)}</td>
-      <td>${k.toplananUrun}</td>
+      <td><strong>${kacisEt(k.ad)}</strong></td>
+      <td>${k.toplananUrun} ürün${k.siparisSayisi ? ` <span class="u-text-soft" style="font-size:11px;">(${k.siparisSayisi} sipariş)</span>` : ""}</td>
       <td>${k.toplananKg ? sayiBicimle(k.toplananKg) + " KG" : "—"}</td>
       <td>${hataRozetiHtml(k.eksikHata)}</td>
       <td>${hataRozetiHtml(k.miktarHata)}</td>
@@ -231,14 +208,12 @@ function render(toplayicilar, kontrolorler, siparisSayisi, urunSayisi) {
       <td>${k.hizKg ? k.hizKg + " KG/s" : "—"}</td>
     </tr>`).join("")}
     <tr style="background:var(--color-surface-2);">
-      <td colspan="9" style="font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:0.04em;color:var(--color-ink-soft);padding:8px 12px;">
-        ✅ Kontrolörler
-      </td>
+      <td colspan="9" style="font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:0.04em;color:var(--color-ink-soft);padding:8px 12px;">✅ Kontrolörler</td>
     </tr>
     ${kontrolorler.map((k) => `
     <tr>
-      <td>${kacisEt(k.ad)}</td>
-      <td>${k.kontrolEdilenUrun}</td>
+      <td><strong>${kacisEt(k.ad)}</strong></td>
+      <td>${k.kontrolEdilenUrun} ürün${k.siparisSayisi ? ` <span class="u-text-soft" style="font-size:11px;">(${k.siparisSayisi} sipariş)</span>` : ""}</td>
       <td>${k.kontrolEdilenKg ? sayiBicimle(k.kontrolEdilenKg) + " KG" : "—"}</td>
       <td>${tespitRozetiHtml(k.eksikTespit)}</td>
       <td>${tespitRozetiHtml(k.miktarDuzeltme)}</td>
@@ -256,22 +231,26 @@ function render(toplayicilar, kontrolorler, siparisSayisi, urunSayisi) {
           ${k.hataOrani !== null ? hataOraniHtml(k.hataOrani) : ""}
         </div>
         <div class="row-card__grid" style="margin-top:8px;">
-          <div><div class="row-card__label">Topladığı Ürün</div>${k.toplananUrun}</div>
-          <div><div class="row-card__label">Topladığı KG</div>${k.toplananKg ? sayiBicimle(k.toplananKg) + " KG" : "—"}</div>
+          <div><div class="row-card__label">Sipariş</div>${k.siparisSayisi || "—"}</div>
+          <div><div class="row-card__label">Toplanan Ürün</div>${k.toplananUrun}</div>
+          <div><div class="row-card__label">Toplanan KG</div>${k.toplananKg ? sayiBicimle(k.toplananKg) : "—"}</div>
           <div><div class="row-card__label">Eksik Hata</div>${hataRozetiHtml(k.eksikHata)}</div>
           <div><div class="row-card__label">Miktar Hatası</div>${hataRozetiHtml(k.miktarHata)}</div>
           <div><div class="row-card__label">Ort. Süre</div>${sureBicimle(k.ortalamaToplamaSure)}</div>
           <div><div class="row-card__label">Hız</div>${k.hizUrun ? k.hizUrun + " ürün/s" : "—"}</div>
+          <div><div class="row-card__label">KG Hız</div>${k.hizKg ? k.hizKg + " KG/s" : "—"}</div>
         </div>
       </div>`),
     ...kontrolorler.map((k) => `
       <div class="row-card">
         <div class="row-card__top">
           <div class="row-card__name">✅ ${kacisEt(k.ad)}</div>
+          ${k.toplamDuzeltme ? `<span class="badge badge-blue">${k.toplamDuzeltme} düzeltme</span>` : ""}
         </div>
         <div class="row-card__grid" style="margin-top:8px;">
+          <div><div class="row-card__label">Sipariş</div>${k.siparisSayisi || "—"}</div>
           <div><div class="row-card__label">Kontrol Ettiği Ürün</div>${k.kontrolEdilenUrun}</div>
-          <div><div class="row-card__label">Kontrol Ettiği KG</div>${k.kontrolEdilenKg ? sayiBicimle(k.kontrolEdilenKg) + " KG" : "—"}</div>
+          <div><div class="row-card__label">Kontrol Ettiği KG</div>${k.kontrolEdilenKg ? sayiBicimle(k.kontrolEdilenKg) : "—"}</div>
           <div><div class="row-card__label">Eksik Tespit</div>${tespitRozetiHtml(k.eksikTespit)}</div>
           <div><div class="row-card__label">Miktar Düzeltme</div>${tespitRozetiHtml(k.miktarDuzeltme)}</div>
           <div><div class="row-card__label">Ort. Süre</div>${sureBicimle(k.ortalamaKontrolSure)}</div>
@@ -281,23 +260,7 @@ function render(toplayicilar, kontrolorler, siparisSayisi, urunSayisi) {
   ].join("");
 }
 
-/* ============================================================================
-   EKSİK ÜRÜN ANALİZİ + ŞUBE ANALİZİ + EXCEL EXPORT
-   ============================================================================ */
-let sonTumUrunler = [];
-let sonSiparisler = [];
-
-// hesapla fonksiyonunu genişlet — orijinal render çağrısından sonra analiz de çalışsın
-const _orijinalHesapla = hesapla;
-
-document.getElementById("hesaplaBtn").addEventListener("click", async () => {
-  // Zaten yukarıda kayıtlı, yeniden dinleme gerekmiyor — aşağıda override ediyoruz
-});
-
-// render fonksiyonunun sonunda analiz çalıştır
-const _orijinalRender = render;
-// Veriye erişmek için hesapla'yı sarmalıyoruz — global değişkenleri kullanıyoruz
-
+/* ---- Analiz bölümleri ---- */
 function hesaplaEksikAnalizi(urunler) {
   const map = new Map();
   urunler.forEach((u) => {
@@ -309,10 +272,7 @@ function hesaplaEksikAnalizi(urunler) {
     const k = map.get(anahtar);
     k.istek++;
     k.toplamMiktar += Number(u.miktar) || 0;
-    if (u.eksik) {
-      k.eksik++;
-      k.eksikMiktar += Number(u.miktar) || 0;
-    }
+    if (u.eksik) { k.eksik++; k.eksikMiktar += Number(u.miktar) || 0; }
   });
   return Array.from(map.values())
     .filter((k) => k.eksik > 0)
@@ -323,9 +283,8 @@ function hesaplaEksikAnalizi(urunler) {
 function hesaplaSubeAnalizi(siparisler, urunListeleri) {
   const map = new Map();
   siparisler.forEach((s, i) => {
-    if (!s.subeAdi) return;
-    const sube = s.subeAdi;
-    if (!map.has(sube)) map.set(sube, { sube, siparis: 0, urun: 0, kg: 0, teslim: 0 });
+    const sube = s.subeAdi || s.ad || "—";
+    if (!map.has(sube)) map.set(sube, { sube, siparis: 0, urun: 0, kg: 0, teslim: 0, eksikUrun: 0 });
     const k = map.get(sube);
     k.siparis++;
     if (s.durum === "teslim_edildi") k.teslim++;
@@ -333,6 +292,7 @@ function hesaplaSubeAnalizi(siparisler, urunListeleri) {
     urunler.forEach((u) => {
       k.urun++;
       if (String(u.birim || "").trim().toLowerCase() === "kg") k.kg += Number(u.miktar) || 0;
+      if (u.eksik) k.eksikUrun++;
     });
   });
   return Array.from(map.values()).sort((a, b) => b.siparis - a.siparis);
@@ -343,8 +303,8 @@ function renderAnalizler(tumUrunler, siparisler, urunListeleri) {
   const eksikAnalizBolumu = document.getElementById("eksikAnalizBolumu");
   const eksikAnalizTablosu = document.getElementById("eksikAnalizTablosu");
   const eksikler = hesaplaEksikAnalizi(tumUrunler);
-  if (eksikler.length > 0) {
-    eksikAnalizBolumu.classList.remove("u-hidden");
+  eksikAnalizBolumu.classList.toggle("u-hidden", eksikler.length === 0);
+  if (eksikler.length) {
     eksikAnalizTablosu.innerHTML = eksikler.map((k) => {
       const oran = ((k.eksik / k.istek) * 100).toFixed(1);
       const sinif = oran > 30 ? "badge-red" : oran > 10 ? "badge-amber" : "badge-gray";
@@ -361,25 +321,26 @@ function renderAnalizler(tumUrunler, siparisler, urunListeleri) {
     }).join("");
   }
 
-  // Şube analizi
+  // Şube analizi — urunListeleri doğru geçiriliyor
   const subeAnalizBolumu = document.getElementById("subeAnalizBolumu");
   const subeAnalizTablosu = document.getElementById("subeAnalizTablosu");
   const subeler = hesaplaSubeAnalizi(siparisler, urunListeleri);
-  if (subeler.length > 0) {
-    subeAnalizBolumu.classList.remove("u-hidden");
+  subeAnalizBolumu.classList.toggle("u-hidden", subeler.length === 0);
+  if (subeler.length) {
     subeAnalizTablosu.innerHTML = subeler.map((k) => `<tr>
       <td>${kacisEt(k.sube)}</td>
       <td>${k.siparis}</td>
       <td>${k.urun}</td>
       <td>${k.kg ? sayiBicimle(k.kg) + " KG" : "—"}</td>
-      <td>${k.teslim > 0 ? `<span class="badge badge-green">${k.teslim} onay</span>` : "—"}</td>
+      <td>${k.eksikUrun > 0 ? `<span class="badge badge-red">${k.eksikUrun}</span>` : '<span class="u-text-soft">—</span>'}</td>
+      <td>${k.teslim > 0 ? `<span class="badge badge-green">${k.teslim}</span>` : "—"}</td>
     </tr>`).join("");
   }
 
-  // Excel export butonunu göster
   document.getElementById("excelExportBtn").style.display = "";
 }
 
+/* ---- Excel export ---- */
 document.getElementById("excelExportBtn").addEventListener("click", () => {
   if (!sonTumUrunler.length) return;
   const wb = window.XLSX.utils.book_new();
@@ -387,27 +348,33 @@ document.getElementById("excelExportBtn").addEventListener("click", () => {
   // Personel sayfası
   const { toplayicilar, kontrolorler } = hesaplaOzetler(sonTumUrunler, sonSiparisler);
   const personelSatirlar = [
-    ["Personel", "Rol", "Ürün", "KG", "Eksik Hata", "Miktar H.", "% Hata", "Ort. Süre (dk)", "Hız ürün/s"],
-    ...toplayicilar.map((k) => [k.ad, "Toplayıcı", k.toplananUrun, k.toplananKg, k.eksikHata, k.miktarHata, k.hataOrani, k.ortalamaToplamaSure ? Math.round(k.ortalamaToplamaSure) : "", k.hizUrun || ""]),
-    ...kontrolorler.map((k) => [k.ad, "Kontrolör", k.kontrolEdilenUrun, k.kontrolEdilenKg, k.eksikTespit, k.miktarDuzeltme, "", k.ortalamaKontrolSure ? Math.round(k.ortalamaKontrolSure) : "", k.hizUrun || ""])
+    ["Personel", "Rol", "Sipariş", "Ürün", "KG", "Eksik Hata", "Miktar Hatası", "% Hata", "Ort. Süre (dk)", "Hız (ürün/s)", "Hız (KG/s)"],
+    ...toplayicilar.map((k) => [k.ad, "Toplayıcı", k.siparisSayisi, k.toplananUrun, k.toplananKg, k.eksikHata, k.miktarHata, k.hataOrani, k.ortalamaToplamaSure ? Math.round(k.ortalamaToplamaSure) : "", k.hizUrun || "", k.hizKg || ""]),
+    ...kontrolorler.map((k) => [k.ad, "Kontrolör", k.siparisSayisi, k.kontrolEdilenUrun, k.kontrolEdilenKg, k.eksikTespit, k.miktarDuzeltme, "", k.ortalamaKontrolSure ? Math.round(k.ortalamaKontrolSure) : "", k.hizUrun || "", ""])
   ];
   window.XLSX.utils.book_append_sheet(wb, window.XLSX.utils.aoa_to_sheet(personelSatirlar), "Personel");
 
   // Eksik ürün sayfası
   const eksikler = hesaplaEksikAnalizi(sonTumUrunler);
   if (eksikler.length) {
-    const eksikSatirlar = [["Kod", "Ürün Adı", "Eksik Adet", "Eksik Miktar", "Toplam İstenen Miktar", "Sipariş Sayısı", "% Eksik", "Birim"],
-    ...eksikler.map((k) => [k.kod, k.ad, k.eksik, k.eksikMiktar, k.toplamMiktar, k.istek, ((k.eksik / k.istek) * 100).toFixed(1), k.birim])];
+    const eksikSatirlar = [
+      ["Kod", "Ürün Adı", "Eksik Kez", "Eksik Miktar", "Toplam İstenen", "Toplam Sipariş", "% Eksik", "Birim"],
+      ...eksikler.map((k) => [k.kod, k.ad, k.eksik, k.eksikMiktar, k.toplamMiktar, k.istek, ((k.eksik / k.istek) * 100).toFixed(1), k.birim])
+    ];
     window.XLSX.utils.book_append_sheet(wb, window.XLSX.utils.aoa_to_sheet(eksikSatirlar), "Eksik Ürünler");
   }
 
-  // Şube sayfası
-  const subeler = hesaplaSubeAnalizi(sonSiparisler, []);
+  // Şube sayfası — artık sonUrunListeleri doğru geçiriliyor
+  const subeler = hesaplaSubeAnalizi(sonSiparisler, sonUrunListeleri);
   if (subeler.length) {
-    const subeSatirlar = [["Şube", "Sipariş", "Ürün", "KG", "Teslim Onayı"], ...subeler.map((k) => [k.sube, k.siparis, k.urun, k.kg, k.teslim])];
+    const subeSatirlar = [
+      ["Şube", "Sipariş Sayısı", "Toplam Ürün", "Toplam KG", "Eksik Ürün", "Teslim Onayı"],
+      ...subeler.map((k) => [k.sube, k.siparis, k.urun, k.kg, k.eksikUrun, k.teslim])
+    ];
     window.XLSX.utils.book_append_sheet(wb, window.XLSX.utils.aoa_to_sheet(subeSatirlar), "Şube Analizi");
   }
 
   const tarih = new Date().toLocaleDateString("tr-TR").replace(/\./g, "-");
   window.XLSX.writeFile(wb, `depomax_rapor_${tarih}.xlsx`);
+  toast("Excel indirildi.", "success");
 });
