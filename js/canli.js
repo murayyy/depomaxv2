@@ -22,8 +22,9 @@ document.getElementById("cikisBtn").addEventListener("click", async () => {
 
 function baslatTakip() {
   // Aktif siparişleri dinle
-  tumSiparisleriCanliDinle(["toplaniyor", "toplandi", "kontrol_ediliyor"], async (liste) => {
-    siparisler = liste;
+  tumSiparisleriCanliDinle(async (liste) => {
+    // Durum filtresi istemci tarafında
+    siparisler = liste.filter(s => ["toplaniyor", "toplandi", "kontrol_ediliyor"].includes(s.durum));
 
     // Ürün sayılarını yükle (sadece değişenler için)
     for (const s of liste) {
