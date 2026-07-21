@@ -108,11 +108,12 @@ function hesaplaOzetler(urunler, siparisler) {
   const kgMi = (u) => String(u.birim || "").trim().toLowerCase() === "kg";
 
   siparisler.forEach((s) => {
-    if (s.toplamayiTamamlayan && s.olusturulmaTarihi && s.toplamaBitis) {
-      const baslangic = s.olusturulmaTarihi.toDate?.().toISOString?.() || s.olusturulmaTarihi;
-      const sure = dakikaFarki(baslangic, s.toplamaBitis);
+    // Toplama süresi: toplamaBaslangic → toplamaBitis
+    if (s.toplamayiTamamlayan && s.toplamaBaslangic && s.toplamaBitis) {
+      const sure = dakikaFarki(s.toplamaBaslangic, s.toplamaBitis);
       if (sure) tGetir(s.toplamayiTamamlayan).toplamaSureleri.push(sure);
     }
+    // Kontrol süresi: kontrolBaslangic → kontrolBitis
     if (s.kontrolTamamlayan && s.kontrolBaslangic && s.kontrolBitis) {
       const sure = dakikaFarki(s.kontrolBaslangic, s.kontrolBitis);
       if (sure) kGetir(s.kontrolTamamlayan).kontrolSureleri.push(sure);

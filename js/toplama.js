@@ -245,6 +245,14 @@ function siparisAc(siparis) {
   document.getElementById("barkodTaraBtn").classList.toggle("u-hidden", saltOkunur);
   document.getElementById("excelYukleBtn").classList.toggle("u-hidden", saltOkunur);
 
+  // Toplayıcı siparişi açtı — başlangıç zamanını kaydet (henüz kaydedilmemişse)
+  if (!saltOkunur && !siparis.toplamaBaslangic) {
+    siparisGuncelle(siparis.id, {
+      toplamaBaslangic: new Date().toISOString(),
+      toplayanKullanici: mevcutKullanici.ad || mevcutKullanici.uid
+    }).catch(console.error);
+  }
+
   if (urunAbonelikIptal) urunAbonelikIptal();
   urunAbonelikIptal = urunleriDinle(siparis.id, (liste) => {
     urunlerCache = liste;
