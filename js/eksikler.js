@@ -6,7 +6,7 @@
 // verisiyle karşılaştırır. Stok gelmiş ürünler üstte ve yeşil rozetle çıkar.
 // ============================================================================
 import { auth, signOut, sayfaKorumasi } from "./firebase.js";
-import { tumSiparisleriGetir, urunleriniGetir, urunGuncelle, urunEkle, urunSil } from "./veri.js";
+import { tumSiparisleriGetir, urunleriniGetir, urunGuncelle, urunEkle, urunSil, raflaraGoreUrunBul } from "./veri.js";
 import { stoklariDinle, stokBildirimGoruldu } from "./stok.js";
 import { arayuzHazirla, toast, onayIste, girdiIste, kacisEt, sayiBicimle, ondalikOku, yukleniyorGoster, yukleniyorKapat } from "./utils.js";
 
@@ -173,7 +173,8 @@ async function yukle() {
     const tumSiparisler = await tumSiparisleriGetir();
     const sinirTarihi = Date.now() - 60 * 24 * 60 * 60 * 1000; // son 60 gün (kota tasarrufu)
     const ilgiliSiparisler = tumSiparisler.filter((s) =>
-      (s.durum === "kontrol_ediliyor" || s.durum === "tamamlandi") &&
+      (s.durum === "kontrol_ediliyor" || s.durum === "tamamlandi" ||
+       (s.durum === "teslim_edildi" && s.merkezdegerlendirmesi === "tekrar_kontrol")) &&
       (!s.olusturulmaTarihi || s.olusturulmaTarihi.toMillis() >= sinirTarihi)
     );
     mevcutSiparisler = ilgiliSiparisler;
@@ -182,10 +183,12 @@ async function yukle() {
     const urunListeleri = await Promise.all(ilgiliSiparisler.map((s) => urunleriniGetir(s.id)));
     urunListeleri.forEach((urunler, i) => {
       const s = ilgiliSiparisler[i];
+      const tekrarKontrol = s.merkezdegerlendirmesi === "tekrar_kontrol";
       urunler.filter((u) => u.eksik).forEach((u) => {
         eksikKayitlari.push({
           siparisId: s.id, siparisAdi: s.ad,
-          urunId: u.id, kod: u.kod, ad: u.ad, birim: u.birim, miktar: u.miktar
+          urunId: u.id, kod: u.kod, ad: u.ad, birim: u.birim, miktar: u.miktar,
+          tekrarKontrol
         });
       });
     });
@@ -256,6 +259,9 @@ function render() {
             ${durum.mevcut !== null ? `<span>Depo Stok: ${sayiBicimle(durum.mevcut)} ${kacisEt(grup.birim || "")}</span>` : ""}
             <span>${grup.kayitlar.length} siparişte</span>
           </div>
+          <div id="raf-bilgi-${idx}" style="margin-top:5px;font-size:12px;color:var(--color-ink-soft);">
+            <span style="opacity:.5;">🔍 Raf kontrol ediliyor…</span>
+          </div>
         </div>
         <div class="order-card__actions">
           <button class="btn btn-ghost btn-sm" data-detay="${idx}">Siparişleri Gör</button>
@@ -266,6 +272,26 @@ function render() {
   kapsayici.querySelectorAll("[data-detay]").forEach((btn) => {
     btn.addEventListener("click", () => detayModalAc(siraliGruplar[Number(btn.dataset.detay)]));
   });
+
+  // Raf bilgilerini arka planda async yükle
+  siraliGruplar.forEach((grup, idx) => {
+    raflaraGoreUrunBul(grup.kod, grup.ad).then((rafSonuclari) => {
+      const div = document.getElementById(`raf-bilgi-${idx}`);
+      if (!div) return;
+      if (!rafSonuclari.length) {
+        div.innerHTML = '<span style="opacity:.4;">Rafta kayıt yok</span>';
+        return;
+      }
+      const ilk = rafSonuclari[0];
+      const sktUyari = ilk.skt ? ` · SKT: <strong>${ilk.skt}</strong>` : "";
+      const girisUyari = ilk.girisTarihi ? ` · Giriş: ${ilk.girisTarihi}` : "";
+      const ekRaf = rafSonuclari.length > 1 ? ` <span style="opacity:.6;">(+${rafSonuclari.length - 1} daha)</span>` : "";
+      div.innerHTML = `🗄 <strong style="color:#10B981;">${kacisEt(ilk.rafAdi)}</strong>` +
+        (ilk.kat ? ` Kat ${ilk.kat}/Böl.${ilk.bolme}` : "") +
+        ` · ${sayiBicimle(ilk.miktar)} ${kacisEt(ilk.birim || "")}` +
+        sktUyari + girisUyari + ekRaf;
+    }).catch(() => {});
+  });
 }
 
 function detayModalAc(grup) {
@@ -275,7 +301,7 @@ function detayModalAc(grup) {
       <div class="row-card__top">
         <div>
           <div class="row-card__name">${kacisEt(k.siparisAdi)}</div>
-          <div class="row-card__code">Eksik: ${sayiBicimle(k.miktar)} ${kacisEt(k.birim || "")}</div>
+          <div class="row-card__code">Eksik: ${sayiBicimle(k.miktar)} ${kacisEt(k.birim || "")}${k.tekrarKontrol ? ' &nbsp; <span class="badge badge-red">🔄 Teslim Uyuşmazlığı</span>' : ""}</div>
         </div>
         <div class="u-flex">
           <button class="btn btn-green btn-sm" data-topla="${k.siparisId}|${k.urunId}">✓ Toplandı Yap</button>

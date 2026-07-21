@@ -544,3 +544,32 @@ export async function stokGirisleriGetir(limit = 100) {
   const snap = await getDocs(query(collection(db, STOK_GIRISLER), orderBy("tarih", "desc")));
   return snap.docs.map(d => ({ id: d.id, ...d.data() }));
 }
+
+/* ============================================================================
+   RAF - ÜRÜN ARAMA (eksikler için)
+   ============================================================================ */
+export async function raflaraGoreUrunBul(stokKodu, ad) {
+  // Tüm rafları ve kalemlerini tara, eşleşen ürünleri bul
+  const rafSnap = await getDocs(collection(db, "raflar"));
+  const sonuclar = [];
+  for (const rafDoc of rafSnap.docs) {
+    const raf = { id: rafDoc.id, ...rafDoc.data() };
+    const kalemSnap = await getDocs(collection(db, "raflar", rafDoc.id, "kalemler"));
+    for (const kalemDoc of kalemSnap.docs) {
+      const k = kalemDoc.data();
+      const eslesme = (stokKodu && k.stokKodu && k.stokKodu === stokKodu) ||
+                      (ad && k.ad && k.ad.toLowerCase() === ad.toLowerCase());
+      if (eslesme && (k.miktar > 0 || k.palet > 0)) {
+        sonuclar.push({ rafAdi: raf.ad, kat: k.kat, bolme: k.bolme, miktar: k.miktar, palet: k.palet, birim: k.birim, skt: k.skt, girisTarihi: k.girisTarihi, cari: k.cari });
+      }
+    }
+  }
+  // FEFO: SKT'si en yakın önce, SKT yoksa giriş tarihine göre
+  sonuclar.sort((a, b) => {
+    const sktA = a.skt || "9999";
+    const sktB = b.skt || "9999";
+    if (sktA !== sktB) return sktA.localeCompare(sktB);
+    return (a.girisTarihi || "").localeCompare(b.girisTarihi || "");
+  });
+  return sonuclar;
+}
