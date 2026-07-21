@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8" />
+<link rel="manifest" href="/manifest.json" />
+<meta name="theme-color" content="#0F52BA" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Fabrika — Depomax</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body>
+<div class="app-shell">
+  <header class="topbar">
+    <div class="topbar__brand"><span class="topbar__mark">D</span> Depomax</div>
+    <div class="topbar__user">
+      <span class="role-chip" id="rolEtiketi">…</span>
+      <span id="kullaniciAdi">…</span>
+      <button class="btn btn-ghost btn-sm" id="cikisBtn">Çıkış</button>
+    </div>
+  </header>
+
+  <main class="page">
+    <!-- Sekmeler -->
+    <div class="toolbar" style="margin-bottom:20px;">
+      <div class="toolbar__group">
+        <button class="btn btn-ghost btn-sm is-active" data-sekme="siparis">🛒 Sipariş Ver</button>
+        <button class="btn btn-ghost btn-sm" data-sekme="giris">📥 Stok Girişi</button>
+        <button class="btn btn-ghost btn-sm" data-sekme="gecmis">🕐 Geçmiş</button>
+      </div>
+    </div>
+
+    <!-- SİPARİŞ BÖLÜMÜ -->
+    <div id="siparisBloku">
+      <div class="page__header">
+        <div>
+          <div class="page__title">Sipariş Ver</div>
+          <div class="page__subtitle">Katalogdan ihtiyaç duyduğunuz ürünleri seçin.</div>
+        </div>
+        <button class="btn btn-primary" id="siparisGonderBtn" disabled>📤 Siparişi Gönder</button>
+      </div>
+      <div class="toolbar" style="margin-bottom:14px;gap:8px;flex-wrap:wrap;">
+        <input class="input" id="urunAraInput" placeholder="🔍 Ürün ara…" style="max-width:220px;" autocomplete="off" />
+        <select class="select" id="kategoriFiltre" style="max-width:200px;">
+          <option value="">Tüm Kategoriler</option>
+        </select>
+      </div>
+      <div id="yukleniyorAlani" style="text-align:center;padding:40px;color:var(--color-ink-soft);">⏳ Yükleniyor…</div>
+      <div id="bosKatalog" class="empty-state u-hidden">
+        <div class="empty-state__icon">📦</div>
+        <div class="empty-state__title">Katalog boş</div>
+      </div>
+      <div id="katalogAlani" class="u-hidden">
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>Ürün Adı</th><th>Kategori</th><th>Birim</th><th>Miktar</th></tr></thead>
+            <tbody id="katalogGovde"></tbody>
+          </table>
+        </div>
+        <div class="row-cards" id="katalogKartlar"></div>
+      </div>
+    </div>
+
+    <!-- STOK GİRİŞİ BÖLÜMÜ -->
+    <div id="girisBloku" class="u-hidden">
+      <div class="page__title" style="margin-bottom:16px;">📥 Fabrikadan Stok Girişi</div>
+      <div class="card" style="max-width:560px;">
+        <div class="field">
+          <label>Ürün Adı / Stok Kodu</label>
+          <input class="input" id="girisUrun" placeholder="Ürün adı veya stok kodu" list="girisUrunList" autocomplete="off" />
+          <datalist id="girisUrunList"></datalist>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;">
+          <div class="field"><label>Miktar</label><input class="input" type="text" inputmode="decimal" id="girisMiktar" placeholder="0" /></div>
+          <div class="field"><label>Birim</label><input class="input" id="girisBirim" value="KG" placeholder="KG, Adet…" /></div>
+          <div class="field"><label>Tarih</label><input class="input" type="date" id="girisTarih" /></div>
+        </div>
+        <div class="field"><label>Parti / Lot No (isteğe bağlı)</label><input class="input" id="girisParti" placeholder="LOT-001" /></div>
+        <div class="field"><label>Not</label><input class="input" id="girisNot" placeholder="İsteğe bağlı…" /></div>
+        <button class="btn btn-primary" id="girisKaydetBtn">✅ Girişi Kaydet</button>
+      </div>
+    </div>
+
+    <!-- GEÇMİŞ BÖLÜMÜ -->
+    <div id="gecmisBloku" class="u-hidden">
+      <div class="page__title" style="margin-bottom:16px;">🕐 Giriş Geçmişi</div>
+      <div style="display:flex;justify-content:flex-end;margin-bottom:10px;">
+        <button class="btn btn-ghost btn-sm" id="gecmisExcelBtn">⬇ Excel</button>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>Tarih</th><th>Ürün</th><th>Miktar</th><th>Birim</th><th>Parti</th><th>Yapan</th><th>Not</th></tr></thead>
+          <tbody id="gecmisTablosu"></tbody>
+        </table>
+      </div>
+      <div class="row-cards" id="gecmisKartlar"></div>
+      <div class="empty-state u-hidden" id="gecmisBosDurum">
+        <div class="empty-state__icon">📥</div>
+        <div class="empty-state__title">Henüz giriş kaydı yok</div>
+      </div>
+    </div>
+  </main>
+</div>
+<div id="modalRoot"></div>
+<script type="module" src="js/fabrika.js"></script>
+</body>
+</html>

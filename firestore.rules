@@ -2,44 +2,77 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    function girisYapmis() { return request.auth != null; }
-    function kullaniciDoc() {
-      return get(/databases/$(database)/documents/kullanicilar/$(request.auth.uid));
+    function auth() { return request.auth != null; }
+    function rol() {
+      return get(/databases/$(database)/documents/kullanicilar/$(request.auth.uid)).data.rol;
     }
-    function rolU() { return kullaniciDoc().data.rol; }
-    function admin()     { return girisYapmis() && rolU() == 'admin'; }
-    function toplayici() { return girisYapmis() && (rolU() == 'toplayici' || admin()); }
-    function kontrolor() { return girisYapmis() && (rolU() == 'kontrolor' || admin()); }
+    function isAdmin()     { return auth() && rol() == 'admin'; }
+    function isToplayici() { return auth() && (rol() == 'toplayici' || rol() == 'admin'); }
+    function isKontrolcu() { return auth() && (rol() == 'kontrolor' || rol() == 'admin'); }
+    function isSube()      { return auth() && (rol() == 'sube'      || rol() == 'admin'); }
+    function isSurucu()    { return auth() && (rol() == 'surucu'    || rol() == 'admin'); }
+    function isDepocu()    { return auth() && (rol() == 'depocu'    || rol() == 'admin'); }
+    function isPaletci()   { return auth() && (rol() == 'paletci'   || rol() == 'admin'); }
+    function isUretici()   { return auth() && (rol() == 'uretici'   || rol() == 'admin'); }
+    function isFabrika() { return auth() && (rol() == 'fabrika' || rol() == 'admin'); }
 
-    // Kullanıcı profil/rol belgeleri: herkes kendi belgesini okuyabilir,
-    // yalnızca admin yazabilir (rol ataması admin işidir).
     match /kullanicilar/{uid} {
-      allow read: if girisYapmis() && (request.auth.uid == uid || admin());
-      allow write: if admin();
+      allow read: if auth();
+      allow write: if isAdmin();
+    }
+
+    match /katalog/{id} {
+      allow read: if auth();
+      allow write: if isAdmin();
     }
 
     match /siparisler/{siparisId} {
-      allow read: if girisYapmis();
-      allow create: if toplayici();
-      // Not: Basitlik için toplayıcı/kontrolör sipariş belgesinin tamamını
-      // güncelleyebiliyor. Alan bazlı kısıtlama (örn. kontrolörün sadece
-      // kontrolEdilenUrun alanını değiştirebilmesi) ileride eklenebilir.
-      allow update: if toplayici() || kontrolor();
-      allow delete: if admin();
+      allow read: if auth();
+      allow create: if isToplayici() || isSube();
+      allow update: if isToplayici() || isKontrolcu() || isSube();
+      allow delete: if isAdmin();
 
       match /urunler/{urunId} {
-        allow read: if girisYapmis();
-        allow create, delete: if toplayici();
-        allow update: if toplayici() || kontrolor();
+        allow read: if auth();
+        allow create, delete: if isToplayici() || isKontrolcu() || isSube();
+        allow update: if isToplayici() || isKontrolcu();
       }
     }
 
-    // Depo stok seviyeleri (Mikro'dan köprü script ile senkronize ediliyor).
-    // Uygulama sadece okur; yazma işlemi güvenilir köprü scripti tarafından
-    // Firebase Admin SDK ile yapılıyor (Admin SDK bu kuralları zaten atlar).
-    match /stoklar/{urunKodu} {
-      allow read: if girisYapmis();
-      allow write: if false;
+    match /stoklar/{id} {
+      allow read, write: if auth();
+    }
+
+    match /raflar/{rafId} {
+      allow read, write: if isDepocu();
+      match /kalemler/{id} {
+        allow read, write: if isDepocu();
+      }
+    }
+
+    match /rafHareketleri/{id} {
+      allow read, create: if isDepocu();
+    }
+
+    match /paletlemeler/{id} {
+      allow read, write: if isPaletci();
+    }
+
+    match /stokGirisleri/{id} {
+      allow read: if isFabrika();
+      allow create: if isFabrika();
+    }
+
+    match /receteler/{id} {
+      allow read, write: if isDepocu();
+    }
+
+    match /uretimKayitlari/{id} {
+      allow read, create: if isDepocu();
+    }
+
+    match /paketlemeKayitlari/{id} {
+      allow read, create: if isDepocu();
     }
   }
 }
