@@ -10,6 +10,7 @@ arayuzHazirla();
 let mevcutKullanici = null;
 let katalogCache = [];
 let miktarlar = {};
+let ozelKalemler = [];
 let aktifSekme = "siparis";
 
 const bugun = new Date().toISOString().slice(0, 10);
@@ -120,8 +121,69 @@ document.addEventListener("input", (e) => {
   const val = ondalikOku(e.target.value);
   if (val > 0) miktarlar[id] = e.target.value;
   else delete miktarlar[id];
-  document.getElementById("siparisGonderBtn").disabled = Object.keys(miktarlar).length === 0;
+  document.getElementById("siparisGonderBtn").disabled = Object.keys(miktarlar).length === 0 && ozelKalemler.length === 0;
 });
+
+/* ---- Katalog Dışı Ekle ---- */
+document.getElementById("katalogDisiEkleBtn")?.addEventListener("click", () => {
+  const root = document.getElementById("modalRoot");
+  root.innerHTML = `
+    <div class="modal-backdrop" data-role="backdrop">
+      <div class="modal" style="max-width:400px;">
+        <h3>🟠 Katalog Dışı Talep</h3>
+        <div class="field"><label>Ürün / Malzeme Adı</label><input class="input" id="odAd" placeholder="Ürün adını yazın" /></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <div class="field"><label>Miktar</label><input class="input" type="text" inputmode="decimal" id="odMiktar" placeholder="0" /></div>
+          <div class="field"><label>Birim</label><input class="input" id="odBirim" value="KG" /></div>
+        </div>
+        <div class="field"><label>Not</label><input class="input" id="odNot" placeholder="Açıklama…" /></div>
+        <div class="modal__actions">
+          <button class="btn btn-ghost" data-role="iptal">Vazgeç</button>
+          <button class="btn btn-primary" data-role="ekle">Ekle</button>
+        </div>
+      </div>
+    </div>`;
+  const kapat = () => { root.innerHTML = ""; };
+  root.querySelector('[data-role="iptal"]').onclick = kapat;
+  root.querySelector('[data-role="backdrop"]').onclick = (e) => { if (e.target.dataset.role === "backdrop") kapat(); };
+  root.querySelector('[data-role="ekle"]').onclick = () => {
+    const ad = document.getElementById("odAd").value.trim();
+    if (!ad) { toast("Ürün adı zorunlu.", "error"); return; }
+    ozelKalemler.push({
+      ad, miktar: ondalikOku(document.getElementById("odMiktar").value) || 1,
+      birim: document.getElementById("odBirim").value.trim() || "KG",
+      not: document.getElementById("odNot").value.trim(), katalogDisi: true
+    });
+    renderOzelKalemler();
+    document.getElementById("siparisGonderBtn").disabled = false;
+    kapat();
+    toast(`"${ad}" eklendi.`, "success", 2000);
+  };
+  document.getElementById("odAd").focus();
+});
+
+function renderOzelKalemler() {
+  const alan = document.getElementById("ozelKalemlerAlani");
+  const liste = document.getElementById("ozelKalemlerListe");
+  if (!alan) return;
+  if (!ozelKalemler.length) { alan.classList.add("u-hidden"); return; }
+  alan.classList.remove("u-hidden");
+  liste.innerHTML = ozelKalemler.map((k, i) => `
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--color-border);">
+      <span class="badge badge-amber">Özel</span>
+      <div style="flex:1;"><div style="font-weight:600;font-size:13px;">${kacisEt(k.ad)}</div>
+        ${k.not ? `<div style="font-size:11.5px;color:var(--color-ink-soft);">${kacisEt(k.not)}</div>` : ""}
+      </div>
+      <div style="font-weight:600;">${sayiBicimle(k.miktar)} ${kacisEt(k.birim)}</div>
+      <button class="btn btn-danger btn-sm" data-sil="${i}">✕</button>
+    </div>`).join("");
+  liste.querySelectorAll("[data-sil]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      ozelKalemler.splice(Number(btn.dataset.sil), 1);
+      renderOzelKalemler();
+    });
+  });
+}
 
 /* ---- Sipariş Gönder ---- */
 document.getElementById("siparisGonderBtn").addEventListener("click", async () => {
@@ -141,9 +203,19 @@ document.getElementById("siparisGonderBtn").addEventListener("click", async () =
     ad: mevcutKullanici.subeAdi || mevcutKullanici.ad || "Fabrika",
     subeId: mevcutKullanici.uid,
     rol: "fabrika",
-    urunler
+    urunler: [
+      ...urunler,
+      ...ozelKalemler.map(k => ({
+        id: `ozel_${Date.now()}_${Math.random().toString(36).slice(2,7)}`,
+        ad: k.ad, stokKodu: "", barkod: "", birim: k.birim,
+        miktar: k.miktar, kategori: "Özel Talep",
+        katalogDisi: true, subeNotu: k.not || ""
+      }))
+    ]
   });
   miktarlar = {};
+  ozelKalemler.length = 0;
+  renderOzelKalemler();
   document.querySelectorAll(".miktar-input").forEach(i => { i.value = ""; });
   document.getElementById("siparisGonderBtn").disabled = true;
   toast("✅ Sipariş gönderildi!", "success");

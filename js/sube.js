@@ -9,6 +9,7 @@ arayuzHazirla();
 
 let mevcutKullanici = null;
 let katalogCache = [];
+let ozelKalemler = []; // Katalog dışı talepler
 
 sayfaKorumasi(["sube"], (kullanici) => {
   mevcutKullanici = kullanici;
@@ -50,7 +51,7 @@ function katalogGuncellendi(liste) {
 // ---- Buton durumunu güncelle ----
 function butonGuncelle() {
   const herhangi = Array.from(document.querySelectorAll(".miktar-input"))
-    .some((i) => ondalikOku(i.value) > 0);
+    .some((i) => ondalikOku(i.value) > 0) || ozelKalemler.length > 0;
   document.getElementById("siparisGonderBtn").disabled = !herhangi;
 }
 
@@ -149,6 +150,66 @@ function aciklamalariTopla() {
 
 // ---- Excel'den miktarları yükle ----
 // Excel formatı: A sütunu=Stok Kodu veya Ürün Adı, B sütunu=Miktar
+document.getElementById("katalogDisiEkleBtn").addEventListener("click", () => {
+  const root = document.getElementById("modalRoot");
+  root.innerHTML = `
+    <div class="modal-backdrop" data-role="backdrop">
+      <div class="modal" style="max-width:400px;">
+        <h3>🟠 Katalog Dışı Talep</h3>
+        <div class="field"><label>Ürün / Malzeme Adı</label><input class="input" id="odAd" placeholder="Ürün adını yazın" /></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <div class="field"><label>Miktar</label><input class="input" type="text" inputmode="decimal" id="odMiktar" placeholder="0" /></div>
+          <div class="field"><label>Birim</label><input class="input" id="odBirim" value="KG" placeholder="KG, Adet…" /></div>
+        </div>
+        <div class="field"><label>Not / Açıklama</label><input class="input" id="odNot" placeholder="Neden gerekli, özellik vs." /></div>
+        <div class="modal__actions">
+          <button class="btn btn-ghost" data-role="iptal">Vazgeç</button>
+          <button class="btn btn-primary" data-role="ekle">Ekle</button>
+        </div>
+      </div>
+    </div>`;
+  const kapat = () => { root.innerHTML = ""; };
+  root.querySelector('[data-role="iptal"]').onclick = kapat;
+  root.querySelector('[data-role="backdrop"]').onclick = (e) => { if (e.target.dataset.role === "backdrop") kapat(); };
+  root.querySelector('[data-role="ekle"]').onclick = () => {
+    const ad = document.getElementById("odAd").value.trim();
+    if (!ad) { toast("Ürün adı zorunlu.", "error"); return; }
+    const miktar = ondalikOku(document.getElementById("odMiktar").value) || 1;
+    const birim = document.getElementById("odBirim").value.trim() || "KG";
+    const not = document.getElementById("odNot").value.trim();
+    ozelKalemler.push({ ad, miktar, birim, not, katalogDisi: true });
+    renderOzelKalemler();
+    butonGuncelle();
+    kapat();
+    toast(`"${ad}" eklendi.`, "success", 2000);
+  };
+  document.getElementById("odAd").focus();
+});
+
+function renderOzelKalemler() {
+  const alan = document.getElementById("ozelKalemlerAlani");
+  const liste = document.getElementById("ozelKalemlerListe");
+  if (!ozelKalemler.length) { alan.classList.add("u-hidden"); return; }
+  alan.classList.remove("u-hidden");
+  liste.innerHTML = ozelKalemler.map((k, i) => `
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--color-border);">
+      <span class="badge badge-amber">Özel</span>
+      <div style="flex:1;">
+        <div style="font-weight:600;font-size:13px;">${kacisEt(k.ad)}</div>
+        ${k.not ? `<div style="font-size:11.5px;color:var(--color-ink-soft);">${kacisEt(k.not)}</div>` : ""}
+      </div>
+      <div style="font-size:13px;font-weight:600;">${sayiBicimle(k.miktar)} ${kacisEt(k.birim)}</div>
+      <button class="btn btn-danger btn-sm" data-ozel-sil="${i}">✕</button>
+    </div>`).join("");
+  liste.querySelectorAll("[data-ozel-sil]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      ozelKalemler.splice(Number(btn.dataset.ozelSil), 1);
+      renderOzelKalemler();
+      butonGuncelle();
+    });
+  });
+}
+
 document.getElementById("excelYukleInput").addEventListener("change", async (e) => {
   const dosya = e.target.files[0];
   e.target.value = "";
@@ -220,6 +281,14 @@ document.getElementById("siparisGonderBtn").addEventListener("click", async () =
     .filter((u) => miktarMap.has(u.id))
     .map((u) => ({ ...u, miktar: miktarMap.get(u.id), subeNotu: aciklamaMap.get(u.id) || "" }));
 
+  // Katalog dışı özel kalemleri ekle
+  const tumSatirlar = [...satirlar, ...ozelKalemler.map(k => ({
+    id: `ozel_${Date.now()}_${Math.random().toString(36).slice(2,7)}`,
+    ad: k.ad, stokKodu: "", barkod: "", birim: k.birim,
+    miktar: k.miktar, kategori: "Özel Talep",
+    katalogDisi: true, subeNotu: k.not || ""
+  }))];
+
   const btn = document.getElementById("siparisGonderBtn");
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span> Gönderiliyor…';
@@ -229,9 +298,11 @@ document.getElementById("siparisGonderBtn").addEventListener("click", async () =
       subeAdi: mevcutKullanici.subeAdi || mevcutKullanici.ad,
       subeId: mevcutKullanici.uid,
       olusturan: mevcutKullanici.uid,
-      satirlar
+      satirlar: tumSatirlar
     });
     document.querySelectorAll(".miktar-input, .aciklama-input").forEach((i) => { i.value = ""; });
+    ozelKalemler.length = 0;
+    renderOzelKalemler();
     btn.disabled = true;
     btn.innerHTML = "Siparişi Gönder";
     toast("✅ Sipariş gönderildi! Depo tarafında hazırlanmaya başlandı.", "success", 5000);

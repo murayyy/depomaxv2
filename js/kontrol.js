@@ -295,7 +295,7 @@ function satirHtml(u, saltOkunur) {
   return `
     <tr class="${durumSinifi(u)}" data-uid="${u.id}">
       <td class="cell-code">${kacisEt(u.kod)}</td>
-      <td>${kacisEt(u.ad)}</td>
+      <td>${kacisEt(u.ad)}${u.katalogDisi ? ' <span class="badge badge-amber" style="font-size:10px;">Özel Talep</span>' : ""}</td>
       <td><input type="text" inputmode="decimal" class="cell-qty-input" data-rol="miktar" value="${u.miktar || 0}" ${saltOkunur ? "disabled" : ""} /></td>
       <td>${kacisEt(u.birim || "—")}</td>
       <td>${depoStokHucresi(u.kod)}</td>
