@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Canlı Takip — Depomax</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css" />
+<style>
+  .canli-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+  .canli-kart { background: var(--color-surface-1); border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: 14px; position: relative; }
+  .canli-kart.toplaniyor { border-left: 3px solid #3B82F6; }
+  .canli-kart.kontrol { border-left: 3px solid #8B5CF6; }
+  .canli-kart.bekliyor { border-left: 3px solid #9CA3AF; }
+  .progress-bar { height: 6px; background: var(--color-surface-2); border-radius: 3px; overflow: hidden; margin: 8px 0; }
+  .progress-fill { height: 100%; border-radius: 3px; transition: width .5s; }
+  .progress-fill.blue { background: #3B82F6; }
+  .progress-fill.purple { background: #8B5CF6; }
+  .canli-personel { font-size: 13px; font-weight: 600; }
+  .canli-sure { font-size: 11px; color: var(--color-ink-soft); }
+  .pulse { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #10B981; animation: pulse 1.5s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(1.3)} }
+  .ozet-bar { display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 20px; }
+  .ozet-item { text-align: center; }
+  .ozet-sayi { font-size: 28px; font-weight: 700; }
+  .ozet-label { font-size: 12px; color: var(--color-ink-soft); }
+</style>
+</head>
+<body>
+<div class="app-shell">
+  <header class="topbar">
+    <div class="topbar__brand"><span class="topbar__mark">D</span> Depomax · <span style="font-size:12px;color:var(--color-green);"><span class="pulse"></span> Canlı Takip</span></div>
+    <nav class="topbar__nav">
+      <a class="topbar__link" href="admin.html">⬅ Admin</a>
+    </nav>
+    <div class="topbar__user">
+      <span id="kullaniciAdi">…</span>
+      <button class="btn btn-ghost btn-sm" id="cikisBtn">Çıkış</button>
+    </div>
+  </header>
+
+  <main class="page">
+    <div class="page__header">
+      <div>
+        <div class="page__title">Canlı Takip</div>
+        <div class="page__subtitle" id="sonGuncelleme">Yükleniyor…</div>
+      </div>
+    </div>
+
+    <!-- Özet bar -->
+    <div class="ozet-bar" id="ozetBar">
+      <div class="ozet-item"><div class="ozet-sayi" id="ozetToplaniyor" style="color:#3B82F6;">—</div><div class="ozet-label">Toplama</div></div>
+      <div class="ozet-item"><div class="ozet-sayi" id="ozetKontrol" style="color:#8B5CF6;">—</div><div class="ozet-label">Kontrol</div></div>
+      <div class="ozet-item"><div class="ozet-sayi" id="ozetBekliyor" style="color:#9CA3AF;">—</div><div class="ozet-label">Bekliyor</div></div>
+      <div class="ozet-item"><div class="ozet-sayi" id="ozetTamamlandi" style="color:#10B981;">—</div><div class="ozet-label">Bugün Tamam</div></div>
+    </div>
+
+    <!-- Aktif siparişler -->
+    <div style="font-weight:700;font-size:13px;margin-bottom:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--color-ink-soft);">Aktif Siparişler</div>
+    <div class="canli-grid" id="canliGrid"></div>
+    <div class="empty-state u-hidden" id="bosDurum">
+      <div class="empty-state__icon">✅</div>
+      <div class="empty-state__title">Aktif sipariş yok</div>
+      <div class="empty-state__text">Tüm siparişler tamamlandı veya henüz başlanmadı.</div>
+    </div>
+  </main>
+</div>
+<script type="module" src="js/canli.js"></script>
+</body>
+</html>
