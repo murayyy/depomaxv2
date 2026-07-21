@@ -125,16 +125,18 @@ function hesaplaOzetler(urunler, siparisler) {
       k.toplananUrun++;
       k.siparisSeti.add(u.siparisId || "");
       if (kgMi(u)) k.toplananKg += Number(u.miktar) || 0;
+      // Hata: kontrolör düzelttiyse → toplayıcının hatasıdır
       if (u.duzeltildi) k.eksikHata++;
-      if (u.miktarDuzeltildi && u.orijinalMiktar !== undefined && u.orijinalMiktar !== u.miktar) k.miktarHata++;
+      if (u.miktarDuzeltildi) k.miktarHata++;
     }
     if (u.kontrolEdenKullanici) {
       const k = kGetir(u.kontrolEdenKullanici);
       k.kontrolEdilenUrun++;
       k.siparisSeti.add(u.siparisId || "");
       if (kgMi(u)) k.kontrolEdilenKg += Number(u.miktar) || 0;
-      if (u.kontrolorEksikTespiti) k.eksikTespit++;
-      if (u.miktarDuzeltildi && u.miktarDuzeltenKullanici === u.kontrolEdenKullanici) k.miktarDuzeltme++;
+      // Pozitif: kontrolör hata yakaladı (toplayıcının hatasını buldu)
+      if (u.duzeltildi) k.eksikTespit++;
+      if (u.miktarDuzeltildi) k.miktarDuzeltme++;
     }
   });
 
@@ -215,8 +217,8 @@ function render(toplayicilar, kontrolorler, siparisSayisi, urunSayisi) {
       <td><strong>${kacisEt(k.ad)}</strong></td>
       <td>${k.kontrolEdilenUrun} ürün${k.siparisSayisi ? ` <span class="u-text-soft" style="font-size:11px;">(${k.siparisSayisi} sipariş)</span>` : ""}</td>
       <td>${k.kontrolEdilenKg ? sayiBicimle(k.kontrolEdilenKg) + " KG" : "—"}</td>
-      <td>${tespitRozetiHtml(k.eksikTespit)}</td>
-      <td>${tespitRozetiHtml(k.miktarDuzeltme)}</td>
+      <td>${tespitRozetiHtml(k.eksikTespit)} <span class="u-text-soft" style="font-size:10px;">yakaladı</span></td>
+      <td>${tespitRozetiHtml(k.miktarDuzeltme)} <span class="u-text-soft" style="font-size:10px;">düzeltti</span></td>
       <td>—</td>
       <td>${sureBicimle(k.ortalamaKontrolSure)}</td>
       <td>${k.hizUrun ? k.hizUrun + " ürün/s" : "—"}</td>
