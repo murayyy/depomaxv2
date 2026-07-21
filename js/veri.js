@@ -530,3 +530,17 @@ export async function stokGozaltiSifirla(stokKodlari) {
   });
   await batch.commit();
 }
+
+/* ============================================================================
+   FABRİKA — Stok Girişleri
+   ============================================================================ */
+const STOK_GIRISLER = "stokGirisleri";
+
+export function stokGirisiKaydet(veri) {
+  return addDoc(collection(db, STOK_GIRISLER), { ...veri, tarih: serverTimestamp() });
+}
+
+export async function stokGirisleriGetir(limit = 100) {
+  const snap = await getDocs(query(collection(db, STOK_GIRISLER), orderBy("tarih", "desc")));
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}

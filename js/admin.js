@@ -8,7 +8,7 @@ import { arayuzHazirla, toast, onayIste, kacisEt, tarihBicimle, ondalikOku, sayi
 
 arayuzHazirla();
 
-const ROL_ETIKETI = { toplayici: "Toplayıcı", kontrolor: "Kontrolör", admin: "Admin", sube: "Şube", surucu: "Sürücü", depocu: "Depocu", paletci: "Paletçi", uretici: "Üretici" };
+const ROL_ETIKETI = { toplayici: "Toplayıcı", kontrolor: "Kontrolör", admin: "Admin", sube: "Şube", surucu: "Sürücü", depocu: "Depocu", paletci: "Paletçi", uretici: "Üretici", fabrika: "Fabrika" };
 const HATA_MESAJLARI = {
   "auth/email-already-in-use": "Bu e-posta adresiyle zaten bir hesap var.",
   "auth/invalid-email": "E-posta adresi geçerli değil.",
@@ -192,6 +192,7 @@ function yeniKullaniciModalAc() {
             <option value="depocu">Depocu</option>
             <option value="paletci">Paletçi</option>
             <option value="uretici">Üretici</option>
+            <option value="fabrika">Fabrika</option>
             <option value="admin">Admin</option>
           </select>
         </div>
