@@ -45,8 +45,8 @@ function durumEtiketi(s) {
   return DURUM_ETIKETI[s.durum] || { etiket: s.durum, sinif: "badge-gray" };
 }
 
-// Sadece "toplaniyor" aşamasındaki siparişlere ürün eklenebilir
-const DUZENLENEBILIR = ["toplaniyor"];
+// Sevk edilmeden önce ürün eklenebilir
+const DUZENLENEBILIR = ["toplaniyor", "toplandi", "kontrol_ediliyor", "tamamlandi"];
 // Teslim alındı butonu: sevk edildi + sisteme aktarılmış olmalı
 const teslimAlinabilir = (s) => s.durum === "sevk_edildi" && s.sistemeAktarildi === true;
 
