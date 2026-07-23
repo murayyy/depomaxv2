@@ -9,6 +9,7 @@ arayuzHazirla();
 
 let mevcutKullanici = null;
 let katalogCache = [];
+let siparislerCache = [];
 
 sayfaKorumasi(["sube"], (kullanici) => {
   mevcutKullanici = kullanici;
@@ -51,6 +52,7 @@ const DUZENLENEBILIR = ["toplaniyor", "toplandi", "kontrol_ediliyor", "tamamland
 const teslimAlinabilir = (s) => s.durum === "sevk_edildi" && s.sistemeAktarildi === true;
 
 function renderSiparisler(liste) {
+  siparislerCache = liste;
   const kapsayici = document.getElementById("siparisListesi");
   const bos = document.getElementById("bosDurum");
 
@@ -238,6 +240,9 @@ async function detayGoster(siparis) {
 
 function urunEkleModalAc(siparisId) {
   const root = document.getElementById("modalRoot");
+  // Kontrol tamamlandıktan sonra eklenen ürünler eksik olarak işaretlenir
+  const siparis = siparislerCache?.find((s) => s.id === siparisId);
+  const kontrolSonrasi = siparis && ["tamamlandi", "sevk_edildi"].includes(siparis.durum);
 
   // Katalogdan seçme veya serbest yazma — ikisini de sunan bir modal
   const katalogOptions = katalogCache.length > 0
@@ -304,10 +309,13 @@ function urunEkleModalAc(siparisId) {
         aciklama: document.getElementById("subeUrunNot").value.trim(),
         reyon: katalogUrun?.reyon || "",
         barkod: "",
-        eksik: false
+        eksik: kontrolSonrasi ? true : false,
+        subeEkledi: true
       });
       kapat();
-      toast("Ürün siparişe eklendi.", "success");
+      toast(kontrolSonrasi
+        ? "Ürün eksikler listesine eklendi."
+        : "Ürün siparişe eklendi.", "success");
     } catch (err) {
       console.error(err);
       toast("Eklenirken hata: " + (err.message || err), "error");
