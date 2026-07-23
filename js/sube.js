@@ -11,6 +11,7 @@ let mevcutKullanici = null;
 let katalogCache = [];
 let ozelKalemler = []; // Katalog dışı talepler
 const miktarSakla = new Map(); // Girilen miktarları kategori değişiminde korur
+const notSakla = new Map(); // Girilen notları kategori değişiminde korur
 
 sayfaKorumasi(["sube"], (kullanici) => {
   mevcutKullanici = kullanici;
@@ -66,6 +67,13 @@ document.addEventListener("input", (e) => {
       else miktarSakla.delete(id);
     }
     butonGuncelle();
+  }
+  if (e.target.classList.contains("aciklama-input")) {
+    const id = e.target.dataset.id;
+    if (id) {
+      if (e.target.value.trim()) notSakla.set(id, e.target.value);
+      else notSakla.delete(id);
+    }
   }
   if (e.target.id === "urunAraInput") renderKatalog();
 });
@@ -138,9 +146,13 @@ function renderKatalog() {
   });
   kartlar.innerHTML = kartHtml;
 
-  // Kaydedilen miktarları geri yükle
+  // Kaydedilen miktarları ve notları geri yükle
   document.querySelectorAll(".miktar-input[data-id]").forEach((input) => {
     const kayitli = miktarSakla.get(input.dataset.id);
+    if (kayitli) input.value = kayitli;
+  });
+  document.querySelectorAll(".aciklama-input[data-id]").forEach((input) => {
+    const kayitli = notSakla.get(input.dataset.id);
     if (kayitli) input.value = kayitli;
   });
 
@@ -318,6 +330,7 @@ document.getElementById("siparisGonderBtn").addEventListener("click", async () =
     });
     document.querySelectorAll(".miktar-input, .aciklama-input").forEach((i) => { i.value = ""; });
     miktarSakla.clear();
+    notSakla.clear();
     ozelKalemler.length = 0;
     renderOzelKalemler();
     btn.disabled = true;
