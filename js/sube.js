@@ -58,7 +58,15 @@ function butonGuncelle() {
 
 // Event delegation ile miktar değişimini yakala — yeniden render sonrası da çalışır
 document.addEventListener("input", (e) => {
-  if (e.target.classList.contains("miktar-input")) butonGuncelle();
+  if (e.target.classList.contains("miktar-input")) {
+    const id = e.target.dataset.id;
+    const val = ondalikOku(e.target.value);
+    if (id) {
+      if (val > 0) miktarSakla.set(id, e.target.value);
+      else miktarSakla.delete(id);
+    }
+    butonGuncelle();
+  }
   if (e.target.id === "urunAraInput") renderKatalog();
 });
 document.getElementById("kategoriFiltre")?.addEventListener("change", () => renderKatalog());
@@ -66,15 +74,6 @@ document.getElementById("kategoriFiltre")?.addEventListener("change", () => rend
 function renderKatalog() {
   const tbody = document.getElementById("katalogGovde");
   const kartlar = document.getElementById("katalogKartlar");
-
-  // Render öncesi mevcut girilen miktarları kaydet
-  document.querySelectorAll(".miktar-input").forEach((input) => {
-    const val = ondalikOku(input.value);
-    if (input.dataset.id) {
-      if (val > 0) miktarSakla.set(input.dataset.id, input.value);
-      else miktarSakla.delete(input.dataset.id);
-    }
-  });
 
   // Filtrele
   const ara = (document.getElementById("urunAraInput")?.value || "").toLowerCase().trim();
