@@ -10,6 +10,7 @@ arayuzHazirla();
 let mevcutKullanici = null;
 let katalogCache = [];
 let ozelKalemler = []; // Katalog dışı talepler
+const miktarSakla = new Map(); // Girilen miktarları kategori değişiminde korur
 
 sayfaKorumasi(["sube"], (kullanici) => {
   mevcutKullanici = kullanici;
@@ -65,6 +66,15 @@ document.getElementById("kategoriFiltre")?.addEventListener("change", () => rend
 function renderKatalog() {
   const tbody = document.getElementById("katalogGovde");
   const kartlar = document.getElementById("katalogKartlar");
+
+  // Render öncesi mevcut girilen miktarları kaydet
+  document.querySelectorAll(".miktar-input").forEach((input) => {
+    const val = ondalikOku(input.value);
+    if (input.dataset.id) {
+      if (val > 0) miktarSakla.set(input.dataset.id, input.value);
+      else miktarSakla.delete(input.dataset.id);
+    }
+  });
 
   // Filtrele
   const ara = (document.getElementById("urunAraInput")?.value || "").toLowerCase().trim();
@@ -128,6 +138,13 @@ function renderKatalog() {
       </div>`).join("");
   });
   kartlar.innerHTML = kartHtml;
+
+  // Kaydedilen miktarları geri yükle
+  document.querySelectorAll(".miktar-input[data-id]").forEach((input) => {
+    const kayitli = miktarSakla.get(input.dataset.id);
+    if (kayitli) input.value = kayitli;
+  });
+
   butonGuncelle();
 }
 
@@ -301,6 +318,7 @@ document.getElementById("siparisGonderBtn").addEventListener("click", async () =
       satirlar: tumSatirlar
     });
     document.querySelectorAll(".miktar-input, .aciklama-input").forEach((i) => { i.value = ""; });
+    miktarSakla.clear();
     ozelKalemler.length = 0;
     renderOzelKalemler();
     btn.disabled = true;

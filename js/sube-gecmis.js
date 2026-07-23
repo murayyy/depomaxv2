@@ -78,6 +78,7 @@ function renderSiparisler(liste) {
           <div class="order-card__meta">
             <span class="badge ${d.sinif}">${d.etiket}</span>
             <span>${s.toplamUrun || 0} ürün</span>
+            ${s.toplamKg ? `<span>${sayiBicimle(s.toplamKg)} KG</span>` : ""}
             ${s.paletSayisi ? `<span>${s.paletSayisi} palet</span>` : ""}
             <span>${tarihBicimle(s.olusturulmaTarihi)}</span>
           </div>
