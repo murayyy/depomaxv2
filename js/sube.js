@@ -10,8 +10,6 @@ arayuzHazirla();
 let mevcutKullanici = null;
 let katalogCache = [];
 let ozelKalemler = []; // Katalog dışı talepler
-const miktarSakla = new Map(); // Girilen miktarları kategori değişiminde korur
-const notSakla = new Map(); // Girilen notları kategori değişiminde korur
 
 sayfaKorumasi(["sube"], (kullanici) => {
   mevcutKullanici = kullanici;
@@ -59,25 +57,11 @@ function butonGuncelle() {
 
 // Event delegation ile miktar değişimini yakala — yeniden render sonrası da çalışır
 document.addEventListener("input", (e) => {
-  if (e.target.classList.contains("miktar-input")) {
-    const id = e.target.dataset.id;
-    const val = ondalikOku(e.target.value);
-    if (id) {
-      if (val > 0) miktarSakla.set(id, e.target.value);
-      else miktarSakla.delete(id);
-    }
-    butonGuncelle();
-  }
-  if (e.target.classList.contains("aciklama-input")) {
-    const id = e.target.dataset.id;
-    if (id) {
-      if (e.target.value.trim()) notSakla.set(id, e.target.value);
-      else notSakla.delete(id);
-    }
-  }
+  if (e.target.classList.contains("miktar-input")) butonGuncelle();
   if (e.target.id === "urunAraInput") renderKatalog();
 });
 document.getElementById("kategoriFiltre")?.addEventListener("change", () => renderKatalog());
+document.getElementById("siralamaFiltre")?.addEventListener("change", () => renderKatalog());
 
 function renderKatalog() {
   const tbody = document.getElementById("katalogGovde");
@@ -95,18 +79,31 @@ function renderKatalog() {
     return katEsles && araEsles;
   });
 
+  // Sırala
+  const siralama = document.getElementById("siralamaFiltre")?.value || "sira";
+  const sirali = [...filtrelenmis].sort((a, b) => {
+    if (siralama === "kod") return (a.stokKodu || "").localeCompare(b.stokKodu || "", "tr");
+    if (siralama === "ad") return (a.ad || "").localeCompare(b.ad || "", "tr");
+    if (siralama === "reyon") return (a.reyon || "").localeCompare(b.reyon || "", "tr");
+    return (Number(a.sira) || 999) - (Number(b.sira) || 999);
+  });
+
+  // Koda göre sıralamada kategorisiz tek liste
+  const gruplama = siralama === "sira" || siralama === "reyon";
   const gruplar = new Map();
-  filtrelenmis.forEach((u) => {
-    const kat = (u.kategori || "").trim() || "Diğer";
+  sirali.forEach((u) => {
+    const kat = gruplama ? ((u.kategori || "").trim() || "Diğer") : "Tüm Ürünler";
     if (!gruplar.has(kat)) gruplar.set(kat, []);
     gruplar.get(kat).push(u);
   });
 
+  const kolonSayisi = 6;
   let tabloHtml = "";
   gruplar.forEach((urunler, kategori) => {
-    tabloHtml += `<tr><td colspan="5" style="background:var(--color-surface-2);font-weight:700;font-size:12.5px;text-transform:uppercase;letter-spacing:0.04em;color:var(--color-ink-soft);padding:8px 12px;">${kacisEt(kategori)}</td></tr>`;
+    tabloHtml += `<tr><td colspan="${kolonSayisi}" style="background:var(--color-surface-2);font-weight:700;font-size:12.5px;text-transform:uppercase;letter-spacing:0.04em;color:var(--color-ink-soft);padding:8px 12px;">${kacisEt(kategori)}</td></tr>`;
     tabloHtml += urunler.map((u) => `
       <tr data-uid="${u.id}">
+        <td class="cell-code" style="font-size:12px;">${kacisEt(u.stokKodu || "—")}</td>
         <td>
           <div style="font-weight:600;">${kacisEt(u.ad)}</div>
           ${u.aciklama ? `<div class="u-text-soft" style="font-size:12px;">${kacisEt(u.aciklama)}</div>` : ""}
@@ -145,17 +142,6 @@ function renderKatalog() {
       </div>`).join("");
   });
   kartlar.innerHTML = kartHtml;
-
-  // Kaydedilen miktarları ve notları geri yükle
-  document.querySelectorAll(".miktar-input[data-id]").forEach((input) => {
-    const kayitli = miktarSakla.get(input.dataset.id);
-    if (kayitli) input.value = kayitli;
-  });
-  document.querySelectorAll(".aciklama-input[data-id]").forEach((input) => {
-    const kayitli = notSakla.get(input.dataset.id);
-    if (kayitli) input.value = kayitli;
-  });
-
   butonGuncelle();
 }
 
@@ -329,8 +315,6 @@ document.getElementById("siparisGonderBtn").addEventListener("click", async () =
       satirlar: tumSatirlar
     });
     document.querySelectorAll(".miktar-input, .aciklama-input").forEach((i) => { i.value = ""; });
-    miktarSakla.clear();
-    notSakla.clear();
     ozelKalemler.length = 0;
     renderOzelKalemler();
     btn.disabled = true;
