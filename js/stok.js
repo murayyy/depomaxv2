@@ -6,7 +6,7 @@
 // buraya (Firestore) senkronize ediyor. Depomax sadece gösterim için okur.
 // ============================================================================
 import { db } from "./firebase.js";
-import { collection, doc, updateDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { collection, doc, updateDoc, onSnapshot, getDocs } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { toast, sesCal, sayiBicimle, kacisEt } from "./utils.js";
 
 const STOKLAR = "stoklar";
