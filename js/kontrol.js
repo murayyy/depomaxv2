@@ -2,7 +2,7 @@
 // KONTROL EKRANI MANTIĞI
 // ============================================================================
 import { auth, signOut, sayfaKorumasi } from "./firebase.js";
-import { siparisleriDinle, siparisGuncelle, urunleriDinle, urunGuncelle, urunEkle, tumSiparisleriCanliDinle, siparisArsivle, suruculeriGetir, stokDusur, stokGeriEkle, stokGozaltiSifirla } from "./veri.js";
+import { siparisleriDinle, siparisGuncelle, urunleriDinle, urunGuncelle, urunEkle, tumSiparisleriCanliDinle, siparisArsivle, suruculeriGetir, stokDusur, stokGeriEkle, stokGozaltiSifirla, katalogDinle } from "./veri.js";
 import { stoklariDinle, stokRozetiHtml } from "./stok.js";
 import { serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
@@ -15,6 +15,7 @@ import {
 arayuzHazirla();
 
 let mevcutKullanici = null;
+let katalogCache = [];
 let siparisAbonelikIptal = null;
 let urunAbonelikIptal = null;
 let sayacYazimZamanlayici = null;
@@ -51,6 +52,7 @@ sayfaKorumasi(["kontrolor"], (kullanici) => {
   mevcutKullanici = kullanici;
   document.getElementById("kullaniciAdi").textContent = kullanici.ad || kullanici.uid;
   document.getElementById("rolEtiketi").textContent = kullanici.rol;
+  katalogDinle((liste) => { katalogCache = liste.filter(u => u.aktif !== false); });
   if (kullanici.rol === "admin") {
     document.getElementById("topNav").insertAdjacentHTML("beforeend",
       `<a class="topbar__link" href="toplama.html">📦 Toplama</a><a class="topbar__link" href="admin.html">👥 Yönetim</a><a class="topbar__link" href="performans.html">📊 Performans</a>`);
@@ -541,14 +543,18 @@ document.getElementById("tamamlaBtn").addEventListener("click", async () => {
 /* ---------------- Kontrol ekranında manuel ürün ekleme ---------------- */
 document.getElementById("urunEkleBtn").addEventListener("click", () => {
   const root = document.getElementById("modalRoot");
+  const adOptions = katalogCache.map(u => `<option value="${kacisEt(u.ad)}">`).join("");
+  const kodOptions = katalogCache.map(u => `<option value="${kacisEt(u.stokKodu || "")}">`).join("");
   root.innerHTML = `
     <div class="modal-backdrop" data-role="backdrop">
       <div class="modal">
         <h3>Ürün Ekle</h3>
         <p>Toplama sırasında atlanmış bir ürünü buradan ekleyebilirsiniz.</p>
+        <datalist id="keAdList">${adOptions}</datalist>
+        <datalist id="keKodList">${kodOptions}</datalist>
         <div class="input-row">
-          <div class="field"><label>Ürün Kodu</label><input class="input" id="keKod" /></div>
-          <div class="field"><label>Ürün Adı</label><input class="input" id="keAd" /></div>
+          <div class="field"><label>Ürün Kodu</label><input class="input" id="keKod" list="keKodList" autocomplete="off" /></div>
+          <div class="field"><label>Ürün Adı</label><input class="input" id="keAd" list="keAdList" autocomplete="off" /></div>
           <div class="field"><label>Miktar</label><input class="input" type="text" inputmode="decimal" id="keMiktar" /></div>
           <div class="field"><label>Birim</label><input class="input" id="keBirim" placeholder="KG, Adet…" /></div>
           <div class="field"><label>Reyon</label><input class="input" id="keReyon" /></div>
@@ -564,17 +570,35 @@ document.getElementById("urunEkleBtn").addEventListener("click", () => {
   const kapat = () => { root.innerHTML = ""; };
   root.querySelector('[data-role="iptal"]').onclick = kapat;
   root.querySelector('[data-role="backdrop"]').onclick = (e) => { if (e.target.dataset.role === "backdrop") kapat(); };
+
+  // Autocomplete: ad → kod, kod → ad
+  const keAd = root.querySelector("#keAd");
+  const keKod = root.querySelector("#keKod");
+  const keBirim = root.querySelector("#keBirim");
+  const keReyon = root.querySelector("#keReyon");
+  const keBarkod = root.querySelector("#keBarkod");
+  function katalogDoldur(u) {
+    if (!u) return;
+    if (!keKod.value) keKod.value = u.stokKodu || "";
+    if (!keAd.value) keAd.value = u.ad || "";
+    if (!keBirim.value) keBirim.value = u.birim || "";
+    if (!keReyon.value) keReyon.value = u.reyon || "";
+    if (!keBarkod.value) keBarkod.value = u.barkod || "";
+  }
+  keAd.addEventListener("change", () => katalogDoldur(katalogCache.find(u => u.ad === keAd.value)));
+  keKod.addEventListener("change", () => katalogDoldur(katalogCache.find(u => u.stokKodu === keKod.value)));
+
   root.querySelector('[data-role="onay"]').onclick = async () => {
-    const kod = document.getElementById("keKod").value.trim();
-    const ad = document.getElementById("keAd").value.trim();
+    const kod = keKod.value.trim();
+    const ad = keAd.value.trim();
     if (!kod && !ad) { toast("Ürün kodu veya adı girin.", "error"); return; }
     try {
       await urunEkle(aktifSiparis.id, {
         kod, ad,
         miktar: ondalikOku(document.getElementById("keMiktar").value),
-        birim: document.getElementById("keBirim").value.trim(),
-        reyon: document.getElementById("keReyon").value.trim(),
-        barkod: document.getElementById("keBarkod").value.trim(),
+        birim: keBirim.value.trim(),
+        reyon: keReyon.value.trim(),
+        barkod: keBarkod.value.trim(),
         aciklama: document.getElementById("keAciklama").value.trim()
       });
       kapat();

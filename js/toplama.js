@@ -5,7 +5,7 @@ import { auth, signOut, sayfaKorumasi } from "./firebase.js";
 import {
   siparisleriDinle, siparisOlustur, siparisGuncelle, tumSiparisleriCanliDinle,
   urunleriDinle, urunleriTopluEkle, urunEkle, urunGuncelle, urunSil,
-  stokDusur, stokGeriEkle
+  stokDusur, stokGeriEkle, katalogDinle
 } from "./veri.js";
 import { stoklariDinle, stokRozetiHtml } from "./stok.js";
 import {
@@ -18,6 +18,7 @@ import {
 arayuzHazirla();
 
 let mevcutKullanici = null;
+let katalogCache = [];
 let aktifSekme = "aktif";
 let siparisAbonelikIptal = null;
 let urunAbonelikIptal = null;
@@ -55,6 +56,7 @@ sayfaKorumasi(["toplayici"], (kullanici) => {
   mevcutKullanici = kullanici;
   document.getElementById("kullaniciAdi").textContent = kullanici.ad || kullanici.uid;
   document.getElementById("rolEtiketi").textContent = kullanici.rol;
+  katalogDinle((liste) => { katalogCache = liste.filter(u => u.aktif !== false); });
   if (kullanici.rol === "admin") {
     document.getElementById("topNav").insertAdjacentHTML("beforeend",
       `<a class="topbar__link" href="kontrol.html">✅ Kontrol</a><a class="topbar__link" href="admin.html">👥 Yönetim</a><a class="topbar__link" href="performans.html">📊 Performans</a>`);
@@ -505,13 +507,17 @@ document.getElementById("excelYukleInput").addEventListener("change", async (e) 
 /* ---------------- Manuel ürün ekle ---------------- */
 document.getElementById("urunEkleBtn").addEventListener("click", () => {
   const root = document.getElementById("modalRoot");
+  const adOptions = katalogCache.map(u => `<option value="${kacisEt(u.ad)}">`).join("");
+  const kodOptions = katalogCache.map(u => `<option value="${kacisEt(u.stokKodu || "")}">`).join("");
   root.innerHTML = `
     <div class="modal-backdrop" data-role="backdrop">
       <div class="modal">
         <h3>Ürün Ekle</h3>
+        <datalist id="ueAdList">${adOptions}</datalist>
+        <datalist id="ueKodList">${kodOptions}</datalist>
         <div class="input-row">
-          <div class="field"><label>Ürün Kodu</label><input class="input" id="ueKod" /></div>
-          <div class="field"><label>Ürün Adı</label><input class="input" id="ueAd" /></div>
+          <div class="field"><label>Ürün Kodu</label><input class="input" id="ueKod" list="ueKodList" autocomplete="off" /></div>
+          <div class="field"><label>Ürün Adı</label><input class="input" id="ueAd" list="ueAdList" autocomplete="off" /></div>
           <div class="field"><label>Miktar</label><input class="input" type="text" inputmode="decimal" id="ueMiktar" /></div>
           <div class="field"><label>Birim</label><input class="input" id="ueBirim" placeholder="KG, Adet…" /></div>
           <div class="field"><label>Reyon</label><input class="input" id="ueReyon" /></div>
@@ -527,16 +533,34 @@ document.getElementById("urunEkleBtn").addEventListener("click", () => {
   const kapat = () => { root.innerHTML = ""; };
   root.querySelector('[data-role="iptal"]').onclick = kapat;
   root.querySelector('[data-role="backdrop"]').onclick = (e) => { if (e.target.dataset.role === "backdrop") kapat(); };
+
+  // Autocomplete
+  const ueAd = root.querySelector("#ueAd");
+  const ueKod = root.querySelector("#ueKod");
+  const ueBirim = root.querySelector("#ueBirim");
+  const ueReyon = root.querySelector("#ueReyon");
+  const ueBarkod = root.querySelector("#ueBarkod");
+  function katalogDoldur(u) {
+    if (!u) return;
+    if (!ueKod.value) ueKod.value = u.stokKodu || "";
+    if (!ueAd.value) ueAd.value = u.ad || "";
+    if (!ueBirim.value) ueBirim.value = u.birim || "";
+    if (!ueReyon.value) ueReyon.value = u.reyon || "";
+    if (!ueBarkod.value) ueBarkod.value = u.barkod || "";
+  }
+  ueAd.addEventListener("change", () => katalogDoldur(katalogCache.find(u => u.ad === ueAd.value)));
+  ueKod.addEventListener("change", () => katalogDoldur(katalogCache.find(u => u.stokKodu === ueKod.value)));
+
   root.querySelector('[data-role="onay"]').onclick = async () => {
-    const kod = document.getElementById("ueKod").value.trim();
-    const ad = document.getElementById("ueAd").value.trim();
+    const kod = ueKod.value.trim();
+    const ad = ueAd.value.trim();
     if (!kod && !ad) { toast("Ürün kodu veya adı girin.", "error"); return; }
     await urunEkle(aktifSiparis.id, {
       kod, ad,
       miktar: ondalikOku(document.getElementById("ueMiktar").value),
-      birim: document.getElementById("ueBirim").value.trim(),
-      reyon: document.getElementById("ueReyon").value.trim(),
-      barkod: document.getElementById("ueBarkod").value.trim(),
+      birim: ueBirim.value.trim(),
+      reyon: ueReyon.value.trim(),
+      barkod: ueBarkod.value.trim(),
       aciklama: document.getElementById("ueAciklama").value.trim()
     });
     kapat();
