@@ -6,18 +6,20 @@
 // verisiyle karşılaştırır. Stok gelmiş ürünler üstte ve yeşil rozetle çıkar.
 // ============================================================================
 import { auth, signOut, sayfaKorumasi } from "./firebase.js";
-import { tumSiparisleriGetir, urunleriniGetir, urunGuncelle, urunEkle, urunSil, raflaraGoreUrunBul } from "./veri.js";
+import { tumSiparisleriGetir, urunleriniGetir, urunGuncelle, urunEkle, urunSil, raflaraGoreUrunBul, katalogDinle } from "./veri.js";
 import { stoklariDinle, stokBildirimGoruldu } from "./stok.js";
 import { arayuzHazirla, toast, onayIste, girdiIste, kacisEt, sayiBicimle, ondalikOku, yukleniyorGoster, yukleniyorKapat } from "./utils.js";
 
 arayuzHazirla();
 
 let mevcutKullanici = null;
+let katalogCache = [];
 let stokMap = new Map();
 let gruplar = []; // son yüklenen eksik ürün grupları
 let mevcutSiparisler = []; // "ürün ekle" açılır listesi için
 
 sayfaKorumasi(["toplayici", "kontrolor"], (kullanici) => {
+  katalogDinle((liste) => { katalogCache = liste.filter(u => u.aktif !== false); });
   mevcutKullanici = kullanici;
   document.getElementById("kullaniciAdi").textContent = kullanici.ad || kullanici.uid;
   document.getElementById("rolEtiketi").textContent = kullanici.rol;
@@ -119,8 +121,8 @@ function eksikUrunEkleModalAc(onDoldur, basariCallback) {
           <select class="select" id="eeSiparis">${siparisOptions}</select>
         </div>
         <div class="input-row">
-          <div class="field"><label>Ürün Kodu</label><input class="input" id="eeKod" value="${kacisEt(on.kod || "")}" /></div>
-          <div class="field"><label>Ürün Adı</label><input class="input" id="eeAd" value="${kacisEt(on.ad || "")}" /></div>
+          <div class="field"><label>Ürün Kodu</label><input class="input" id="eeKod" value="${kacisEt(on.kod || "")}" list="eeKodList" autocomplete="off" /><datalist id="eeKodList">${katalogCache.map(u => `<option value="${kacisEt(u.stokKodu || "")}">`).join("")}</datalist></div>
+          <div class="field"><label>Ürün Adı</label><input class="input" id="eeAd" value="${kacisEt(on.ad || "")}" list="eeAdList" autocomplete="off" /><datalist id="eeAdList">${katalogCache.map(u => `<option value="${kacisEt(u.ad)}">`).join("")}</datalist></div>
           <div class="field"><label>Miktar</label><input class="input" type="text" inputmode="decimal" id="eeMiktar" value="${on.miktar || ""}" /></div>
           <div class="field"><label>Birim</label><input class="input" id="eeBirim" placeholder="KG, Adet…" value="${kacisEt(on.birim || "")}" /></div>
           <div class="field"><label>Reyon</label><input class="input" id="eeReyon" /></div>
@@ -136,6 +138,23 @@ function eksikUrunEkleModalAc(onDoldur, basariCallback) {
   const kapat = () => { root.innerHTML = ""; };
   root.querySelector('[data-role="iptal"]').onclick = kapat;
   root.querySelector('[data-role="backdrop"]').onclick = (e) => { if (e.target.dataset.role === "backdrop") kapat(); };
+
+  // Katalog autocomplete
+  const eeKod = root.querySelector("#eeKod");
+  const eeAd = root.querySelector("#eeAd");
+  const eeBirim = root.querySelector("#eeBirim");
+  const eeReyon = root.querySelector("#eeReyon");
+  const eeBarkod = root.querySelector("#eeBarkod");
+  function katalogDoldur(u) {
+    if (!u) return;
+    if (!eeKod.value) eeKod.value = u.stokKodu || "";
+    if (!eeAd.value) eeAd.value = u.ad || "";
+    if (!eeBirim.value) eeBirim.value = u.birim || "";
+    if (!eeReyon.value) eeReyon.value = u.reyon || "";
+    if (!eeBarkod.value) eeBarkod.value = u.barkod || "";
+  }
+  eeAd.addEventListener("change", () => katalogDoldur(katalogCache.find(u => u.ad === eeAd.value)));
+  eeKod.addEventListener("change", () => katalogDoldur(katalogCache.find(u => u.stokKodu === eeKod.value)));
   root.querySelector('[data-role="onay"]').onclick = async () => {
     const siparisId = document.getElementById("eeSiparis").value;
     const kod = document.getElementById("eeKod").value.trim();
