@@ -2,7 +2,7 @@
 // KONTROL EKRANI MANTIĞI
 // ============================================================================
 import { auth, signOut, sayfaKorumasi } from "./firebase.js";
-import { siparisleriDinle, siparisGuncelle, urunleriDinle, urunGuncelle, urunEkle, tumSiparisleriCanliDinle, siparisArsivle, suruculeriGetir, stokDusur, stokGeriEkle, stokGozaltiSifirla, katalogDinle } from "./veri.js";
+import { siparisleriDinle, siparisGuncelle, urunleriDinle, urunGuncelle, urunEkle, tumSiparisleriCanliDinle, siparisArsivle, suruculeriGetir, stokDusur, stokGeriEkle, stokGozaltiSifirla, katalogDinle, siparisAlanAta, alanlariDinle } from "./veri.js";
 import { stoklariDinle, stokRozetiHtml } from "./stok.js";
 import { serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
@@ -149,11 +149,50 @@ function renderSiparisListesi(liste) {
           <div class="progress-label">${kontrolEdilen}/${toplam} kontrol edildi</div>
         </div>
         <div class="order-card__actions">
+          ${s.alanAdi ? `<span style="padding:3px 8px;border-radius:99px;font-size:11px;font-weight:700;background:#DBEAFE;color:#1E40AF;">📍 ${kacisEt(s.alanAdi)}</span>` : `<button class="btn btn-ghost btn-sm" data-alan-ata="${s.id}">📍 Alan Ata</button>`}
           <button class="btn btn-primary btn-sm" data-ac="${s.id}">${butonMetni}</button>
           ${s.durum === "sevk_edildi" && s.sistemeAktarildi ? `<button class="btn btn-ghost btn-sm" data-arsivle="${s.id}">🗂 Arşivle</button>` : ""}
         </div>
       </div>`;
   }).join("");
+
+  kapsayici.querySelectorAll("[data-alan-ata]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      let alanlar = [];
+      alanlariDinle((liste) => { alanlar = liste; })();
+      // Kısa bekleme — alanlar yüklensin
+      await new Promise(r => setTimeout(r, 500));
+      if (!alanlar.length) { toast("Önce admin panelinde alan tanımlayın.", "error"); return; }
+      const root = document.getElementById("modalRoot");
+      root.innerHTML = `
+        <div class="modal-backdrop" data-role="backdrop">
+          <div class="modal" style="max-width:360px;">
+            <h3>📍 Alan Ata</h3>
+            <div class="field">
+              <label>Alan Seç</label>
+              <select class="select" id="alanSecici">
+                ${alanlar.map(a => `<option value="${a.id}" data-ad="${kacisEt(a.ad)}">${kacisEt(a.ad)}</option>`).join("")}
+              </select>
+            </div>
+            <div class="modal__actions">
+              <button class="btn btn-ghost" data-role="iptal">Vazgeç</button>
+              <button class="btn btn-primary" data-role="ata">Ata</button>
+            </div>
+          </div>
+        </div>`;
+      const kapat = () => { root.innerHTML = ""; };
+      root.querySelector('[data-role="iptal"]').onclick = kapat;
+      root.querySelector('[data-role="backdrop"]').onclick = (e) => { if (e.target.dataset.role === "backdrop") kapat(); };
+      root.querySelector('[data-role="ata"]').onclick = async () => {
+        const sel = document.getElementById("alanSecici");
+        const alanId = sel.value;
+        const alanAdi = sel.options[sel.selectedIndex]?.dataset.ad || "";
+        await siparisAlanAta(btn.dataset.alanAta, alanId, alanAdi);
+        kapat();
+        toast(`Alan atandı: ${alanAdi}`, "success");
+      };
+    });
+  });
 
   kapsayici.querySelectorAll("[data-ac]").forEach((btn) => {
     btn.addEventListener("click", () => {

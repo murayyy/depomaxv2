@@ -3,7 +3,7 @@
 // ============================================================================
 import { auth, signOut, sayfaKorumasi } from "./firebase.js";
 import { kullanicilariDinle, kullaniciOlustur, kullaniciRolGuncelle, kullaniciSil } from "./kullanici-yonetimi.js";
-import { katalogDinle, katalogUrunEkle, katalogUrunGuncelle, katalogUrunSil, tumSiparisleriGetir, teslimatDegerlendir } from "./veri.js";
+import { katalogDinle, katalogUrunEkle, katalogUrunGuncelle, katalogUrunSil, tumSiparisleriGetir, teslimatDegerlendir, gunlukOzetGetir, alanlariDinle, alanOlustur, alanSil, siparisAlanAta } from "./veri.js";
 import { arayuzHazirla, toast, onayIste, kacisEt, tarihBicimle, ondalikOku, sayiBicimle } from "./utils.js";
 
 arayuzHazirla();
@@ -23,6 +23,14 @@ sayfaKorumasi(["admin"], (kullanici) => {
   mevcutKullanici = kullanici;
   document.getElementById("kullaniciAdi").textContent = kullanici.ad || kullanici.uid;
   document.getElementById("rolEtiketi").textContent = kullanici.rol;
+  // Günlük özet hemen yükle
+  gunlukOzetGetir().then((ozet) => {
+    document.getElementById("ozSiparis").textContent = ozet.toplamSiparis;
+    document.getElementById("ozTamamlanan").textContent = ozet.tamamlanan;
+    document.getElementById("ozBekleyen").textContent = ozet.bekleyen;
+    document.getElementById("ozKg").textContent = ozet.toplamKg ? Math.round(ozet.toplamKg).toLocaleString("tr-TR") : "0";
+    document.getElementById("ozEksik").textContent = ozet.toplamEksik;
+  }).catch(console.error);
   kullanicilariDinle((liste) => {
     kullaniciListesi = liste.sort((a, b) => (a.ad || "").localeCompare(b.ad || ""));
     renderKullanicilar();
@@ -44,6 +52,8 @@ document.querySelectorAll("[data-sekme]").forEach((btn) => {
     document.getElementById("katalogBloku").classList.toggle("u-hidden", aktif !== "katalog");
     document.getElementById("teslimatBloku").classList.toggle("u-hidden", aktif !== "teslimat");
     document.getElementById("aracBloku").classList.toggle("u-hidden", aktif !== "arac");
+    document.getElementById("alanlarBloku").classList.toggle("u-hidden", aktif !== "alanlar");
+    if (aktif === "alanlar") renderAlanlar();
   });
 });
 
@@ -833,3 +843,74 @@ async function gunlukOzetGoster(kullanicilar) {
 /* ============================================================================
    ROTA OPTİMİZASYONU (surucu.js'de kullanılır — burada yardımcı fonksiyonlar)
    ============================================================================ */
+
+/* ---- TOPLAMA ALANLARI ---- */
+let alanListesi = [];
+
+function renderAlanlar() {
+  alanlariDinle((liste) => {
+    alanListesi = liste;
+    const div = document.getElementById("alanlarListe");
+    const bos = document.getElementById("alanlarBos");
+    if (!liste.length) { div.innerHTML = ""; bos.classList.remove("u-hidden"); return; }
+    bos.classList.add("u-hidden");
+    div.innerHTML = liste.map(a => `
+      <div class="card order-card" style="margin-bottom:8px;">
+        <div class="order-card__main">
+          <div class="order-card__name">
+            <span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:${kacisEt(a.renk || "#3B82F6")};margin-right:8px;vertical-align:middle;"></span>
+            ${kacisEt(a.ad)}
+          </div>
+          ${a.aciklama ? `<div class="u-text-soft" style="font-size:12px;">${kacisEt(a.aciklama)}</div>` : ""}
+        </div>
+        <div class="order-card__actions">
+          <button class="btn btn-danger btn-sm" data-alan-sil="${a.id}">Sil</button>
+        </div>
+      </div>`).join("");
+    div.querySelectorAll("[data-alan-sil]").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        await alanSil(btn.dataset.alanSil);
+        toast("Alan silindi.", "success");
+      });
+    });
+  });
+}
+
+document.getElementById("yeniAlanBtn")?.addEventListener("click", () => {
+  const root = document.getElementById("modalRoot");
+  const renkler = ["#3B82F6", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6", "#EC4899", "#06B6D4", "#84CC16"];
+  root.innerHTML = `
+    <div class="modal-backdrop" data-role="backdrop">
+      <div class="modal" style="max-width:400px;">
+        <h3>📍 Yeni Toplama Alanı</h3>
+        <div class="field"><label>Alan Adı</label><input class="input" id="alanAd" placeholder="Örn. A Alanı, Sol Koridor…" /></div>
+        <div class="field">
+          <label>Renk</label>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;" id="renkSecici">
+            ${renkler.map(r => `<div data-renk="${r}" style="width:28px;height:28px;border-radius:50%;background:${r};cursor:pointer;border:2px solid transparent;" onclick="this.parentElement.querySelectorAll('[data-renk]').forEach(x=>x.style.borderColor='transparent');this.style.borderColor='#000';document.getElementById('seciliRenk').value='${r}'"></div>`).join("")}
+          </div>
+          <input type="hidden" id="seciliRenk" value="#3B82F6" />
+        </div>
+        <div class="field"><label>Açıklama (isteğe bağlı)</label><input class="input" id="alanAciklama" placeholder="Hangi ürünler, hangi bölge…" /></div>
+        <div class="modal__actions">
+          <button class="btn btn-ghost" data-role="iptal">Vazgeç</button>
+          <button class="btn btn-primary" data-role="kaydet">Oluştur</button>
+        </div>
+      </div>
+    </div>`;
+  const kapat = () => { root.innerHTML = ""; };
+  root.querySelector('[data-role="iptal"]').onclick = kapat;
+  root.querySelector('[data-role="backdrop"]').onclick = (e) => { if (e.target.dataset.role === "backdrop") kapat(); };
+  root.querySelector('[data-role="kaydet"]').onclick = async () => {
+    const ad = document.getElementById("alanAd").value.trim();
+    if (!ad) { toast("Alan adı zorunlu.", "error"); return; }
+    await alanOlustur({
+      ad,
+      renk: document.getElementById("seciliRenk").value,
+      aciklama: document.getElementById("alanAciklama").value.trim()
+    });
+    kapat();
+    toast("Alan oluşturuldu.", "success");
+    renderAlanlar();
+  };
+});

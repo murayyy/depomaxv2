@@ -3,8 +3,8 @@
 // ============================================================================
 import { auth, signOut, sayfaKorumasi } from "./firebase.js";
 import { db } from "./firebase.js";
-import { collection, query, where, getDocs, orderBy } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { urunleriniGetir } from "./veri.js";
+import { collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { urunleriniGetir, aktifKullanicilariGetir } from "./veri.js";
 import { arayuzHazirla, kacisEt, sayiBicimle } from "./utils.js";
 
 arayuzHazirla();
@@ -51,6 +51,11 @@ function baslatTakip() {
           }
         }
       }
+      // Aktif kullanıcıları da güncelle
+      try {
+        const aktifler = await aktifKullanicilariGetir();
+        renderAktifKullanicilar(aktifler);
+      } catch (e) {}
       render();
     } catch (err) { console.error(err); }
   }
@@ -155,5 +160,27 @@ function render() {
         ${eksik > 0 ? `<div style="font-size:11.5px;color:#EF4444;margin-top:4px;">⚠ ${eksik} eksik ürün</div>` : ""}
         ${s.toplamKg ? `<div style="font-size:11.5px;color:var(--color-ink-soft);margin-top:2px;">${sayiBicimle(s.toplamKg)} KG</div>` : ""}
       </div>`;
+  }).join("");
+}
+
+function renderAktifKullanicilar(kullanicilar) {
+  let div = document.getElementById("aktifKullanicilarDiv");
+  if (!div) return;
+  if (!kullanicilar.length) { div.innerHTML = '<span style="color:var(--color-ink-soft);font-size:13px;">Aktif kullanıcı yok</span>'; return; }
+  const ROL_IKON = { toplayici: "📦", kontrolor: "✅", surucu: "🚚", sube: "🏪", depocu: "🗄", paletci: "🪵", uretici: "🧪", fabrika: "🏭", admin: "⚙️" };
+  const SAYFA_ETIKET = { "toplama.html": "Topluyor", "kontrol.html": "Kontrol", "raf.html": "Raf", "uretim.html": "Üretim", "surucu.html": "Sürücü", "paletci.html": "Paletliyor" };
+  div.innerHTML = kullanicilar.map(u => {
+    const ikon = ROL_IKON[u.rol] || "👤";
+    const sayfa = SAYFA_ETIKET[u.aktifSayfa] || u.aktifSayfa || "—";
+    const sure = u.sonAktif?.toDate ? gecenSure(u.sonAktif.toDate().toISOString()) : "—";
+    return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--color-border);">
+      <span style="font-size:16px;">${ikon}</span>
+      <div style="flex:1;">
+        <div style="font-weight:600;font-size:13px;">${kacisEt(u.ad || u.uid)}</div>
+        <div style="font-size:11.5px;color:var(--color-ink-soft);">${kacisEt(u.rol || "")} · ${sayfa}</div>
+      </div>
+      <div style="font-size:11px;color:var(--color-ink-soft);">${sure} önce</div>
+      <span style="width:8px;height:8px;border-radius:50%;background:#10B981;flex-shrink:0;"></span>
+    </div>`;
   }).join("");
 }

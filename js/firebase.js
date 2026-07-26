@@ -11,24 +11,19 @@ import {
   signOut
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import {
-  getFirestore,
-  enableIndexedDbPersistence,
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
   doc,
   getDoc
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 export const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
-export const db = getFirestore(app);
 
-// Çevrimdışı destek: internet kesilse bile veriler önbellekten okunur,
-// bağlantı gelince otomatik senkronize olur.
-enableIndexedDbPersistence(db).catch((err) => {
-  if (err.code === "failed-precondition") {
-    console.warn("Çevrimdışı mod: birden fazla sekme açık, yalnızca biri aktif olabilir.");
-  } else if (err.code === "unimplemented") {
-    console.warn("Çevrimdışı mod bu tarayıcıda desteklenmiyor.");
-  }
+// Çevrimdışı destek: yeni API (persistentLocalCache)
+export const db = initializeFirestore(app, {
+  cache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
 });
 
 export { onAuthStateChanged, signInWithEmailAndPassword, signOut, doc, getDoc };
@@ -61,6 +56,15 @@ export function sayfaKorumasi(izinliRoller, onReady) {
       window.location.href = "index.html?hata=yetkisiz";
       return;
     }
+    // Aktif kullanıcı güncelle — her 2 dk'da bir
+    const sayfa = window.location.pathname.split("/").pop() || "index.html";
+    const { updateDoc, doc, serverTimestamp } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+    const { db } = await import("./firebase.js");
+    const aktifGuncelle = () => updateDoc(doc(db, "kullanicilar", user.uid), {
+      sonAktif: serverTimestamp(), aktifSayfa: sayfa
+    }).catch(() => {});
+    aktifGuncelle();
+    setInterval(aktifGuncelle, 2 * 60 * 1000);
     onReady(bilgi);
   });
 }

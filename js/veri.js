@@ -600,3 +600,72 @@ export async function raflaraGoreUrunBul(stokKodu, ad) {
   });
   return sonuclar;
 }
+
+/* ============================================================================
+   TOPLAMA ALANLARI
+   ============================================================================ */
+const ALANLAR = "alanlar";
+
+export function alanlariDinle(callback) {
+  return onSnapshot(query(collection(db, ALANLAR), orderBy("ad")), (snap) => {
+    callback(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+  }, err => console.error(err));
+}
+
+export function alanOlustur(veri) {
+  return addDoc(collection(db, ALANLAR), { ...veri, olusturulmaTarihi: serverTimestamp() });
+}
+
+export function alanSil(id) {
+  return deleteDoc(doc(db, ALANLAR, id));
+}
+
+export function siparisAlanAta(siparisId, alanId, alanAdi) {
+  return updateDoc(doc(db, SIPARISLER, siparisId), { alanId, alanAdi });
+}
+
+/* ============================================================================
+   AKTİF KULLANICI TAKİBİ
+   ============================================================================ */
+export function kullaniciAktifGuncelle(uid, ekBilgi = {}) {
+  return updateDoc(doc(db, "kullanicilar", uid), {
+    sonAktif: serverTimestamp(),
+    ...ekBilgi
+  }).catch(() => {});
+}
+
+export async function aktifKullanicilariGetir() {
+  const sinir = new Date(Date.now() - 10 * 60 * 1000); // 10 dk
+  const snap = await getDocs(collection(db, "kullanicilar"));
+  return snap.docs.map(d => ({ uid: d.id, ...d.data() }))
+    .filter(u => u.sonAktif?.toDate?.() > sinir || u.sonAktif > sinir.toISOString());
+}
+
+/* ============================================================================
+   GÜNLÜK ÖZET
+   ============================================================================ */
+export async function gunlukOzetGetir() {
+  const bugunBaslangic = new Date();
+  bugunBaslangic.setHours(0, 0, 0, 0);
+
+  const snap = await getDocs(query(
+    collection(db, SIPARISLER),
+    where("olusturulmaTarihi", ">=", bugunBaslangic)
+  ));
+
+  const siparisler = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  const tamamlanan = siparisler.filter(s => ["tamamlandi", "sevk_edildi", "teslim_edildi"].includes(s.durum));
+  const bekleyen = siparisler.filter(s => ["toplaniyor", "toplandi", "kontrol_ediliyor"].includes(s.durum));
+
+  const toplamKg = tamamlanan.reduce((t, s) => t + (Number(s.toplamKg) || 0), 0);
+  const toplamEksik = siparisler.reduce((t, s) => t + (Number(s.eksikUrun) || 0), 0);
+
+  return {
+    toplamSiparis: siparisler.length,
+    tamamlanan: tamamlanan.length,
+    bekleyen: bekleyen.length,
+    toplamKg,
+    toplamEksik,
+    tarih: bugunBaslangic.toLocaleDateString("tr-TR")
+  };
+}

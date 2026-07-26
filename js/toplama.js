@@ -240,6 +240,16 @@ function siparisAc(siparis) {
   document.getElementById("listeGorunumu").classList.add("u-hidden");
   document.getElementById("detayGorunumu").classList.remove("u-hidden");
   document.getElementById("detaySiparisAdi").textContent = siparis.ad;
+  // Alan göster
+  const alanEl = document.getElementById("detayAlanBilgi");
+  if (alanEl) {
+    if (siparis.alanAdi) {
+      alanEl.innerHTML = `<span style="display:inline-block;padding:3px 10px;border-radius:99px;font-size:12px;font-weight:700;background:#DBEAFE;color:#1E40AF;">📍 ${kacisEt(siparis.alanAdi)}</span>`;
+      alanEl.classList.remove("u-hidden");
+    } else {
+      alanEl.classList.add("u-hidden");
+    }
+  }
 
   const saltOkunur = siparis.durum !== "toplaniyor";
   document.getElementById("tamamlaBtn").classList.toggle("u-hidden", saltOkunur);
