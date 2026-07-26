@@ -1,15 +1,18 @@
 // ============================================================================
-// CANLI TAKİP
+// CANLI TAKİP — polling ile (30s), sürekli listener değil
 // ============================================================================
 import { auth, signOut, sayfaKorumasi } from "./firebase.js";
-import { tumSiparisleriCanliDinle, urunleriniGetir } from "./veri.js";
+import { db } from "./firebase.js";
+import { collection, query, where, getDocs, orderBy } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { urunleriniGetir } from "./veri.js";
 import { arayuzHazirla, kacisEt, sayiBicimle } from "./utils.js";
 
 arayuzHazirla();
 
 let siparisler = [];
-let urunSayilari = new Map(); // siparisId → { toplam, toplanan, eksik }
+let urunSayilari = new Map();
 let sureSayaci = null;
+let pollingInterval = null;
 
 sayfaKorumasi(["admin"], (kullanici) => {
   document.getElementById("kullaniciAdi").textContent = kullanici.ad || kullanici.uid;
@@ -17,37 +20,46 @@ sayfaKorumasi(["admin"], (kullanici) => {
 });
 
 document.getElementById("cikisBtn").addEventListener("click", async () => {
+  clearInterval(pollingInterval);
+  clearInterval(sureSayaci);
   await signOut(auth); window.location.href = "index.html";
 });
 
-function baslatTakip() {
-  // Aktif siparişleri dinle
-  tumSiparisleriCanliDinle(async (liste) => {
-    // Durum filtresi istemci tarafında
-    siparisler = liste.filter(s => ["toplaniyor", "toplandi", "kontrol_ediliyor"].includes(s.durum));
+async function aktifSiparisleriGetir() {
+  const snap = await getDocs(query(
+    collection(db, "siparisler"),
+    where("durum", "in", ["toplaniyor", "toplandi", "kontrol_ediliyor"])
+  ));
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
 
-    // Ürün sayılarını yükle (sadece değişenler için)
-    for (const s of liste) {
-      if (!urunSayilari.has(s.id)) {
-        try {
-          const urunler = await urunleriniGetir(s.id);
-          const toplanan = urunler.filter(u => u.toplandi).length;
-          const eksik = urunler.filter(u => u.eksik).length;
-          urunSayilari.set(s.id, { toplam: urunler.length, toplanan, eksik });
-        } catch (e) {
-          urunSayilari.set(s.id, { toplam: s.toplamUrun || 0, toplanan: s.toplananUrun || 0, eksik: s.eksikUrun || 0 });
+function baslatTakip() {
+  async function guncelle() {
+    try {
+      siparisler = await aktifSiparisleriGetir();
+      for (const s of siparisler) {
+        if (!urunSayilari.has(s.id)) {
+          try {
+            const urunler = await urunleriniGetir(s.id);
+            urunSayilari.set(s.id, {
+              toplam: urunler.length,
+              toplanan: urunler.filter(u => u.toplandi).length,
+              eksik: urunler.filter(u => u.eksik).length
+            });
+          } catch {
+            urunSayilari.set(s.id, { toplam: s.toplamUrun || 0, toplanan: s.toplananUrun || 0, eksik: s.eksikUrun || 0 });
+          }
         }
       }
-    }
+      render();
+    } catch (err) { console.error(err); }
+  }
 
-    render();
-  });
-
-  // Her saniye süreleri güncelle
+  guncelle();
+  pollingInterval = setInterval(guncelle, 30 * 1000);
   sureSayaci = setInterval(() => {
-    document.querySelectorAll("[data-baslangic]").forEach((el) => {
-      const bas = el.dataset.baslangic;
-      if (bas) el.textContent = gecenSure(bas);
+    document.querySelectorAll("[data-baslangic]").forEach(el => {
+      el.textContent = gecenSure(el.dataset.baslangic);
     });
   }, 1000);
 }

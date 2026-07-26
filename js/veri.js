@@ -13,7 +13,7 @@ import { ondalikOku } from "./utils.js";
 import {
   collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot,
   query, where, orderBy, serverTimestamp, writeBatch, getDocs,
-  setDoc, getDoc, increment
+  setDoc, getDoc, increment, collectionGroup
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const SIPARISLER = "siparisler";
@@ -161,11 +161,27 @@ export async function urunleriniGetir(siparisId) {
    ============================================================================ */
 const KATALOG = "katalog";
 
+let _katalogCache = null;
+let _katalogSonYukleme = 0;
+const KATALOG_CACHE_SURE = 5 * 60 * 1000; // 5 dakika
+
 export function katalogDinle(callback) {
-  const q = query(collection(db, KATALOG), orderBy("sira", "asc"));
-  return onSnapshot(q, (snap) => {
-    callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-  }, (err) => console.error("katalogDinle:", err));
+  // Katalog nadiren değişir — 5 dakika cache, sonra yeniden çek
+  async function yukle() {
+    const simdi = Date.now();
+    if (_katalogCache && simdi - _katalogSonYukleme < KATALOG_CACHE_SURE) {
+      callback(_katalogCache); return;
+    }
+    try {
+      const snap = await getDocs(query(collection(db, KATALOG), orderBy("sira", "asc")));
+      _katalogCache = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      _katalogSonYukleme = Date.now();
+      callback(_katalogCache);
+    } catch (err) { console.error("katalogDinle:", err); }
+  }
+  yukle();
+  // unsubscribe fonksiyonu (uyumluluk için)
+  return () => {};
 }
 
 export async function katalogUrunEkle(urun) {
@@ -549,22 +565,33 @@ export async function stokGirisleriGetir(limit = 100) {
    RAF - ÜRÜN ARAMA (eksikler için)
    ============================================================================ */
 export async function raflaraGoreUrunBul(stokKodu, ad) {
-  // Tüm rafları ve kalemlerini tara, eşleşen ürünleri bul
-  const rafSnap = await getDocs(collection(db, "raflar"));
+  // collectionGroup ile tek sorguda tüm kalemler — N+1 yerine 1 okuma
+  const kalemSnap = await getDocs(collectionGroup(db, "kalemler"));
   const sonuclar = [];
-  for (const rafDoc of rafSnap.docs) {
-    const raf = { id: rafDoc.id, ...rafDoc.data() };
-    const kalemSnap = await getDocs(collection(db, "raflar", rafDoc.id, "kalemler"));
-    for (const kalemDoc of kalemSnap.docs) {
-      const k = kalemDoc.data();
-      const eslesme = (stokKodu && k.stokKodu && k.stokKodu === stokKodu) ||
-                      (ad && k.ad && k.ad.toLowerCase() === ad.toLowerCase());
-      if (eslesme && (k.miktar > 0 || k.palet > 0)) {
-        sonuclar.push({ rafAdi: raf.ad, kat: k.kat, bolme: k.bolme, miktar: k.miktar, palet: k.palet, birim: k.birim, skt: k.skt, girisTarihi: k.girisTarihi, cari: k.cari });
-      }
+  for (const kalemDoc of kalemSnap.docs) {
+    const k = kalemDoc.data();
+    const eslesme = (stokKodu && k.stokKodu && k.stokKodu === stokKodu) ||
+                    (ad && k.ad && k.ad.toLowerCase() === (ad || "").toLowerCase());
+    if (eslesme && (k.miktar > 0 || k.palet > 0)) {
+      // Raf adını parent path'ten çıkar: raflar/{rafId}/kalemler/{kalemId}
+      const rafId = kalemDoc.ref.parent.parent?.id || "";
+      // Raf adını önbellekten al (fazladan sorgu yapmamak için)
+      sonuclar.push({
+        rafId, rafAdi: k._rafAdi || rafId,
+        kat: k.kat, bolme: k.bolme, miktar: k.miktar,
+        palet: k.palet, birim: k.birim, skt: k.skt,
+        girisTarihi: k.girisTarihi, cari: k.cari
+      });
     }
   }
-  // FEFO: SKT'si en yakın önce, SKT yoksa giriş tarihine göre
+  // Raf adlarını tek seferde çek (sadece bulunan raflar için)
+  const rafIdler = [...new Set(sonuclar.map(s => s.rafId).filter(Boolean))];
+  if (rafIdler.length) {
+    const raflar = await Promise.all(rafIdler.map(id => getDoc(doc(db, "raflar", id))));
+    const rafMap = new Map(raflar.filter(d => d.exists()).map(d => [d.id, d.data().ad]));
+    sonuclar.forEach(s => { if (s.rafId) s.rafAdi = rafMap.get(s.rafId) || s.rafId; });
+  }
+  // FEFO sırala
   sonuclar.sort((a, b) => {
     const sktA = a.skt || "9999";
     const sktB = b.skt || "9999";

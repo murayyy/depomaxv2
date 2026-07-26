@@ -29,33 +29,48 @@ let _stokIlkYukleme = true;
  * stoğu sıfırdan/eksiden pozitife dönen ürünleri otomatik olarak bildirir.
  */
 export function stoklariDinle(callback) {
-  return onSnapshot(collection(db, STOKLAR), (snap) => {
-    const map = new Map();
-    const dizi = [];
-    snap.docs.forEach((d) => {
-      const veri = { kod: d.id, ...d.data() };
-      map.set(d.id, veri);
-      dizi.push(veri);
-    });
+  // onSnapshot yerine 2 dakikada bir getDocs — sürekli listener yerine periyodik okuma
+  // Stok köprüsü zaten 10 dakikada bir güncelliyor, 2 dakika yeterli
+  let aktif = true;
 
-    dizi.forEach((veri) => {
-      const eskiMiktar = _oncekiStokMiktarlari.get(veri.kod);
-      const yeniMiktar = Number(veri.miktar) || 0;
-      if (!_stokIlkYukleme) {
-        if (eskiMiktar === undefined) {
-          sesCal("basari");
-          toast(`🆕 Yeni ürün stoğa açıldı: ${kacisEt(veri.ad || veri.kod)}`, "info", 5000);
-        } else if (eskiMiktar <= 0 && yeniMiktar > 0) {
-          sesCal("basari");
-          toast(`📦 Stoğa geldi: ${kacisEt(veri.ad || veri.kod)} (${sayiBicimle(yeniMiktar)} ${kacisEt(veri.birim || "")})`, "success", 6000);
+  async function yukle() {
+    if (!aktif) return;
+    try {
+      const snap = await getDocs(collection(db, STOKLAR));
+      const map = new Map();
+      const dizi = [];
+      snap.docs.forEach((d) => {
+        const veri = { kod: d.id, ...d.data() };
+        map.set(d.id, veri);
+        dizi.push(veri);
+      });
+
+      dizi.forEach((veri) => {
+        const eskiMiktar = _oncekiStokMiktarlari.get(veri.kod);
+        const yeniMiktar = Number(veri.miktar) || 0;
+        if (!_stokIlkYukleme) {
+          if (eskiMiktar === undefined) {
+            sesCal("basari");
+            toast(`🆕 Yeni ürün stoğa açıldı: ${kacisEt(veri.ad || veri.kod)}`, "info", 5000);
+          } else if (eskiMiktar <= 0 && yeniMiktar > 0) {
+            sesCal("basari");
+            toast(`📦 Stoğa geldi: ${kacisEt(veri.ad || veri.kod)} (${sayiBicimle(yeniMiktar)} ${kacisEt(veri.birim || "")})`, "success", 6000);
+          }
         }
-      }
-      _oncekiStokMiktarlari.set(veri.kod, yeniMiktar);
-    });
-    _stokIlkYukleme = false;
+        _oncekiStokMiktarlari.set(veri.kod, yeniMiktar);
+      });
+      _stokIlkYukleme = false;
+      callback(map, dizi);
+    } catch (err) {
+      console.error("stoklariDinle:", err);
+    }
+  }
 
-    callback(map, dizi);
-  }, (err) => console.error("stoklariDinle:", err));
+  yukle(); // İlk yükleme hemen
+  const interval = setInterval(yukle, 2 * 60 * 1000); // 2 dakikada bir
+
+  // unsubscribe fonksiyonu döndür (eski onSnapshot gibi)
+  return () => { aktif = false; clearInterval(interval); };
 }
 
 export const DURUM_RENK = {
