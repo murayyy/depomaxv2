@@ -53,8 +53,14 @@
     <!-- Arama + Kategori filtresi -->
     <div class="toolbar" style="margin-bottom:14px;gap:8px;flex-wrap:wrap;">
       <input class="input" id="urunAraInput" placeholder="🔍 Ürün ara…" style="max-width:220px;" autocomplete="off" />
-      <select class="select" id="kategoriFiltre" style="max-width:220px;">
+      <select class="select" id="kategoriFiltre" style="max-width:200px;">
         <option value="">Tüm Kategoriler</option>
+      </select>
+      <select class="select" id="siralamaFiltre" style="max-width:180px;">
+        <option value="sira">Sıra No</option>
+        <option value="kod">Stok Koduna Göre</option>
+        <option value="ad">Ürün Adına Göre</option>
+        <option value="reyon">Reyon Sırasına Göre</option>
       </select>
     </div>
 
@@ -68,6 +74,7 @@
         <table class="data-table" id="katalogTablo">
           <thead>
             <tr>
+              <th>Stok Kodu</th>
               <th>Ürün Adı</th>
               <th>Birim</th>
               <th>Min. Miktar</th>
