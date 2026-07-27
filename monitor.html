@@ -67,10 +67,31 @@
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getFirestore, collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { getFirestore as _gf, doc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { firebaseConfig } from "./js/firebase-config.js";
 
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
+const auth = getAuth(app);
+
+// Auth koruması — sadece admin/kontrolör/toplayıcı görebilir
+onAuthStateChanged(auth, async (user) => {
+  if (!user) { window.location.href = "index.html"; return; }
+  const snap = await getDoc(doc(db, "kullanicilar", user.uid));
+  const rol = snap.exists() ? snap.data().rol : null;
+  if (!["admin", "kontrolor", "toplayici", "depocu"].includes(rol)) {
+    window.location.href = "index.html?hata=yetkisiz"; return;
+  }
+  // Auth tamam — başlat
+  guncelle();
+  setInterval(guncelle, 30000);
+  setInterval(() => {
+    document.querySelectorAll(".sure-sayac[data-bas]").forEach(el => {
+      el.textContent = gecenSure(el.dataset.bas);
+    });
+  }, 1000);
+});
 
 // Saat
 setInterval(() => {
@@ -146,15 +167,7 @@ async function guncelle() {
   } catch(e) { console.error(e); }
 }
 
-guncelle();
-setInterval(guncelle, 30000); // 30 saniyede bir veri yenile
 
-// Her saniye süre sayaçlarını güncelle
-setInterval(() => {
-  document.querySelectorAll(".sure-sayac[data-bas]").forEach(el => {
-    el.textContent = gecenSure(el.dataset.bas);
-  });
-}, 1000);
 </script>
 </body>
 </html>
