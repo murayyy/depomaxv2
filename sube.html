@@ -2,18 +2,12 @@
 <html lang="tr">
 <head>
 <meta charset="UTF-8" />
-    <link rel="manifest" href="/manifest.json" />
-    <meta name="theme-color" content="#0F52BA" />
-    <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <meta name="apple-mobile-web-app-title" content="Depomax" />
-    <link rel="apple-touch-icon" href="/icon-192.png" />
-<link rel="icon" type="image/svg+xml" href="favicon.svg" />
-
+<link rel="manifest" href="/manifest.json" />
+<meta name="theme-color" content="#0F52BA" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>Sipariş Ver — Depomax</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
+<title>Şube — Depomax</title>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/style.css" />
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -23,93 +17,82 @@
   <header class="topbar">
     <div class="topbar__brand"><span class="topbar__mark">D</span> Depomax</div>
     <nav class="topbar__nav">
-      <a class="topbar__link is-active" href="sube.html">🛒 Sipariş Ver</a>
-      <a class="topbar__link" href="sube-gecmis.html">📋 Siparişlerim</a>
+      <button class="topbar__link is-active" data-sekme="siparis">🛒 Sipariş Ver</button>
+      <button class="topbar__link" data-sekme="gecmis">📋 Siparişlerim <span id="gecmisSayac" style="font-size:11px;color:var(--color-ink-soft);"></span></button>
     </nav>
     <div class="topbar__user">
-      <span class="role-chip" id="subeEtiketi">…</span>
+      <span class="role-chip" id="rolEtiketi">…</span>
       <span id="kullaniciAdi">…</span>
       <button class="btn btn-ghost btn-sm" id="cikisBtn">Çıkış</button>
     </div>
   </header>
 
   <main class="page">
-    <div class="page__header">
-      <div>
-        <div class="page__title">Sipariş Ver</div>
-        <div class="page__subtitle" id="altBaslik">İstediğiniz ürünlerin miktarını girin. Boş bıraktıklarınız siparişe eklenmez.</div>
+
+    <!-- ============ SİPARİŞ VER ============ -->
+    <div id="siparisBloku">
+      <div class="page__header">
+        <div>
+          <div class="page__title">Sipariş Ver</div>
+          <div class="page__subtitle">Miktarları girin, boş bıraktıklarınız eklenmez.</div>
+        </div>
+        <div class="toolbar__group">
+          <label class="btn btn-ghost" style="cursor:pointer;">
+            📄 Excel'den Yükle
+            <input type="file" id="excelYukleInput" accept=".xlsx,.xls,.csv" class="u-hidden" />
+          </label>
+          <button class="btn btn-ghost" id="katalogDisiEkleBtn">+ Katalog Dışı</button>
+          <button class="btn btn-primary" id="siparisGonderBtn" disabled>Siparişi Gönder</button>
+        </div>
       </div>
-      <div class="toolbar__group">
-        <label class="btn btn-ghost" style="cursor:pointer;">
-          📄 Excel'den Yükle
-          <input type="file" id="excelYukleInput" accept=".xlsx,.xls,.csv" class="u-hidden" />
-        </label>
-        <input class="input" id="barkodTabancaInput" placeholder="🔫 Barkod okut…" style="max-width:160px;" autocomplete="off" />
-        <button class="btn btn-ghost" id="katalogDisiEkleBtn">+ Katalog Dışı</button>
-        <button class="btn btn-primary" id="siparisGonderBtn" disabled>Siparişi Gönder</button>
+
+      <div class="toolbar" style="margin-bottom:14px;gap:8px;flex-wrap:wrap;">
+        <input class="input" id="urunAraInput" placeholder="🔍 Ürün ara…" style="max-width:220px;" autocomplete="off" />
+        <select class="select" id="kategoriFiltre" style="max-width:200px;">
+          <option value="">Tüm Kategoriler</option>
+        </select>
+        <select class="select" id="siralamaFiltre" style="max-width:180px;">
+          <option value="sira">Sıra No</option>
+          <option value="kod">Stok Koduna Göre</option>
+          <option value="ad">Ürün Adına Göre</option>
+        </select>
+      </div>
+
+      <div id="yukleniyorAlani" class="empty-state">
+        <div class="empty-state__icon">⏳</div>
+        <div class="empty-state__title">Katalog yükleniyor…</div>
+      </div>
+      <div id="bosKatalog" class="empty-state u-hidden">
+        <div class="empty-state__icon">📦</div>
+        <div class="empty-state__title">Katalog henüz boş</div>
+      </div>
+      <div id="katalogAlani" class="u-hidden">
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>Stok Kodu</th><th>Ürün Adı</th><th>Birim</th><th>Min.</th><th>Miktar</th><th>Not</th></tr></thead>
+            <tbody id="katalogGovde"></tbody>
+          </table>
+        </div>
+        <div class="row-cards" id="katalogKartlar"></div>
+      </div>
+
+      <div id="ozelKalemlerAlani" class="u-hidden" style="margin-top:20px;">
+        <div style="font-weight:700;font-size:13px;margin-bottom:8px;">🟠 Katalog Dışı Talepler</div>
+        <div id="ozelKalemlerListe"></div>
       </div>
     </div>
 
-    <!-- Arama + Kategori filtresi -->
-    <div class="toolbar" style="margin-bottom:14px;gap:8px;flex-wrap:wrap;">
-      <input class="input" id="urunAraInput" placeholder="🔍 Ürün ara…" style="max-width:220px;" autocomplete="off" />
-      <select class="select" id="kategoriFiltre" style="max-width:200px;">
-        <option value="">Tüm Kategoriler</option>
-      </select>
-      <select class="select" id="siralamaFiltre" style="max-width:180px;">
-        <option value="sira">Sıra No</option>
-        <option value="kod">Stok Koduna Göre</option>
-        <option value="ad">Ürün Adına Göre</option>
-        <option value="reyon">Reyon Sırasına Göre</option>
-      </select>
-    </div>
-
-    <div id="yukleniyorAlani" class="empty-state">
-      <div class="empty-state__icon">⏳</div>
-      <div class="empty-state__title">Ürünler yükleniyor…</div>
-    </div>
-
-    <div id="katalogAlani" class="u-hidden">
-      <div class="table-wrap">
-        <table class="data-table" id="katalogTablo">
-          <thead>
-            <tr>
-              <th>Stok Kodu</th>
-              <th>Ürün Adı</th>
-              <th>Birim</th>
-              <th>Min. Miktar</th>
-              <th>Sipariş Miktarı</th>
-              <th>Not</th>
-            </tr>
-          </thead>
-          <tbody id="katalogGovde"></tbody>
-        </table>
+    <!-- ============ SİPARİŞLERİM ============ -->
+    <div id="gecmisBloku" class="u-hidden">
+      <div class="page__header">
+        <div class="page__title">Siparişlerim</div>
       </div>
-      <div class="row-cards" id="katalogKartlar"></div>
+      <div id="gecmisListesi"></div>
     </div>
 
-    <div class="empty-state u-hidden" id="bosKatalog">
-      <div class="empty-state__icon">📦</div>
-      <div class="empty-state__title">Katalog henüz boş</div>
-      <div class="empty-state__text">Yönetici henüz ürün katalogu oluşturmamış.</div>
-    </div>
-
-    <!-- Katalog dışı özel talepler -->
-    <div id="ozelKalemlerAlani" class="u-hidden" style="margin-top:20px;">
-      <div style="font-weight:700;font-size:13px;margin-bottom:8px;">🟠 Katalog Dışı Talepler</div>
-      <div id="ozelKalemlerListe"></div>
-    </div>
   </main>
 </div>
-
-<script type="module" src="js/sube.js"></script>
-  <script>
-    // Eski service worker'ı temizle
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.getRegistrations().then((regs) => {
-        regs.forEach((r) => r.unregister());
-      });
-    }
-  </script>
+<div id="modalRoot"></div>
+<script type="module" src="js/sube-combined.js"></script>
 </body>
 </html>
