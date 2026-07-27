@@ -134,7 +134,7 @@ async function guncelle() {
           <div class="kart-ad">${s.ad || s.subeAdi || "—"}</div>
           <span class="kart-durum ${durumSinif}">${durumMetni}</span>
         </div>
-        ${personel ? `<div class="kart-personel">👤 ${personel}${baslangic ? " · " + gecenSure(baslangic) : ""}</div>` : ""}
+        ${personel ? `<div class="kart-personel">👤 ${personel}${baslangic ? ` · <span class="sure-sayac" data-bas="${baslangic}">${gecenSure(baslangic)}</span>` : ""}</div>` : ""}
         <div class="progress"><div class="progress-fill ${fillSinif}" style="width:${yuzde}%"></div></div>
         <div class="kart-alt">
           <span>${toplanan} / ${toplam} ürün${s.toplamKg ? " · " + Math.round(s.toplamKg) + " KG" : ""}</span>
@@ -147,7 +147,14 @@ async function guncelle() {
 }
 
 guncelle();
-setInterval(guncelle, 30000); // 30 saniyede bir
+setInterval(guncelle, 30000); // 30 saniyede bir veri yenile
+
+// Her saniye süre sayaçlarını güncelle
+setInterval(() => {
+  document.querySelectorAll(".sure-sayac[data-bas]").forEach(el => {
+    el.textContent = gecenSure(el.dataset.bas);
+  });
+}, 1000);
 </script>
 </body>
 </html>
