@@ -298,7 +298,7 @@ function durumEtiketiGetir(s) {
   return DURUM_BİLGİ[s.durum] || { etiket: s.durum, sinif: "badge-gray" };
 }
 
-const teslimAlinabilir = s => s.durum === "sevk_edildi" && s.sistemeAktarildi === true;
+const teslimAlinabilir = s => s.durum === "sevk_edildi";
 
 function renderSiparisler(liste) {
   siparislerCache = liste;
