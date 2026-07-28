@@ -369,33 +369,65 @@ async function teslimAlModalAc(siparisId) {
   const root = document.getElementById("modalRoot");
   root.innerHTML = `
     <div class="modal-backdrop" data-role="backdrop">
-      <div class="modal" style="max-width:480px;">
-        <h3>✅ Teslimatı Onayla</h3>
-        <p>Siparişi teslim aldığınızı onaylıyorsunuz. Eksik/fazla ürün varsa belirtin.</p>
-        <div id="teslimUrunler">⏳</div>
+      <div class="modal" style="max-width:560px;">
+        <h3>✅ Teslimat Onayı</h3>
+        <p style="font-size:13px;color:var(--color-ink-soft);">Her ürün için teslim durumunu seçin.</p>
+        <div id="teslimUrunler" style="max-height:420px;overflow-y:auto;">⏳</div>
         <div class="modal__actions">
           <button class="btn btn-ghost" data-role="iptal">Vazgeç</button>
-          <button class="btn btn-green" data-role="onayla">Teslim Aldım ✅</button>
+          <button class="btn btn-green" data-role="onayla">Onayla ✅</button>
         </div>
       </div>
     </div>`;
   const kapat = () => { root.innerHTML = ""; };
   root.querySelector('[data-role="iptal"]').onclick = kapat;
   root.querySelector('[data-role="backdrop"]').onclick = (e) => { if (e.target.dataset.role === "backdrop") kapat(); };
+
   const urunler = await urunleriniGetir(siparisId);
-  document.getElementById("teslimUrunler").innerHTML = `
-    <div class="table-wrap" style="max-height:300px;overflow-y:auto;"><table class="data-table">
-      <thead><tr><th>Ürün</th><th>Gönderilen</th><th>Teslim Alınan</th></tr></thead>
-      <tbody>${urunler.map((u, i) => `<tr>
-        <td>${kacisEt(u.ad)}</td>
-        <td>${sayiBicimle(u.gercekMiktar ?? u.miktar)} ${kacisEt(u.birim || "")}</td>
-        <td><input class="input" type="text" inputmode="decimal" data-uid="${u.id}" value="${u.gercekMiktar ?? u.miktar}" style="width:90px;" /></td>
-      </tr>`).join("")}</tbody>
-    </table></div>`;
+  // Koda göre sırala
+  const sirali = [...urunler].sort((a, b) => (a.kod || "").localeCompare(b.kod || "", "tr"));
+
+  document.getElementById("teslimUrunler").innerHTML = sirali.map((u) => {
+    const miktar = u.gercekMiktar ?? u.miktar;
+    const eksikMi = u.eksik ? "gelmedi" : "tamam";
+    return `<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--color-border);flex-wrap:wrap;">
+      <div style="flex:1;min-width:180px;">
+        <div style="font-weight:600;font-size:13px;">${kacisEt(u.ad)}</div>
+        <div style="font-size:11px;color:var(--color-ink-soft);">${kacisEt(u.kod || "—")} · ${sayiBicimle(miktar)} ${kacisEt(u.birim || "")}</div>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center;">
+        <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:13px;">
+          <input type="radio" name="durum_${u.id}" value="tamam" ${eksikMi === "tamam" ? "checked" : ""} /> ✅ Teslim
+        </label>
+        <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:13px;">
+          <input type="radio" name="durum_${u.id}" value="gelmedi" ${eksikMi === "gelmedi" ? "checked" : ""} /> ❌ Gelmedi
+        </label>
+        <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:13px;">
+          <input type="radio" name="durum_${u.id}" value="kismi" /> ⚠ Kısmi
+        </label>
+        <input class="input kismi-miktar" data-uid="${u.id}" type="text" inputmode="decimal" value="${miktar}" placeholder="Miktar" style="width:70px;font-size:12px;display:none;" />
+      </div>
+    </div>`;
+  }).join("");
+
+  // Kısmi seçilince miktar inputu göster
+  root.querySelectorAll('input[type="radio"]').forEach(radio => {
+    radio.addEventListener("change", () => {
+      const uid = radio.name.replace("durum_", "");
+      const kismiInput = root.querySelector(`.kismi-miktar[data-uid="${uid}"]`);
+      if (kismiInput) kismiInput.style.display = radio.value === "kismi" ? "block" : "none";
+    });
+  });
+
   root.querySelector('[data-role="onayla"]').onclick = async () => {
-    const teslimDetay = urunler.map(u => {
-      const inp = root.querySelector(`[data-uid="${u.id}"]`);
-      return { ...u, teslimAlinanMiktar: inp ? ondalikOku(inp.value) : (u.gercekMiktar ?? u.miktar) };
+    const teslimDetay = sirali.map(u => {
+      const secili = root.querySelector(`input[name="durum_${u.id}"]:checked`)?.value || "tamam";
+      const kismiMiktar = ondalikOku(root.querySelector(`.kismi-miktar[data-uid="${u.id}"]`)?.value || "0");
+      return {
+        ...u,
+        teslimDurumu: secili,
+        teslimAlinanMiktar: secili === "tamam" ? (u.gercekMiktar ?? u.miktar) : secili === "gelmedi" ? 0 : kismiMiktar
+      };
     });
     await teslimatKaydet(siparisId, mevcutKullanici.uid, mevcutKullanici.ad, teslimDetay);
     kapat();
