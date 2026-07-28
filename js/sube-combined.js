@@ -413,7 +413,12 @@ async function teslimAlModalAc(siparisId) {
         <input type="checkbox" data-uid="${u.id}" data-tip="geldi" style="width:18px;height:18px;flex-shrink:0;cursor:pointer;" />
         <div style="flex:1;">
           <div style="font-weight:600;font-size:13px;">${kacisEt(u.ad)}${u.katalogDisi ? ' <span class="badge badge-amber" style="font-size:10px;">Özel</span>' : ""}</div>
-          <div style="font-size:11.5px;color:var(--color-ink-soft);">${kacisEt(u.kod || "—")} · ${sayiBicimle(miktar)} ${kacisEt(u.birim || "")}</div>
+          <div style="font-size:11.5px;color:var(--color-ink-soft);">${kacisEt(u.kod || "—")}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
+          <input type="text" inputmode="decimal" class="input teslim-miktar" data-uid="${u.id}"
+            value="${miktar}" style="width:70px;font-size:13px;text-align:right;" />
+          <span style="font-size:12px;color:var(--color-ink-soft);">${kacisEt(u.birim || "")}</span>
         </div>
       </div>`;
     }).join("");
@@ -470,7 +475,7 @@ async function teslimAlModalAc(siparisId) {
         birim: u.birim || "",
         siparisMiktari: u.gercekMiktar ?? u.miktar,
         gelenMiktar: root.querySelector(`input[data-uid="${u.id}"][data-tip="geldi"]`)?.checked
-          ? (u.gercekMiktar ?? u.miktar) : 0,
+          ? (ondalikOku(root.querySelector(`.teslim-miktar[data-uid="${u.id}"]`)?.value) || (u.gercekMiktar ?? u.miktar)) : 0,
         durum: root.querySelector(`input[data-uid="${u.id}"][data-tip="geldi"]`)?.checked
           ? "tamam" : "eksik"
       })),
