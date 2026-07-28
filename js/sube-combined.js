@@ -371,6 +371,128 @@ async function teslimAlModalAc(siparisId) {
     <div class="modal-backdrop" data-role="backdrop">
       <div class="modal" style="max-width:580px;">
         <h3>✅ Teslimat Onayı</h3>
+        <p style="font-size:13px;color:var(--color-ink-soft);">Gelen ürünleri işaretleyin.</p>
+        <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+          <button class="btn btn-ghost btn-sm" id="tumunuSec">Tümünü İşaretle</button>
+          <button class="btn btn-ghost btn-sm" id="temizle">Temizle</button>
+          <button class="btn btn-ghost btn-sm" id="ekstraEkleBtn">+ Listede Olmayan Ürün</button>
+        </div>
+        <div id="teslimUrunler" style="max-height:380px;overflow-y:auto;">⏳</div>
+        <div id="ekstraUrunler"></div>
+        <div id="teslimOzet" style="margin-top:10px;font-size:13px;font-weight:600;"></div>
+        <div class="modal__actions">
+          <button class="btn btn-ghost" data-role="iptal">Vazgeç</button>
+          <button class="btn btn-green" data-role="onayla">Onayla ✅</button>
+        </div>
+      </div>
+    </div>`;
+
+  const kapat = () => { root.innerHTML = ""; };
+  root.querySelector('[data-role="iptal"]').onclick = kapat;
+  root.querySelector('[data-role="backdrop"]').onclick = (e) => { if (e.target.dataset.role === "backdrop") kapat(); };
+
+  const urunler = await urunleriniGetir(siparisId);
+  // Sadece gönderilen ürünler — eksik olanları çıkar
+  const gonderilen = urunler
+    .filter(u => !u.eksik && u.miktar > 0)
+    .sort((a, b) => (a.kod || "zzz").localeCompare(b.kod || "zzz", "tr"));
+
+  let ekstraUrunler = []; // Listede olmayan ürünler
+
+  function ozetiGuncelle() {
+    const toplam = gonderilen.length + ekstraUrunler.length;
+    const secili = root.querySelectorAll('input[data-tip="geldi"]:checked').length;
+    document.getElementById("teslimOzet").textContent =
+      `✅ ${secili} / ${toplam} ürün işaretlendi`;
+  }
+
+  function renderListe() {
+    document.getElementById("teslimUrunler").innerHTML = gonderilen.map((u) => {
+      const miktar = u.gercekMiktar ?? u.miktar;
+      return `<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--color-border);">
+        <input type="checkbox" data-uid="${u.id}" data-tip="geldi" style="width:18px;height:18px;flex-shrink:0;cursor:pointer;" />
+        <div style="flex:1;">
+          <div style="font-weight:600;font-size:13px;">${kacisEt(u.ad)}${u.katalogDisi ? ' <span class="badge badge-amber" style="font-size:10px;">Özel</span>' : ""}</div>
+          <div style="font-size:11.5px;color:var(--color-ink-soft);">${kacisEt(u.kod || "—")} · ${sayiBicimle(miktar)} ${kacisEt(u.birim || "")}</div>
+        </div>
+      </div>`;
+    }).join("");
+
+    root.querySelectorAll('input[data-tip="geldi"]').forEach(cb => {
+      cb.addEventListener("change", ozetiGuncelle);
+    });
+
+    // Ekstra ürünler
+    document.getElementById("ekstraUrunler").innerHTML = ekstraUrunler.length
+      ? `<div style="margin-top:10px;font-weight:700;font-size:12px;color:var(--color-ink-soft);margin-bottom:6px;">📦 LİSTEDE OLMAYAN GELENLER</div>` +
+        ekstraUrunler.map((e, i) => `
+          <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--color-border);">
+            <div style="flex:1;">
+              <div style="font-weight:600;font-size:13px;">${kacisEt(e.ad)}</div>
+              <div style="font-size:11.5px;color:var(--color-ink-soft);">${sayiBicimle(e.miktar)} ${kacisEt(e.birim)}</div>
+            </div>
+            <button class="btn btn-danger btn-sm" onclick="this.closest('div').remove();ekstraUrunler.splice(${i},1);ozetiGuncelle();">✕</button>
+          </div>`).join("")
+      : "";
+
+    ozetiGuncelle();
+  }
+
+  renderListe();
+
+  document.getElementById("tumunuSec").onclick = () => {
+    root.querySelectorAll('input[data-tip="geldi"]').forEach(cb => { cb.checked = true; });
+    ozetiGuncelle();
+  };
+  document.getElementById("temizle").onclick = () => {
+    root.querySelectorAll('input[data-tip="geldi"]').forEach(cb => { cb.checked = false; });
+    ozetiGuncelle();
+  };
+
+  // Listede olmayan ürün ekle
+  document.getElementById("ekstraEkleBtn").onclick = () => {
+    const adInput = prompt("Ürün adı:");
+    if (!adInput?.trim()) return;
+    const miktarInput = prompt("Miktar:");
+    const birimInput = prompt("Birim (KG, Adet...):");
+    ekstraUrunler.push({
+      ad: adInput.trim(),
+      miktar: ondalikOku(miktarInput || "1") || 1,
+      birim: birimInput?.trim() || "Adet"
+    });
+    renderListe();
+  };
+
+  root.querySelector('[data-role="onayla"]').onclick = async () => {
+    const teslimatKalemleri = [
+      ...gonderilen.map(u => ({
+        urunId: u.id, ad: u.ad, kod: u.kod || "",
+        birim: u.birim || "",
+        siparisMiktari: u.gercekMiktar ?? u.miktar,
+        gelenMiktar: root.querySelector(`input[data-uid="${u.id}"][data-tip="geldi"]`)?.checked
+          ? (u.gercekMiktar ?? u.miktar) : 0,
+        durum: root.querySelector(`input[data-uid="${u.id}"][data-tip="geldi"]`)?.checked
+          ? "tamam" : "eksik"
+      })),
+      ...ekstraUrunler.map(e => ({
+        urunId: "", ad: e.ad, kod: "", birim: e.birim,
+        siparisMiktari: 0, gelenMiktar: e.miktar, durum: "fazla"
+      }))
+    ];
+    await teslimatKaydet(siparisId, {
+      teslimatKalemleri,
+      onaylayanKullanici: mevcutKullanici.ad || mevcutKullanici.uid,
+      subeAdi: mevcutKullanici.subeAdi || mevcutKullanici.ad
+    });
+    kapat();
+    toast("✅ Teslimat onaylandı!", "success");
+  };
+}
+  const root = document.getElementById("modalRoot");
+  root.innerHTML = `
+    <div class="modal-backdrop" data-role="backdrop">
+      <div class="modal" style="max-width:580px;">
+        <h3>✅ Teslimat Onayı</h3>
         <p style="font-size:13px;color:var(--color-ink-soft);">Gelen ürünleri işaretleyin, gelmeyen veya eksik olanları belirtin.</p>
         <div style="display:flex;gap:8px;margin-bottom:10px;">
           <button class="btn btn-ghost btn-sm" id="tumunuSec">Tümünü Seç</button>
