@@ -384,8 +384,10 @@ async function teslimAlModalAc(siparisId) {
   root.querySelector('[data-role="backdrop"]').onclick = (e) => { if (e.target.dataset.role === "backdrop") kapat(); };
 
   const urunler = await urunleriniGetir(siparisId);
+  // Sadece gönderilen (eksik olmayan) ürünleri göster
+  const gonderilen = urunler.filter(u => !u.eksik || u.gercekMiktar > 0);
   // Koda göre sırala
-  const sirali = [...urunler].sort((a, b) => (a.kod || "").localeCompare(b.kod || "", "tr"));
+  const sirali = [...gonderilen].sort((a, b) => (a.kod || "").localeCompare(b.kod || "", "tr"));
 
   document.getElementById("teslimUrunler").innerHTML = sirali.map((u) => {
     const miktar = u.gercekMiktar ?? u.miktar;
@@ -420,16 +422,23 @@ async function teslimAlModalAc(siparisId) {
   });
 
   root.querySelector('[data-role="onayla"]').onclick = async () => {
-    const teslimDetay = sirali.map(u => {
+    const teslimatKalemleri = sirali.map(u => {
       const secili = root.querySelector(`input[name="durum_${u.id}"]:checked`)?.value || "tamam";
       const kismiMiktar = ondalikOku(root.querySelector(`.kismi-miktar[data-uid="${u.id}"]`)?.value || "0");
+      const gelenMiktar = secili === "tamam" ? (u.gercekMiktar ?? u.miktar) : secili === "gelmedi" ? 0 : kismiMiktar;
       return {
-        ...u,
-        teslimDurumu: secili,
-        teslimAlinanMiktar: secili === "tamam" ? (u.gercekMiktar ?? u.miktar) : secili === "gelmedi" ? 0 : kismiMiktar
+        urunId: u.id, ad: u.ad, kod: u.kod || "",
+        birim: u.birim || "",
+        siparisMiktari: u.gercekMiktar ?? u.miktar,
+        gelenMiktar,
+        durum: secili === "tamam" ? "tamam" : secili === "gelmedi" ? "eksik" : "eksik"
       };
     });
-    await teslimatKaydet(siparisId, mevcutKullanici.uid, mevcutKullanici.ad, teslimDetay);
+    await teslimatKaydet(siparisId, {
+      teslimatKalemleri,
+      onaylayanKullanici: mevcutKullanici.ad || mevcutKullanici.uid,
+      subeAdi: mevcutKullanici.subeAdi || mevcutKullanici.ad
+    });
     kapat();
     toast("✅ Teslimat onaylandı!", "success");
   };
