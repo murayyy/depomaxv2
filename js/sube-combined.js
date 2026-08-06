@@ -41,9 +41,36 @@ document.querySelectorAll("[data-sekme]").forEach(btn =>
   btn.addEventListener("click", () => sekmeGoster(btn.dataset.sekme))
 );
 
-/* ============================================================
-   SAYFA KORUMASI — tek seferlik
-   ============================================================ */
+const TASLAK_KEY = "sube_taslak";
+
+function taslakKaydet() {
+  if (miktarSakla.size === 0 && notSakla.size === 0 && ozelKalemler.length === 0) return;
+  const veri = {
+    miktarlar: [...miktarSakla.entries()],
+    notlar: [...notSakla.entries()],
+    ozel: ozelKalemler,
+    tarih: Date.now()
+  };
+  try { localStorage.setItem(TASLAK_KEY, JSON.stringify(veri)); } catch (e) {}
+}
+
+function taslakYukle() {
+  try {
+    const json = localStorage.getItem(TASLAK_KEY);
+    if (!json) return false;
+    const veri = JSON.parse(json);
+    // 24 saatten eski taslağı sil
+    if (Date.now() - veri.tarih > 24 * 60 * 60 * 1000) { localStorage.removeItem(TASLAK_KEY); return false; }
+    (veri.miktarlar || []).forEach(([k, v]) => miktarSakla.set(k, v));
+    (veri.notlar || []).forEach(([k, v]) => notSakla.set(k, v));
+    (veri.ozel || []).forEach(o => ozelKalemler.push(o));
+    return miktarSakla.size > 0 || ozelKalemler.length > 0;
+  } catch (e) { return false; }
+}
+
+function taslakSil() {
+  try { localStorage.removeItem(TASLAK_KEY); } catch (e) {}
+}
 sayfaKorumasi(["sube", "fabrika"], (kullanici) => {
   mevcutKullanici = kullanici;
   document.getElementById("kullaniciAdi").textContent = kullanici.ad || kullanici.uid;
@@ -51,7 +78,13 @@ sayfaKorumasi(["sube", "fabrika"], (kullanici) => {
 
   katalogDinle((liste) => {
     katalogCache = liste.filter(u => u.aktif !== false);
+    const taslakVardi = taslakYukle();
     katalogGuncellendi();
+    if (taslakVardi) {
+      renderOzelKalemler();
+      butonGuncelle();
+      toast("📝 Kaydedilmiş taslak yüklendi.", "info", 4000);
+    }
   });
 
   siparisleriBaslat();
@@ -91,6 +124,7 @@ document.addEventListener("input", (e) => {
     const val = ondalikOku(e.target.value);
     if (id) { if (val > 0) miktarSakla.set(id, e.target.value); else miktarSakla.delete(id); }
     butonGuncelle();
+    taslakKaydet();
   }
   if (e.target.classList.contains("aciklama-input")) {
     const id = e.target.dataset.id;
@@ -237,7 +271,7 @@ document.getElementById("siparisGonderBtn")?.addEventListener("click", async () 
       miktar: k.miktar, kategori: "Özel Talep", katalogDisi: true, subeNotu: k.not || ""
     }))];
     await subeSimarisiOlustur({ subeAdi: mevcutKullanici.subeAdi || mevcutKullanici.ad, subeId: mevcutKullanici.uid, olusturan: mevcutKullanici.uid, satirlar: tumSatirlar });
-    miktarSakla.clear(); notSakla.clear(); ozelKalemler.length = 0;
+    miktarSakla.clear(); notSakla.clear(); ozelKalemler.length = 0; taslakSil();
     document.querySelectorAll(".miktar-input, .aciklama-input").forEach(i => { i.value = ""; });
     renderOzelKalemler(); butonGuncelle();
     toast("✅ Sipariş gönderildi!", "success", 5000);
@@ -543,3 +577,9 @@ function urunEkleModalAc(siparisId) {
     toast(kontrolSonrasi ? "Eksikler listesine eklendi." : "Ürün eklendi.", "success");
   };
 }
+
+// Taslak kaydet butonu
+document.getElementById("taslakKaydetBtn")?.addEventListener("click", () => {
+  taslakKaydet();
+  toast("💾 Taslak kaydedildi. Çıkıp geri geldiğinizde yüklenir.", "success", 4000);
+});

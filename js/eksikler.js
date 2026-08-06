@@ -348,27 +348,48 @@ function detayModalAc(grup) {
   root.querySelectorAll("[data-topla]").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const [siparisId, urunId] = btn.dataset.topla.split("|");
-      const onay = await onayIste({
-        baslik: "Toplandı Olarak İşaretle",
-        metin: "Bu ürün artık stokta var diyerek o siparişte toplandı olarak işaretlenecek.",
-        onayMetni: "İşaretle"
-      });
-      if (!onay) return;
-      yukleniyorGoster("İşaretleniyor…");
-      try {
-        await urunGuncelle(siparisId, urunId, {
-          toplandi: true, eksik: false,
-          toplayanKullanici: mevcutKullanici.ad || mevcutKullanici.uid
-        });
-        yukleniyorKapat();
-        toast("Ürün toplandı olarak işaretlendi.", "success");
-        kapat();
-        yukle();
-      } catch (err) {
-        yukleniyorKapat();
-        console.error(err);
-        toast("İşaretlenirken hata oluştu.", "error");
-      }
+      const kayit = grup.kayitlar.find(k => k.siparisId === siparisId && k.urunId === urunId);
+      const orijinalMiktar = kayit?.miktar || 0;
+
+      // Miktar girilebilen onay modalı
+      const miktarRoot = document.getElementById("modalRoot");
+      const prevContent = miktarRoot.innerHTML;
+      miktarRoot.innerHTML = `
+        <div class="modal-backdrop" data-role="backdrop2">
+          <div class="modal" style="max-width:360px;">
+            <h3>✅ Toplandı İşaretle</h3>
+            <p style="font-size:13px;">Siparişte istenen: <strong>${sayiBicimle(orijinalMiktar)} ${kacisEt(kayit?.birim || "")}</strong></p>
+            <div class="field">
+              <label>Toplanan Miktar</label>
+              <input class="input" type="text" inputmode="decimal" id="toplamaMiktarInput"
+                value="${orijinalMiktar}" style="font-size:16px;" />
+            </div>
+            <div class="modal__actions">
+              <button class="btn btn-ghost" id="toplamIptal">Vazgeç</button>
+              <button class="btn btn-green" id="toplamOnayla">✅ Toplandı</button>
+            </div>
+          </div>
+        </div>`;
+      document.getElementById("toplamIptal").onclick = () => { miktarRoot.innerHTML = prevContent; };
+      document.getElementById("toplamOnayla").onclick = async () => {
+        const yeniMiktar = ondalikOku(document.getElementById("toplamaMiktarInput").value);
+        yukleniyorGoster("İşaretleniyor…");
+        try {
+          await urunGuncelle(siparisId, urunId, {
+            toplandi: true, eksik: false,
+            ...(yeniMiktar !== orijinalMiktar ? { gercekMiktar: yeniMiktar } : {}),
+            toplayanKullanici: mevcutKullanici.ad || mevcutKullanici.uid
+          });
+          yukleniyorKapat();
+          toast("Ürün toplandı olarak işaretlendi.", "success");
+          miktarRoot.innerHTML = "";
+          yukle();
+        } catch (err) {
+          yukleniyorKapat();
+          console.error(err);
+          toast("İşaretlenirken hata oluştu.", "error");
+        }
+      };
     });
   });
 

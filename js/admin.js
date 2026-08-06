@@ -685,7 +685,7 @@ document.getElementById("teslimatHesaplaBtn").addEventListener("click", async ()
             tekrarBtn.disabled = true; tekrarBtn.innerHTML = "⏳ Kaydediliyor…";
             try {
               await teslimatDegerlendir(s.id, { degerlendirme: "tekrar_kontrol", degerlendiren: mevcutKullanici.uid, not });
-              toast(`✅ Kaydedildi. Eksik ${eksikKalemler.length} ürün "📋 Eksikler" sayfasında görünecek.`, "success", 6000);
+              toast(`✅ Kaydedildi. Şube eksik bildirdiği ürünler kayıt altında.`, "success", 5000);
               kapat();
               document.getElementById("teslimatHesaplaBtn").click();
             } catch (err) {
