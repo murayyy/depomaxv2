@@ -393,10 +393,12 @@ export function rafKalemleriDinle(rafId, callback) {
   );
 }
 
-export async function rafKalemiEkle(rafId, { stokKodu, ad, miktar, palet, birim, not }) {
+export async function rafKalemiEkle(rafId, { stokKodu, ad, miktar, palet, birim, not, kat, bolme, girisTarihi, skt, cari }) {
   return addDoc(collection(db, RAFLAR, rafId, "kalemler"), {
     stokKodu: stokKodu || "", ad, miktar: Number(miktar) || 0,
     palet: Number(palet) || 0, birim: birim || "KG", not: not || "",
+    kat: Number(kat) || 1, bolme: Number(bolme) || 1,
+    girisTarihi: girisTarihi || "", skt: skt || "", cari: cari || "",
     eklenmeTarihi: serverTimestamp()
   });
 }
