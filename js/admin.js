@@ -49,13 +49,11 @@ document.querySelectorAll("[data-sekme]").forEach((btn) => {
     btn.classList.add("is-active");
     const aktif = btn.dataset.sekme;
     document.getElementById("kullaniciBloku").classList.toggle("u-hidden", aktif !== "kullanici");
-    document.getElementById("siparislerBloku").classList.toggle("u-hidden", aktif !== "siparisler");
     document.getElementById("katalogBloku").classList.toggle("u-hidden", aktif !== "katalog");
     document.getElementById("teslimatBloku").classList.toggle("u-hidden", aktif !== "teslimat");
     document.getElementById("aracBloku").classList.toggle("u-hidden", aktif !== "arac");
     document.getElementById("alanlarBloku").classList.toggle("u-hidden", aktif !== "alanlar");
     if (aktif === "alanlar") renderAlanlar();
-    if (aktif === "siparisler") renderAdminSiparisler();
   });
 });
 

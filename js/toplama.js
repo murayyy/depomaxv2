@@ -5,7 +5,7 @@ import { auth, signOut, sayfaKorumasi } from "./firebase.js";
 import {
   siparisleriDinle, siparisOlustur, siparisGuncelle, tumSiparisleriCanliDinle,
   urunleriDinle, urunleriTopluEkle, urunEkle, urunGuncelle, urunSil,
-  stokDusur, stokGeriEkle, katalogDinle
+  stokDusur, stokGeriEkle, katalogDinle, siparisiSil, siparisiGeriGonder
 } from "./veri.js";
 import { stoklariDinle, stokRozetiHtml } from "./stok.js";
 import {
@@ -150,10 +150,32 @@ function renderSiparisListesi(liste) {
           <div class="progress-label">${tamam}/${toplam} işaretlendi</div>
         </div>
         <div class="order-card__actions">
+          ${s.durum === "toplaniyor" && mevcutKullanici?.rol === "admin" ? `
+            <button class="btn btn-ghost btn-sm" data-geri-gonder="${s.id}">↩ Geri Gönder</button>
+            <button class="btn btn-danger btn-sm" data-siparis-sil="${s.id}">🗑 Sil</button>
+          ` : ""}
           <button class="btn btn-primary btn-sm" data-ac="${s.id}">${s.durum === "toplaniyor" ? "Aç →" : "Görüntüle →"}</button>
         </div>
       </div>`;
   }).join("");
+
+  kapsayici.querySelectorAll("[data-siparis-sil]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const onay = await onayIste({ baslik: "Siparişi Sil", metin: "Bu sipariş kalıcı olarak silinecek. Emin misiniz?", onayMetni: "Sil" });
+      if (!onay) return;
+      await siparisiSil(btn.dataset.siparisSil);
+      toast("Sipariş silindi.", "success");
+    });
+  });
+
+  kapsayici.querySelectorAll("[data-geri-gonder]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const onay = await onayIste({ baslik: "Geri Gönder", metin: "Sipariş şubeye geri gönderilecek, şube tekrar düzenleyebilecek.", onayMetni: "Geri Gönder" });
+      if (!onay) return;
+      await siparisiGeriGonder(btn.dataset.geriGonder);
+      toast("Sipariş şubeye geri gönderildi.", "success");
+    });
+  });
 
   kapsayici.querySelectorAll("[data-ac]").forEach((btn) => {
     btn.addEventListener("click", () => {
