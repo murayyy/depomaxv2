@@ -559,7 +559,14 @@ function urunEkleModalAc(siparisId) {
   root.querySelector('[data-role="backdrop"]').onclick = (e) => { if (e.target.dataset.role === "backdrop") kapat(); };
   const ueKod = root.querySelector("#ueKod"), ueAd = root.querySelector("#ueAd");
   const ueBirim = root.querySelector("#ueBirim");
-  function doldur(u) { if (!u) return; if (!ueKod.value) ueKod.value = u.stokKodu || ""; if (!ueAd.value) ueAd.value = u.ad || ""; if (!ueBirim.value) ueBirim.value = u.birim || ""; }
+  let _secilenUrun = null;
+  function doldur(u) {
+    if (!u) return;
+    _secilenUrun = u;
+    if (!ueKod.value) ueKod.value = u.stokKodu || "";
+    if (!ueAd.value) ueAd.value = u.ad || "";
+    if (!ueBirim.value) ueBirim.value = u.birim || "";
+  }
   ueAd.addEventListener("change", () => doldur(katalogCache.find(u => u.ad === ueAd.value)));
   ueKod.addEventListener("change", () => doldur(katalogCache.find(u => u.stokKodu === ueKod.value)));
   root.querySelector('[data-role="ekle"]').onclick = async () => {
@@ -569,6 +576,9 @@ function urunEkleModalAc(siparisId) {
       kod: ueKod.value.trim(), ad,
       miktar: ondalikOku(document.getElementById("ueMiktar").value),
       birim: ueBirim.value.trim(),
+      reyon: _secilenUrun?.reyon || "",
+      barkod: _secilenUrun?.barkod || "",
+      kategori: _secilenUrun?.kategori || "",
       eksik: kontrolSonrasi ? true : false,
       subeEkledi: true,
       subeNotu: document.getElementById("ueNot").value.trim()
