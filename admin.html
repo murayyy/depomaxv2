@@ -33,7 +33,6 @@
       <a class="topbar__link" href="raf.html">🗄 Raflar</a>
       <a class="topbar__link" href="uretim.html">🧪 Üretim</a>
       <a class="topbar__link" href="canli.html">🔴 Canlı Takip</a>
-      <a class="topbar__link" href="monitor.html" target="_blank">📺 Monitör</a>
     </nav>
     <div class="topbar__user">
       <span class="role-chip" id="rolEtiketi">…</span>
@@ -60,6 +59,7 @@
       </div>
       <div class="toolbar__group">
         <button class="btn btn-ghost btn-sm is-active" data-sekme="kullanici">👥 Kullanıcılar</button>
+        <button class="btn btn-ghost btn-sm" data-sekme="siparisler">📋 Siparişler</button>
         <button class="btn btn-ghost btn-sm" data-sekme="katalog">📦 Katalog</button>
         <button class="btn btn-ghost btn-sm" data-sekme="alanlar">📍 Toplama Alanları</button>
         <button class="btn btn-ghost btn-sm" data-sekme="teslimat">🚚 Teslimat Raporu</button>
@@ -155,7 +155,25 @@
       </div>
     </div><!-- /aracBloku -->
 
-    <!-- TOPLAMA ALANLARI -->
+    <!-- SİPARİŞLER -->
+    <div id="siparislerBloku" class="u-hidden">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+        <div style="font-weight:700;">Aktif Siparişler</div>
+        <select class="select" id="siparisDurumFiltre" style="max-width:200px;">
+          <option value="">Tüm Durumlar</option>
+          <option value="toplaniyor">Toplanıyor</option>
+          <option value="toplandi">Toplandı</option>
+          <option value="kontrol_ediliyor">Kontrol</option>
+          <option value="tamamlandi">Tamamlandı</option>
+          <option value="sevk_edildi">Sevk Edildi</option>
+        </select>
+      </div>
+      <div id="adminSiparisListe"></div>
+      <div class="empty-state u-hidden" id="adminSiparisBos">
+        <div class="empty-state__icon">📋</div>
+        <div class="empty-state__title">Sipariş yok</div>
+      </div>
+    </div><!-- /siparislerBloku -->
     <div id="alanlarBloku" class="u-hidden">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
         <div style="font-weight:700;">Toplama Alanları</div>
