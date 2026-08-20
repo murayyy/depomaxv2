@@ -671,3 +671,20 @@ export async function gunlukOzetGetir() {
     tarih: bugunBaslangic.toLocaleDateString("tr-TR")
   };
 }
+
+export async function siparisiSil(siparisId) {
+  // Önce alt koleksiyon ürünlerini sil
+  const urunSnap = await getDocs(collection(db, SIPARISLER, siparisId, "urunler"));
+  const batch = writeBatch(db);
+  urunSnap.docs.forEach(d => batch.delete(d.ref));
+  batch.delete(doc(db, SIPARISLER, siparisId));
+  return batch.commit();
+}
+
+export function siparisiGeriGonder(siparisId) {
+  return updateDoc(doc(db, SIPARISLER, siparisId), {
+    durum: "beklemede",
+    geriGonderildi: true,
+    geriGondermeTarihi: serverTimestamp()
+  });
+}

@@ -309,6 +309,7 @@ document.getElementById("excelYukleInput")?.addEventListener("change", async (e)
    ============================================================ */
 const DURUM_BİLGİ = {
   toplaniyor: { etiket: "⏳ Hazırlanıyor", sinif: "badge-amber" },
+  beklemede: { etiket: "↩ Düzenleme Bekliyor", sinif: "badge-red" },
   toplandi: { etiket: "✅ Toplandı", sinif: "badge-green" },
   kontrol_ediliyor: { etiket: "🔍 Kontrol", sinif: "badge-blue" },
   tamamlandi: { etiket: "📦 Hazır", sinif: "badge-green" },
