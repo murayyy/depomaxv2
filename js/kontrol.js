@@ -150,10 +150,6 @@ function renderSiparisListesi(liste) {
         </div>
         <div class="order-card__actions">
           ${s.alanAdi ? `<span style="padding:3px 8px;border-radius:99px;font-size:11px;font-weight:700;background:#DBEAFE;color:#1E40AF;">📍 ${kacisEt(s.alanAdi)}</span>` : `<button class="btn btn-ghost btn-sm" data-alan-ata="${s.id}">📍 Alan Ata</button>`}
-          ${s.durum === "toplaniyor" ? `
-            <button class="btn btn-ghost btn-sm" data-geri-gonder="${s.id}">↩ Geri Gönder</button>
-            <button class="btn btn-danger btn-sm" data-sil="${s.id}">🗑 Sil</button>
-          ` : ""}
           <button class="btn btn-primary btn-sm" data-ac="${s.id}">${butonMetni}</button>
           ${s.durum === "sevk_edildi" && s.sistemeAktarildi ? `<button class="btn btn-ghost btn-sm" data-arsivle="${s.id}">🗂 Arşivle</button>` : ""}
         </div>
@@ -202,24 +198,6 @@ function renderSiparisListesi(liste) {
     btn.addEventListener("click", () => {
       const siparis = liste.find((s) => s.id === btn.dataset.ac);
       siparisAc(siparis);
-    });
-  });
-
-  kapsayici.querySelectorAll("[data-sil]").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      const onay = await onayIste({ baslik: "Siparişi Sil", metin: "Bu sipariş kalıcı olarak silinecek. Emin misiniz?", onayMetni: "Sil", tehlikeli: true });
-      if (!onay) return;
-      await siparisiSil(btn.dataset.sil);
-      toast("Sipariş silindi.", "success");
-    });
-  });
-
-  kapsayici.querySelectorAll("[data-geri-gonder]").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      const onay = await onayIste({ baslik: "Geri Gönder", metin: "Sipariş şubeye geri gönderilecek, şube tekrar düzenleyebilecek.", onayMetni: "Geri Gönder" });
-      if (!onay) return;
-      await siparisiGeriGonder(btn.dataset.geriGonder);
-      toast("Sipariş şubeye geri gönderildi.", "success");
     });
   });
 

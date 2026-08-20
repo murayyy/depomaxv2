@@ -3,7 +3,7 @@
 // ============================================================================
 import { auth, signOut, sayfaKorumasi } from "./firebase.js";
 import { kullanicilariDinle, kullaniciOlustur, kullaniciRolGuncelle, kullaniciSil } from "./kullanici-yonetimi.js";
-import { katalogDinle, katalogUrunEkle, katalogUrunGuncelle, katalogUrunSil, tumSiparisleriGetir, teslimatDegerlendir, gunlukOzetGetir, alanlariDinle, alanOlustur, alanSil, siparisAlanAta } from "./veri.js";
+import { katalogDinle, katalogUrunEkle, katalogUrunGuncelle, katalogUrunSil, tumSiparisleriGetir, teslimatDegerlendir, gunlukOzetGetir, alanlariDinle, alanOlustur, alanSil, siparisAlanAta, siparisiSil, siparisiGeriGonder, siparisleriDinle } from "./veri.js";
 import { arayuzHazirla, toast, onayIste, kacisEt, tarihBicimle, ondalikOku, sayiBicimle } from "./utils.js";
 
 arayuzHazirla();
@@ -49,11 +49,13 @@ document.querySelectorAll("[data-sekme]").forEach((btn) => {
     btn.classList.add("is-active");
     const aktif = btn.dataset.sekme;
     document.getElementById("kullaniciBloku").classList.toggle("u-hidden", aktif !== "kullanici");
+    document.getElementById("siparislerBloku").classList.toggle("u-hidden", aktif !== "siparisler");
     document.getElementById("katalogBloku").classList.toggle("u-hidden", aktif !== "katalog");
     document.getElementById("teslimatBloku").classList.toggle("u-hidden", aktif !== "teslimat");
     document.getElementById("aracBloku").classList.toggle("u-hidden", aktif !== "arac");
     document.getElementById("alanlarBloku").classList.toggle("u-hidden", aktif !== "alanlar");
     if (aktif === "alanlar") renderAlanlar();
+    if (aktif === "siparisler") renderAdminSiparisler();
   });
 });
 
@@ -685,7 +687,7 @@ document.getElementById("teslimatHesaplaBtn").addEventListener("click", async ()
             tekrarBtn.disabled = true; tekrarBtn.innerHTML = "⏳ Kaydediliyor…";
             try {
               await teslimatDegerlendir(s.id, { degerlendirme: "tekrar_kontrol", degerlendiren: mevcutKullanici.uid, not });
-              toast(`✅ Kaydedildi. Şube eksik bildirdiği ürünler kayıt altında.`, "success", 5000);
+              toast(`✅ Kaydedildi. Eksik ${eksikKalemler.length} ürün "📋 Eksikler" sayfasında görünecek.`, "success", 6000);
               kapat();
               document.getElementById("teslimatHesaplaBtn").click();
             } catch (err) {
@@ -913,4 +915,85 @@ document.getElementById("yeniAlanBtn")?.addEventListener("click", () => {
     toast("Alan oluşturuldu.", "success");
     renderAlanlar();
   };
+});
+
+/* ---- ADMİN SİPARİŞLER SEKMESİ ---- */
+const DURUM_ETİKET = {
+  toplaniyor: { etiket: "⏳ Toplanıyor", sinif: "badge-amber" },
+  toplandi: { etiket: "✅ Toplandı", sinif: "badge-green" },
+  kontrol_ediliyor: { etiket: "🔍 Kontrol", sinif: "badge-blue" },
+  tamamlandi: { etiket: "📦 Hazır", sinif: "badge-green" },
+  sevk_edildi: { etiket: "🚚 Yolda", sinif: "badge-blue" },
+  teslim_edildi: { etiket: "🎉 Teslim", sinif: "badge-green" },
+  arsivlendi: { etiket: "🗂 Arşiv", sinif: "badge-gray" },
+  beklemede: { etiket: "↩ Beklemede", sinif: "badge-red" }
+};
+
+let adminSiparisAbonelik = null;
+
+async function renderAdminSiparisler() {
+  const liste = document.getElementById("adminSiparisListe");
+  const bos = document.getElementById("adminSiparisBos");
+  liste.innerHTML = '<div style="text-align:center;padding:20px;color:var(--color-ink-soft);">⏳ Yükleniyor…</div>';
+
+  try {
+    const siparisler = await tumSiparisleriGetir();
+    const filtre = document.getElementById("siparisDurumFiltre")?.value || "";
+    const gosterilen = filtre ? siparisler.filter(s => s.durum === filtre) : siparisler.filter(s => s.durum !== "arsivlendi");
+
+    if (!gosterilen.length) { liste.innerHTML = ""; bos.classList.remove("u-hidden"); return; }
+    bos.classList.add("u-hidden");
+
+    liste.innerHTML = gosterilen.map(s => {
+      const d = DURUM_ETİKET[s.durum] || { etiket: s.durum, sinif: "badge-gray" };
+      const tarih = s.olusturulmaTarihi?.toDate?.()?.toLocaleDateString("tr-TR") || "—";
+      return `<div class="card order-card" style="margin-bottom:8px;">
+        <div class="order-card__main">
+          <div class="order-card__name">${kacisEt(s.ad || s.subeAdi || "—")}</div>
+          <div class="order-card__meta">
+            <span class="badge ${d.sinif}">${d.etiket}</span>
+            <span>${s.toplamUrun || 0} ürün</span>
+            ${s.toplamKg ? `<span>${sayiBicimle(s.toplamKg)} KG</span>` : ""}
+            <span>${tarih}</span>
+          </div>
+        </div>
+        <div class="order-card__actions">
+          ${s.durum === "toplaniyor" || s.durum === "beklemede" ? `
+            <button class="btn btn-ghost btn-sm" data-siparis-geri="${s.id}">↩ Geri Gönder</button>
+            <button class="btn btn-danger btn-sm" data-siparis-sil="${s.id}">🗑 Sil</button>
+          ` : ""}
+        </div>
+      </div>`;
+    }).join("");
+
+    liste.querySelectorAll("[data-siparis-sil]").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const onay = await onayIste({ baslik: "Siparişi Sil", metin: "Bu sipariş kalıcı olarak silinecek. Emin misiniz?", onayMetni: "Sil" });
+        if (!onay) return;
+        await siparisiSil(btn.dataset.siparisSil);
+        toast("Sipariş silindi.", "success");
+        renderAdminSiparisler();
+      });
+    });
+
+    liste.querySelectorAll("[data-siparis-geri]").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const onay = await onayIste({ baslik: "Geri Gönder", metin: "Sipariş şubeye geri gönderilecek, şube tekrar düzenleyebilecek.", onayMetni: "Geri Gönder" });
+        if (!onay) return;
+        await siparisiGeriGonder(btn.dataset.siparisGeri);
+        toast("Sipariş şubeye geri gönderildi.", "success");
+        renderAdminSiparisler();
+      });
+    });
+
+  } catch (err) {
+    console.error(err);
+    liste.innerHTML = '<div style="color:#EF4444;">Yüklenemedi.</div>';
+  }
+}
+
+document.getElementById("siparisDurumFiltre")?.addEventListener("change", () => {
+  if (!document.getElementById("siparislerBloku").classList.contains("u-hidden")) {
+    renderAdminSiparisler();
+  }
 });
