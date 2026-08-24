@@ -74,6 +74,7 @@
     <div class="toolbar" style="margin-bottom:16px;">
       <div class="toolbar__group">
         <button class="btn btn-ghost btn-sm is-active" data-sekme="raflar">📦 Raflar</button>
+        <button class="btn btn-ghost btn-sm" data-sekme="envanter">📋 Tüm Ürünler</button>
         <button class="btn btn-ghost btn-sm" data-sekme="ozet">🗺 Doluluk Özeti</button>
       </div>
     </div>
@@ -93,6 +94,23 @@
         <div class="empty-state__title">Henüz raf tanımlanmamış</div>
         <div class="empty-state__text">"+ Yeni Raf" ile başlayın.</div>
       </div>
+    </div>
+
+    <!-- ENVANTER -->
+    <div id="envanterBloku" class="u-hidden">
+      <div class="toolbar" style="margin-bottom:14px;gap:8px;">
+        <input class="input" id="envanterAra" placeholder="🔍 Ürün adı veya kod…" style="max-width:260px;" autocomplete="off" />
+        <button class="btn btn-ghost btn-sm" id="envanterExcelBtn">⬇ Excel</button>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr><th>Stok Kodu</th><th>Ürün Adı</th><th>Raf</th><th>Kat/Böl</th><th>Miktar</th><th>Birim</th><th>Palet</th><th>SKT</th><th>Giriş Tarihi</th></tr>
+          </thead>
+          <tbody id="envanterTablosu"></tbody>
+        </table>
+      </div>
+      <div class="row-cards" id="envanterKartlar"></div>
     </div>
 
     <div id="ozetBloku" class="u-hidden">
