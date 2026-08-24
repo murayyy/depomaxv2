@@ -43,8 +43,10 @@ document.querySelectorAll("[data-sekme]").forEach((btn) => {
     btn.classList.add("is-active");
     aktifSekme = btn.dataset.sekme;
     document.getElementById("raflarBloku").classList.toggle("u-hidden", aktifSekme !== "raflar");
+    document.getElementById("envanterBloku").classList.toggle("u-hidden", aktifSekme !== "envanter");
     document.getElementById("ozetBloku").classList.toggle("u-hidden", aktifSekme !== "ozet");
     if (aktifSekme === "ozet") renderOzet();
+    if (aktifSekme === "envanter") renderEnvanter();
   });
 });
 
@@ -619,5 +621,78 @@ document.getElementById("excelBtn").addEventListener("click", async () => {
   } catch (err) {
     console.error(err);
     toast("Excel oluşturulamadı.", "error");
+  }
+});
+
+/* ---- ENVANTer — tüm ürünler listesi ---- */
+function renderEnvanter() {
+  const ara = (document.getElementById("envanterAra")?.value || "").toLowerCase().trim();
+  const tbody = document.getElementById("envanterTablosu");
+  const kartlar = document.getElementById("envanterKartlar");
+  if (!tbody) return;
+
+  // rafKalemleriMap'ten tüm kalemleri topla
+  const tum = [];
+  rafListesi.forEach(raf => {
+    const kalemler = rafKalemleriMap.get(raf.id) || [];
+    kalemler.forEach(k => tum.push({ ...k, _rafAdi: raf.ad }));
+  });
+
+  const filtreli = tum.filter(k =>
+    !ara || (k.ad || "").toLowerCase().includes(ara) || (k.stokKodu || "").toLowerCase().includes(ara)
+  ).sort((a, b) => (a.stokKodu || "zzz").localeCompare(b.stokKodu || "zzz", "tr"));
+
+  if (!filtreli.length) {
+    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;color:var(--color-ink-soft);">Ürün bulunamadı</td></tr>`;
+    kartlar.innerHTML = "";
+    return;
+  }
+
+  tbody.innerHTML = filtreli.map(k => `<tr>
+    <td class="cell-code">${kacisEt(k.stokKodu || "—")}</td>
+    <td>${kacisEt(k.ad || "—")}</td>
+    <td>${kacisEt(k._rafAdi || "—")}</td>
+    <td>${k.kat ? `Kat ${k.kat} / Böl. ${k.bolme}` : "—"}</td>
+    <td style="font-weight:600;">${sayiBicimle(k.miktar || 0)}</td>
+    <td>${kacisEt(k.birim || "")}</td>
+    <td>${k.palet || 0}</td>
+    <td>${kacisEt(k.skt || "—")}</td>
+    <td>${kacisEt(k.girisTarihi || "—")}</td>
+  </tr>`).join("");
+
+  kartlar.innerHTML = filtreli.map(k => `
+    <div class="row-card">
+      <div class="row-card__top">
+        <div>
+          <div class="row-card__name">${kacisEt(k.ad || "—")}</div>
+          <div class="row-card__code">${kacisEt(k.stokKodu || "—")} · ${kacisEt(k._rafAdi || "")}${k.kat ? ` Kat ${k.kat}/Böl.${k.bolme}` : ""}</div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-weight:700;font-size:16px;">${sayiBicimle(k.miktar || 0)} ${kacisEt(k.birim || "")}</div>
+          ${k.skt ? `<div style="font-size:11px;color:var(--color-ink-soft);">SKT: ${k.skt}</div>` : ""}
+        </div>
+      </div>
+    </div>`).join("");
+}
+
+document.getElementById("envanterAra")?.addEventListener("input", () => renderEnvanter());
+
+document.getElementById("envanterExcelBtn")?.addEventListener("click", () => {
+  const ara = (document.getElementById("envanterAra")?.value || "").toLowerCase().trim();
+  const tum = [];
+  rafListesi.forEach(raf => {
+    const kalemler = rafKalemleriMap.get(raf.id) || [];
+    kalemler.forEach(k => tum.push({ ...k, _rafAdi: raf.ad }));
+  });
+  const filtreli = tum.filter(k =>
+    !ara || (k.ad || "").toLowerCase().includes(ara) || (k.stokKodu || "").toLowerCase().includes(ara)
+  ).sort((a, b) => (a.stokKodu || "zzz").localeCompare(b.stokKodu || "zzz", "tr"));
+
+  const basliklar = ["Stok Kodu", "Ürün Adı", "Raf", "Kat", "Bölme", "Miktar", "Birim", "Palet", "SKT", "Giriş Tarihi"];
+  const satirlar = filtreli.map(k => [k.stokKodu || "", k.ad || "", k._rafAdi || "", k.kat || "", k.bolme || "", k.miktar || 0, k.birim || "", k.palet || 0, k.skt || "", k.girisTarihi || ""]);
+  if (window.XLSX) {
+    const wb = window.XLSX.utils.book_new();
+    window.XLSX.utils.book_append_sheet(wb, window.XLSX.utils.aoa_to_sheet([basliklar, ...satirlar]), "Envanter");
+    window.XLSX.writeFile(wb, `raf_envanter_${new Date().toLocaleDateString("tr-TR").replace(/\./g,"-")}.xlsx`);
   }
 });
