@@ -5,7 +5,7 @@ import { auth, signOut, sayfaKorumasi } from "./firebase.js";
 import {
   katalogDinle, subeSimarisiOlustur,
   subeSiparisleriDinle, urunleriniGetir, urunEkle,
-  teslimatKaydet, teslimatYenidenOnayla
+  teslimatKaydet, teslimatYenidenOnayla, siparisGuncelle
 } from "./veri.js";
 import {
   arayuzHazirla, toast, onayIste, ondalikOku,
@@ -270,12 +270,20 @@ document.getElementById("siparisGonderBtn")?.addEventListener("click", async () 
       ad: k.ad, stokKodu: "", barkod: "", birim: k.birim,
       miktar: k.miktar, kategori: "Özel Talep", katalogDisi: true, subeNotu: k.not || ""
     }))];
-    await subeSimarisiOlustur({ subeAdi: mevcutKullanici.subeAdi || mevcutKullanici.ad, subeId: mevcutKullanici.uid, olusturan: mevcutKullanici.uid, satirlar: tumSatirlar });
+    if (duzenlemeSiparisId) {
+      await siparisGuncelle(duzenlemeSiparisId, { durum: "toplaniyor", geriGonderildi: false });
+      duzenlemeSiparisId = null;
+      const sendBtn = document.getElementById("siparisGonderBtn");
+      sendBtn.textContent = "Siparişi Gönder";
+      sendBtn.style.background = "";
+    } else {
+      await subeSimarisiOlustur({ subeAdi: mevcutKullanici.subeAdi || mevcutKullanici.ad, subeId: mevcutKullanici.uid, olusturan: mevcutKullanici.uid, satirlar: tumSatirlar });
+    }
     miktarSakla.clear(); notSakla.clear(); ozelKalemler.length = 0; taslakSil();
     document.querySelectorAll(".miktar-input, .aciklama-input").forEach(i => { i.value = ""; });
     renderOzelKalemler(); butonGuncelle();
     toast("✅ Sipariş gönderildi!", "success", 5000);
-    sekmeGoster("gecmis"); // Siparişlerim'e geç
+    sekmeGoster("gecmis");
   } catch (err) {
     console.error(err); toast("Sipariş gönderilemedi: " + (err.message || err), "error");
   } finally {
@@ -359,12 +367,17 @@ function renderSiparisler(liste) {
         </div>
       </div>
       <div class="order-card__actions">
+        ${s.durum === "beklemede" ? `<button class="btn btn-primary btn-sm" data-duzenle="${s.id}">✏️ Düzenle ve Tekrar Gönder</button>` : ""}
         ${DUZENLENEBILIR.includes(s.durum) ? `<button class="btn btn-ghost btn-sm" data-urun-ekle="${s.id}">+ Ürün Ekle</button>` : ""}
         ${teslimAlinabilir(s) ? `<button class="btn btn-green btn-sm" data-teslim="${s.id}">✅ Teslim Aldım</button>` : s.durum === "sevk_edildi" ? `<span class="u-text-soft" style="font-size:12px;">Aktarım bekleniyor…</span>` : ""}
         <button class="btn btn-ghost btn-sm" data-detay="${s.id}">Detay</button>
       </div>
     </div>`;
   }).join("");
+
+  kapsayici.querySelectorAll("[data-duzenle]").forEach(btn =>
+    btn.addEventListener("click", () => siparisiDuzenle(btn.dataset.duzenle))
+  );
 
   kapsayici.querySelectorAll("[data-detay]").forEach(btn =>
     btn.addEventListener("click", () => detayModalAc(siparislerCache.find(s => s.id === btn.dataset.detay)))
@@ -594,3 +607,37 @@ document.getElementById("taslakKaydetBtn")?.addEventListener("click", () => {
   taslakKaydet();
   toast("💾 Taslak kaydedildi. Çıkıp geri geldiğinizde yüklenir.", "success", 4000);
 });
+
+/* ============================================================
+   SİPARİŞ DÜZENLEME — beklemede siparişi yeniden gönder
+   ============================================================ */
+let duzenlemeSiparisId = null; // Hangi siparişi düzenliyoruz
+
+async function siparisiDuzenle(siparisId) {
+  toast("⏳ Sipariş yükleniyor…", "info", 2000);
+  try {
+    const urunler = await urunleriniGetir(siparisId);
+    // Mevcut miktarları miktarSakla'ya yükle
+    miktarSakla.clear(); notSakla.clear();
+    urunler.forEach(u => {
+      const katalogUrun = katalogCache.find(k => k.stokKodu === u.kod || k.ad === u.ad);
+      if (katalogUrun && u.miktar > 0) {
+        miktarSakla.set(katalogUrun.id, String(u.miktar));
+        if (u.subeNotu) notSakla.set(katalogUrun.id, u.subeNotu);
+      }
+    });
+    duzenlemeSiparisId = siparisId;
+    renderKatalog();
+    butonGuncelle();
+    // Gönder butonunu "Güncelle" olarak değiştir
+    const btn = document.getElementById("siparisGonderBtn");
+    btn.textContent = "✅ Güncelle ve Gönder";
+    btn.style.background = "#F59E0B";
+    // Sipariş Ver sekmesine geç
+    sekmeGoster("siparis");
+    toast("✏️ Miktarları düzenleyin ve tekrar gönderin.", "info", 5000);
+  } catch (err) {
+    console.error(err);
+    toast("Sipariş yüklenemedi.", "error");
+  }
+}
