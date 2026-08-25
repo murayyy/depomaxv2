@@ -139,6 +139,24 @@ document.getElementById("siralamaFiltre")?.addEventListener("change", () => rend
 function butonGuncelle() {
   const herhangi = miktarSakla.size > 0 || ozelKalemler.length > 0;
   document.getElementById("siparisGonderBtn").disabled = !herhangi;
+
+  // Toplam KG hesapla
+  let toplamKg = 0;
+  miktarSakla.forEach((val, id) => {
+    const urun = katalogCache.find(u => u.id === id);
+    if (urun && String(urun.birim || "").trim().toLowerCase() === "kg") {
+      toplamKg += ondalikOku(val) || 0;
+    }
+  });
+  const tonajEl = document.getElementById("siparisToplamKg");
+  if (tonajEl) {
+    if (toplamKg > 0) {
+      tonajEl.textContent = `Toplam: ${sayiBicimle(toplamKg)} KG`;
+      tonajEl.style.display = "";
+    } else {
+      tonajEl.style.display = "none";
+    }
+  }
 }
 
 function renderKatalog() {
