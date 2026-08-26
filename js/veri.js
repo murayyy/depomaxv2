@@ -688,3 +688,17 @@ export function siparisiGeriGonder(siparisId) {
     geriGondermeTarihi: serverTimestamp()
   });
 }
+
+/* Belirli stok kodlarının bilgisini çek — tüm stok yerine */
+export async function stokKodlariGetir(kodlar) {
+  if (!kodlar || !kodlar.length) return new Map();
+  const map = new Map();
+  // Firestore'da `in` operatörü max 30 eleman — parçalara böl
+  const parcalar = [];
+  for (let i = 0; i < kodlar.length; i += 30) parcalar.push(kodlar.slice(i, i + 30));
+  for (const parca of parcalar) {
+    const snap = await getDocs(query(collection(db, "stoklar"), where("__name__", "in", parca.map(k => k))));
+    snap.docs.forEach(d => map.set(d.id, { kod: d.id, ...d.data() }));
+  }
+  return map;
+}

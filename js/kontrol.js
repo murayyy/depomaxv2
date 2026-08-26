@@ -2,7 +2,7 @@
 // KONTROL EKRANI MANTIĞI
 // ============================================================================
 import { auth, signOut, sayfaKorumasi } from "./firebase.js";
-import { siparisleriDinle, siparisGuncelle, urunleriDinle, urunGuncelle, urunEkle, tumSiparisleriCanliDinle, siparisArsivle, suruculeriGetir, stokDusur, stokGeriEkle, stokGozaltiSifirla, katalogDinle, siparisAlanAta, alanlariDinle, siparisiSil, siparisiGeriGonder } from "./veri.js";
+import { siparisleriDinle, siparisGuncelle, urunleriDinle, urunGuncelle, urunEkle, tumSiparisleriCanliDinle, siparisArsivle, suruculeriGetir, stokDusur, stokGeriEkle, stokGozaltiSifirla, katalogDinle, siparisAlanAta, alanlariDinle, siparisiSil, siparisiGeriGonder, stokKodlariGetir } from "./veri.js";
 import { stoklariDinle, stokRozetiHtml } from "./stok.js";
 import { serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
@@ -24,11 +24,7 @@ let urunlerCache = [];
 let aramaMetni = "";
 let tarayici = null;
 let sonBulunamadiBarkod = null;
-let stokMap = new Map();
-stoklariDinle((map) => {
-  stokMap = map;
-  if (aktifSiparis) renderUrunler(aktifSiparis.durum === "tamamlandi" || aktifSiparis.durum === "sevk_edildi");
-});
+let stokMap = new Map(); // Sipariş açılınca ilgili ürünler için doldurulur
 
 /* ---------------- Bildirimler: sekme/durum geçişlerini canlı izle ---------------- */
 let bilinenSiparisDurumlari = new Map();
@@ -233,8 +229,14 @@ function siparisAc(siparis) {
   document.getElementById("urunEkleBtn").classList.toggle("u-hidden", saltOkunur);
 
   if (urunAbonelikIptal) urunAbonelikIptal();
+  stokMap.clear();
   urunAbonelikIptal = urunleriDinle(siparis.id, (liste) => {
     urunlerCache = liste;
+    // İlk yüklemede ürün kodlarına göre stok çek
+    if (stokMap.size === 0 && liste.length) {
+      const kodlar = [...new Set(liste.map(u => u.kod).filter(Boolean))];
+      stokKodlariGetir(kodlar).then(map => { stokMap = map; renderUrunler(siparis.durum === "tamamlandi" || siparis.durum === "sevk_edildi"); }).catch(() => {});
+    }
     const kontrolEdilen = liste.filter((u) => u.kontrol || u.eksik).length;
     const toplamKg = kgToplami(liste);
     if (siparis.durum !== "tamamlandi" && siparis.durum !== "sevk_edildi" && (kontrolEdilen !== siparis.kontrolEdilenUrun || toplamKg !== siparis.toplamKg)) {
