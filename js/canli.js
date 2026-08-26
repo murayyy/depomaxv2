@@ -4,7 +4,7 @@
 import { auth, signOut, sayfaKorumasi } from "./firebase.js";
 import { db } from "./firebase.js";
 import { collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { urunleriniGetir, aktifKullanicilariGetir } from "./veri.js";
+import { aktifKullanicilariGetir } from "./veri.js";
 import { arayuzHazirla, kacisEt, sayiBicimle } from "./utils.js";
 
 arayuzHazirla();
@@ -37,20 +37,14 @@ function baslatTakip() {
   async function guncelle() {
     try {
       siparisler = await aktifSiparisleriGetir();
-      for (const s of siparisler) {
-        if (!urunSayilari.has(s.id)) {
-          try {
-            const urunler = await urunleriniGetir(s.id);
-            urunSayilari.set(s.id, {
-              toplam: urunler.length,
-              toplanan: urunler.filter(u => u.toplandi).length,
-              eksik: urunler.filter(u => u.eksik).length
-            });
-          } catch {
-            urunSayilari.set(s.id, { toplam: s.toplamUrun || 0, toplanan: s.toplananUrun || 0, eksik: s.eksikUrun || 0 });
-          }
-        }
-      }
+      // Sipariş belgesindeki hazır alanları kullan — alt koleksiyon sorgusu yok
+      siparisler.forEach(s => {
+        urunSayilari.set(s.id, {
+          toplam: s.toplamUrun || 0,
+          toplanan: s.toplananUrun || 0,
+          eksik: s.eksikUrun || 0
+        });
+      });
       // Aktif kullanıcıları da güncelle
       try {
         const aktifler = await aktifKullanicilariGetir();
