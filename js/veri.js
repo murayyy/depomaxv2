@@ -20,9 +20,11 @@ const SIPARISLER = "siparisler";
 
 /* ---------------- Sipariş listesi ---------------- */
 export function siparisleriDinle(durumFiltre, callback) {
+  const sinir = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000); // 60 gün
   const q = query(
     collection(db, SIPARISLER),
     where("durum", "in", durumFiltre),
+    where("olusturulmaTarihi", ">=", sinir),
     orderBy("olusturulmaTarihi", "desc")
   );
   return onSnapshot(q, (snap) => {
@@ -145,8 +147,13 @@ export function urunSil(siparisId, urunId) {
   return deleteDoc(doc(db, SIPARISLER, siparisId, "urunler", urunId));
 }
 
-export async function tumSiparisleriGetir() {
-  const snap = await getDocs(collection(db, SIPARISLER));
+export async function tumSiparisleriGetir(gunSayisi = 60) {
+  const sinir = new Date(Date.now() - gunSayisi * 24 * 60 * 60 * 1000);
+  const snap = await getDocs(query(
+    collection(db, SIPARISLER),
+    where("olusturulmaTarihi", ">=", sinir),
+    orderBy("olusturulmaTarihi", "desc")
+  ));
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
 

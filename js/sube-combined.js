@@ -130,11 +130,30 @@ document.addEventListener("input", (e) => {
     const id = e.target.dataset.id;
     if (id) { if (e.target.value.trim()) notSakla.set(id, e.target.value); else notSakla.delete(id); }
   }
-  if (e.target.id === "urunAraInput") renderKatalog();
+  if (e.target.id === "urunAraInput") {
+    // Render öncesi mevcut inputları kaydet
+    document.querySelectorAll(".miktar-input[data-id]").forEach(inp => {
+      const v = ondalikOku(inp.value);
+      if (inp.dataset.id) { if (v > 0) miktarSakla.set(inp.dataset.id, inp.value); else miktarSakla.delete(inp.dataset.id); }
+    });
+    document.querySelectorAll(".aciklama-input[data-id]").forEach(inp => {
+      if (inp.dataset.id) { if (inp.value.trim()) notSakla.set(inp.dataset.id, inp.value); else notSakla.delete(inp.dataset.id); }
+    });
+    renderKatalog();
+  }
 });
 
-document.getElementById("kategoriFiltre")?.addEventListener("change", () => renderKatalog());
-document.getElementById("siralamaFiltre")?.addEventListener("change", () => renderKatalog());
+function renderOncesiKaydet() {
+  document.querySelectorAll(".miktar-input[data-id]").forEach(inp => {
+    const v = ondalikOku(inp.value);
+    if (inp.dataset.id) { if (v > 0) miktarSakla.set(inp.dataset.id, inp.value); else miktarSakla.delete(inp.dataset.id); }
+  });
+  document.querySelectorAll(".aciklama-input[data-id]").forEach(inp => {
+    if (inp.dataset.id) { if (inp.value.trim()) notSakla.set(inp.dataset.id, inp.value); else notSakla.delete(inp.dataset.id); }
+  });
+}
+document.getElementById("kategoriFiltre")?.addEventListener("change", () => { renderOncesiKaydet(); renderKatalog(); });
+document.getElementById("siralamaFiltre")?.addEventListener("change", () => { renderOncesiKaydet(); renderKatalog(); });
 
 function butonGuncelle() {
   const herhangi = miktarSakla.size > 0 || ozelKalemler.length > 0;
