@@ -108,18 +108,22 @@ input, select, textarea { font-family: var(--font-display); }
 .topbar__nav {
   display: flex;
   align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
+  gap: 2px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
 }
 .topbar__link {
-  color: rgba(255,255,255,0.78);
+  color: rgba(255,255,255,0.7);
   text-decoration: none;
-  font-size: 13.5px;
-  font-weight: 600;
-  padding: 7px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 6px 11px;
   border-radius: var(--radius-sm);
+  white-space: nowrap;
+  transition: background .15s, color .15s;
 }
-.topbar__link.is-active { background: rgba(255,255,255,0.12); color: #fff; }
+.topbar__link:hover { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.95); }
+.topbar__link.is-active { background: rgba(255,255,255,0.14); color: #fff; font-weight: 600; }
 .topbar__user {
   display: flex;
   align-items: center;
