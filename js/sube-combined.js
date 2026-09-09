@@ -416,6 +416,7 @@ function renderSiparisler(liste) {
   siparislerCache = liste;
   const kapsayici = document.getElementById("gecmisListesi");
   const sayacEl = document.getElementById("gecmisSayac");
+  if (!kapsayici) return; // DOM henüz hazır değil
   if (sayacEl) sayacEl.textContent = `${liste.length} sipariş`;
 
   if (!liste.length) {
