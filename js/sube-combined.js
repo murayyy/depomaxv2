@@ -77,9 +77,15 @@ sayfaKorumasi(["sube", "fabrika"], (kullanici) => {
   document.getElementById("rolEtiketi").textContent = kullanici.rol;
 
   katalogDinle((liste) => {
+    const eskiBoyut = katalogCache.length;
     katalogCache = liste.filter(u => u.aktif !== false);
     const taslakVardi = taslakYukle();
-    katalogGuncellendi();
+    // Eğer kullanıcı miktar girdiyse ve katalog zaten yüklüyse yeniden render etme
+    if (eskiBoyut > 0 && miktarSakla.size > 0) {
+      katalogFiltrele(); // Sadece filtrele, DOM'u yıkma
+    } else {
+      katalogGuncellendi();
+    }
     if (taslakVardi) {
       renderOzelKalemler();
       butonGuncelle();
