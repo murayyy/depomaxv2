@@ -130,30 +130,11 @@ document.addEventListener("input", (e) => {
     const id = e.target.dataset.id;
     if (id) { if (e.target.value.trim()) notSakla.set(id, e.target.value); else notSakla.delete(id); }
   }
-  if (e.target.id === "urunAraInput") {
-    // Render öncesi mevcut inputları kaydet
-    document.querySelectorAll(".miktar-input[data-id]").forEach(inp => {
-      const v = ondalikOku(inp.value);
-      if (inp.dataset.id) { if (v > 0) miktarSakla.set(inp.dataset.id, inp.value); else miktarSakla.delete(inp.dataset.id); }
-    });
-    document.querySelectorAll(".aciklama-input[data-id]").forEach(inp => {
-      if (inp.dataset.id) { if (inp.value.trim()) notSakla.set(inp.dataset.id, inp.value); else notSakla.delete(inp.dataset.id); }
-    });
-    renderKatalog();
-  }
+  if (e.target.id === "urunAraInput") katalogFiltrele();
 });
 
-function renderOncesiKaydet() {
-  document.querySelectorAll(".miktar-input[data-id]").forEach(inp => {
-    const v = ondalikOku(inp.value);
-    if (inp.dataset.id) { if (v > 0) miktarSakla.set(inp.dataset.id, inp.value); else miktarSakla.delete(inp.dataset.id); }
-  });
-  document.querySelectorAll(".aciklama-input[data-id]").forEach(inp => {
-    if (inp.dataset.id) { if (inp.value.trim()) notSakla.set(inp.dataset.id, inp.value); else notSakla.delete(inp.dataset.id); }
-  });
-}
-document.getElementById("kategoriFiltre")?.addEventListener("change", () => { renderOncesiKaydet(); renderKatalog(); });
-document.getElementById("siralamaFiltre")?.addEventListener("change", () => { renderOncesiKaydet(); renderKatalog(); });
+document.getElementById("kategoriFiltre")?.addEventListener("change", () => katalogFiltrele());
+document.getElementById("siralamaFiltre")?.addEventListener("change", () => renderKatalog()); // Sıralama değişince yeniden sırala
 
 function butonGuncelle() {
   const herhangi = miktarSakla.size > 0 || ozelKalemler.length > 0;
@@ -178,22 +159,13 @@ function butonGuncelle() {
   }
 }
 
+// Katalog ilk kez veya sıralama/katalog değişince tam render
 function renderKatalog() {
   const tbody = document.getElementById("katalogGovde");
   const kartlar = document.getElementById("katalogKartlar");
-  const ara = (document.getElementById("urunAraInput")?.value || "").toLowerCase().trim();
-  const seciliKat = (document.getElementById("kategoriFiltre")?.value || "").trim();
   const siralama = document.getElementById("siralamaFiltre")?.value || "sira";
 
-  const filtrelenmis = katalogCache.filter(u => {
-    const katOk = !seciliKat || (u.kategori || "").trim() === seciliKat;
-    const araOk = !ara || (u.ad || "").toLowerCase().includes(ara) ||
-      (u.stokKodu || "").toLowerCase().includes(ara) ||
-      (u.barkod || "").toLowerCase().includes(ara);
-    return katOk && araOk;
-  });
-
-  const sirali = [...filtrelenmis].sort((a, b) => {
+  const sirali = [...katalogCache].sort((a, b) => {
     if (siralama === "kod") return (a.stokKodu || "").localeCompare(b.stokKodu || "", "tr");
     if (siralama === "ad") return (a.ad || "").localeCompare(b.ad || "", "tr");
     return (Number(a.sira) || 999) - (Number(b.sira) || 999);
@@ -209,10 +181,11 @@ function renderKatalog() {
 
   let tabloHtml = "", kartHtml = "";
   gruplar.forEach((urunler, kategori) => {
-    tabloHtml += `<tr><td colspan="6" style="background:var(--color-surface-2);font-weight:700;font-size:12.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--color-ink-soft);padding:8px 12px;">${kacisEt(kategori)}</td></tr>`;
-    kartHtml += `<div style="background:var(--color-surface-2);font-weight:700;font-size:12px;text-transform:uppercase;color:var(--color-ink-soft);padding:8px 12px;border-radius:var(--radius-sm);margin:14px 0 6px;">${kacisEt(kategori)}</div>`;
+    tabloHtml += `<tr class="kat-baslik" data-kategori="${kacisEt(kategori)}"><td colspan="6" style="background:var(--color-surface-2);font-weight:700;font-size:12.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--color-ink-soft);padding:8px 12px;">${kacisEt(kategori)}</td></tr>`;
+    kartHtml += `<div class="kat-baslik-kart" data-kategori="${kacisEt(kategori)}" style="background:var(--color-surface-2);font-weight:700;font-size:12px;text-transform:uppercase;color:var(--color-ink-soft);padding:8px 12px;border-radius:var(--radius-sm);margin:14px 0 6px;">${kacisEt(kategori)}</div>`;
     urunler.forEach(u => {
-      tabloHtml += `<tr>
+      const araAnahtar = [(u.ad || ""), (u.stokKodu || ""), (u.barkod || ""), (u.kategori || "")].join(" ").toLowerCase();
+      tabloHtml += `<tr data-uid="${u.id}" data-ara="${araAnahtar}" data-kat="${kacisEt((u.kategori || "").trim() || "Diğer")}">
         <td class="cell-code" style="font-size:12px;">${kacisEt(u.stokKodu || "—")}</td>
         <td><div style="font-weight:600;">${kacisEt(u.ad)}</div></td>
         <td>${kacisEt(u.birim || "")}</td>
@@ -220,7 +193,7 @@ function renderKatalog() {
         <td><input type="text" inputmode="decimal" class="cell-qty-input miktar-input" data-id="${u.id}" placeholder="0" style="width:80px;" /></td>
         <td><input type="text" class="input aciklama-input" data-id="${u.id}" placeholder="Not…" style="min-width:120px;font-size:12.5px;" /></td>
       </tr>`;
-      kartHtml += `<div class="row-card">
+      kartHtml += `<div class="row-card" data-uid="${u.id}" data-ara="${araAnahtar}" data-kat="${kacisEt((u.kategori || "").trim() || "Diğer")}">
         <div class="row-card__top">
           <div>
             <div class="row-card__name">${kacisEt(u.ad)}</div>
@@ -236,19 +209,51 @@ function renderKatalog() {
   tbody.innerHTML = tabloHtml;
   kartlar.innerHTML = kartHtml;
 
-  // innerHTML sonrası değerleri JS ile zorla set et (HTML attribute bazen çalışmaz)
-  if (miktarSakla.size > 0) {
-    document.querySelectorAll(".miktar-input[data-id]").forEach(inp => {
-      const val = miktarSakla.get(inp.dataset.id);
-      if (val) inp.value = val;
-    });
-  }
-  if (notSakla.size > 0) {
-    document.querySelectorAll(".aciklama-input[data-id]").forEach(inp => {
-      const val = notSakla.get(inp.dataset.id);
-      if (val) inp.value = val;
-    });
-  }
+  // Mevcut miktarları geri yükle
+  miktarSakla.forEach((val, id) => {
+    const inp = document.querySelector(`.miktar-input[data-id="${id}"]`);
+    if (inp) inp.value = val;
+  });
+  notSakla.forEach((val, id) => {
+    const inp = document.querySelector(`.aciklama-input[data-id="${id}"]`);
+    if (inp) inp.value = val;
+  });
+
+  katalogFiltrele(); // Mevcut filtre/aramayı uygula
+  butonGuncelle();
+}
+
+// Arama/kategori filtresi — DOM yeniden oluşturmaz, sadece göster/gizle
+function katalogFiltrele() {
+  const ara = (document.getElementById("urunAraInput")?.value || "").toLowerCase().trim();
+  const seciliKat = (document.getElementById("kategoriFiltre")?.value || "").trim();
+
+  // Tablo satırları
+  document.querySelectorAll("#katalogGovde tr[data-uid]").forEach(tr => {
+    const araOk = !ara || tr.dataset.ara.includes(ara);
+    const katOk = !seciliKat || tr.dataset.kat === seciliKat;
+    tr.style.display = (araOk && katOk) ? "" : "none";
+  });
+
+  // Kategori başlıklarını göster/gizle
+  document.querySelectorAll("#katalogGovde tr.kat-baslik").forEach(tr => {
+    const kat = tr.dataset.kategori;
+    const gorunur = !seciliKat || kat === seciliKat;
+    tr.style.display = gorunur ? "" : "none";
+  });
+
+  // Kart görünümü
+  document.querySelectorAll("#katalogKartlar .row-card[data-uid]").forEach(kart => {
+    const araOk = !ara || kart.dataset.ara.includes(ara);
+    const katOk = !seciliKat || kart.dataset.kat === seciliKat;
+    kart.style.display = (araOk && katOk) ? "" : "none";
+  });
+
+  document.querySelectorAll("#katalogKartlar .kat-baslik-kart").forEach(el => {
+    const kat = el.dataset.kategori;
+    const gorunur = !seciliKat || kat === seciliKat;
+    el.style.display = gorunur ? "" : "none";
+  });
 
   butonGuncelle();
 }
