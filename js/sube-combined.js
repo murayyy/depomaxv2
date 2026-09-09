@@ -215,6 +215,14 @@ function renderKatalog() {
   tbody.innerHTML = tabloHtml;
   kartlar.innerHTML = kartHtml;
 
+  // Arama haritasını doldur
+  katalogCache.forEach(u => {
+    urunAraHaritasi.set(u.id, {
+      ara: [(u.ad || ""), (u.stokKodu || ""), (u.barkod || ""), (u.kategori || "")].join(" ").toLowerCase(),
+      kat: (u.kategori || "").trim() || "Diğer"
+    });
+  });
+
   // Mevcut miktarları geri yükle
   miktarSakla.forEach((val, id) => {
     const inp = document.querySelector(`.miktar-input[data-id="${id}"]`);
@@ -230,35 +238,33 @@ function renderKatalog() {
 }
 
 // Arama/kategori filtresi — DOM yeniden oluşturmaz, sadece göster/gizle
+// uid → {ara, kat} haritası — HTML attribute yerine bellek kullan
+const urunAraHaritasi = new Map();
+
 function katalogFiltrele() {
   const ara = (document.getElementById("urunAraInput")?.value || "").toLowerCase().trim();
   const seciliKat = (document.getElementById("kategoriFiltre")?.value || "").trim();
 
-  // Tablo satırları
   document.querySelectorAll("#katalogGovde tr[data-uid]").forEach(tr => {
-    const araOk = !ara || tr.dataset.ara.includes(ara);
-    const katOk = !seciliKat || tr.dataset.kat === seciliKat;
+    const bilgi = urunAraHaritasi.get(tr.dataset.uid) || {};
+    const araOk = !ara || (bilgi.ara || "").includes(ara);
+    const katOk = !seciliKat || bilgi.kat === seciliKat;
     tr.style.display = (araOk && katOk) ? "" : "none";
   });
 
-  // Kategori başlıklarını göster/gizle
   document.querySelectorAll("#katalogGovde tr.kat-baslik").forEach(tr => {
-    const kat = tr.dataset.kategori;
-    const gorunur = !seciliKat || kat === seciliKat;
-    tr.style.display = gorunur ? "" : "none";
+    tr.style.display = (!seciliKat || tr.dataset.kategori === seciliKat) ? "" : "none";
   });
 
-  // Kart görünümü
   document.querySelectorAll("#katalogKartlar .row-card[data-uid]").forEach(kart => {
-    const araOk = !ara || kart.dataset.ara.includes(ara);
-    const katOk = !seciliKat || kart.dataset.kat === seciliKat;
+    const bilgi = urunAraHaritasi.get(kart.dataset.uid) || {};
+    const araOk = !ara || (bilgi.ara || "").includes(ara);
+    const katOk = !seciliKat || bilgi.kat === seciliKat;
     kart.style.display = (araOk && katOk) ? "" : "none";
   });
 
   document.querySelectorAll("#katalogKartlar .kat-baslik-kart").forEach(el => {
-    const kat = el.dataset.kategori;
-    const gorunur = !seciliKat || kat === seciliKat;
-    el.style.display = gorunur ? "" : "none";
+    el.style.display = (!seciliKat || el.dataset.kategori === seciliKat) ? "" : "none";
   });
 
   butonGuncelle();
