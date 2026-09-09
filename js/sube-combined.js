@@ -235,6 +235,21 @@ function renderKatalog() {
 
   tbody.innerHTML = tabloHtml;
   kartlar.innerHTML = kartHtml;
+
+  // innerHTML sonrası değerleri JS ile zorla set et (HTML attribute bazen çalışmaz)
+  if (miktarSakla.size > 0) {
+    document.querySelectorAll(".miktar-input[data-id]").forEach(inp => {
+      const val = miktarSakla.get(inp.dataset.id);
+      if (val) inp.value = val;
+    });
+  }
+  if (notSakla.size > 0) {
+    document.querySelectorAll(".aciklama-input[data-id]").forEach(inp => {
+      const val = notSakla.get(inp.dataset.id);
+      if (val) inp.value = val;
+    });
+  }
+
   butonGuncelle();
 }
 
