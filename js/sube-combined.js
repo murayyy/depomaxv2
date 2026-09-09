@@ -217,8 +217,8 @@ function renderKatalog() {
         <td><div style="font-weight:600;">${kacisEt(u.ad)}</div></td>
         <td>${kacisEt(u.birim || "")}</td>
         <td>${u.minMiktar ? sayiBicimle(u.minMiktar) : "—"}</td>
-        <td><input type="text" inputmode="decimal" class="cell-qty-input miktar-input" data-id="${u.id}" value="${miktarSakla.get(u.id) || ""}" placeholder="0" style="width:80px;" /></td>
-        <td><input type="text" class="input aciklama-input" data-id="${u.id}" value="${kacisEt(notSakla.get(u.id) || "")}" placeholder="Not…" style="min-width:120px;font-size:12.5px;" /></td>
+        <td><input type="text" inputmode="decimal" class="cell-qty-input miktar-input" data-id="${u.id}" placeholder="0" style="width:80px;" /></td>
+        <td><input type="text" class="input aciklama-input" data-id="${u.id}" placeholder="Not…" style="min-width:120px;font-size:12.5px;" /></td>
       </tr>`;
       kartHtml += `<div class="row-card">
         <div class="row-card__top">
@@ -227,8 +227,8 @@ function renderKatalog() {
             <div class="row-card__code">${kacisEt(u.stokKodu || "")} · ${kacisEt(u.birim || "")}</div>
           </div>
         </div>
-        <input type="text" inputmode="decimal" class="cell-qty-input miktar-input" data-id="${u.id}" value="${miktarSakla.get(u.id) || ""}" placeholder="Miktar…" style="margin-top:8px;" />
-        <input type="text" class="input aciklama-input" data-id="${u.id}" value="${kacisEt(notSakla.get(u.id) || "")}" placeholder="Not…" style="margin-top:6px;font-size:12.5px;" />
+        <input type="text" inputmode="decimal" class="cell-qty-input miktar-input" data-id="${u.id}" placeholder="Miktar…" style="margin-top:8px;" />
+        <input type="text" class="input aciklama-input" data-id="${u.id}" placeholder="Not…" style="margin-top:6px;font-size:12.5px;" />
       </div>`;
     });
   });

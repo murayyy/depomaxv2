@@ -6,18 +6,20 @@
 // verisiyle karşılaştırır. Stok gelmiş ürünler üstte ve yeşil rozetle çıkar.
 // ============================================================================
 import { auth, signOut, sayfaKorumasi } from "./firebase.js";
-import { tumSiparisleriGetir, urunleriniGetir, urunGuncelle, urunEkle, urunSil, raflaraGoreUrunBul } from "./veri.js";
+import { tumSiparisleriGetir, urunleriniGetir, urunGuncelle, urunEkle, urunSil, raflaraGoreUrunBul, katalogDinle } from "./veri.js";
 import { stoklariDinle, stokBildirimGoruldu } from "./stok.js";
 import { arayuzHazirla, toast, onayIste, girdiIste, kacisEt, sayiBicimle, ondalikOku, yukleniyorGoster, yukleniyorKapat } from "./utils.js";
 
 arayuzHazirla();
 
 let mevcutKullanici = null;
+let katalogCache = [];
 let stokMap = new Map();
 let gruplar = []; // son yüklenen eksik ürün grupları
 let mevcutSiparisler = []; // "ürün ekle" açılır listesi için
 
 sayfaKorumasi(["toplayici", "kontrolor"], (kullanici) => {
+  katalogDinle((liste) => { katalogCache = liste.filter(u => u.aktif !== false); });
   mevcutKullanici = kullanici;
   document.getElementById("kullaniciAdi").textContent = kullanici.ad || kullanici.uid;
   document.getElementById("rolEtiketi").textContent = kullanici.rol;
@@ -45,8 +47,6 @@ stoklariDinle((map) => {
 });
 
 document.getElementById("yenileBtn").addEventListener("click", yukle);
-document.getElementById("eksikAraInput")?.addEventListener("input", render);
-document.getElementById("eksikDurumFiltre")?.addEventListener("change", render);
 
 document.getElementById("urunEkleBtn").addEventListener("click", () => eksikUrunEkleModalAc());
 
@@ -121,8 +121,10 @@ function eksikUrunEkleModalAc(onDoldur, basariCallback) {
           <select class="select" id="eeSiparis">${siparisOptions}</select>
         </div>
         <div class="input-row">
-          <div class="field"><label>Ürün Kodu</label><input class="input" id="eeKod" value="${kacisEt(on.kod || "")}" /></div>
-          <div class="field"><label>Ürün Adı</label><input class="input" id="eeAd" value="${kacisEt(on.ad || "")}" /></div>
+          <datalist id="eeKodList">${katalogCache.map(u => `<option value="${kacisEt(u.stokKodu || "")}">`).join("")}</datalist>
+          <datalist id="eeAdList">${katalogCache.map(u => `<option value="${kacisEt(u.ad)}">`).join("")}</datalist>
+          <div class="field"><label>Ürün Kodu</label><input class="input" id="eeKod" value="${kacisEt(on.kod || "")}" list="eeKodList" autocomplete="off" /></div>
+          <div class="field"><label>Ürün Adı</label><input class="input" id="eeAd" value="${kacisEt(on.ad || "")}" list="eeAdList" autocomplete="off" /></div>
           <div class="field"><label>Miktar</label><input class="input" type="text" inputmode="decimal" id="eeMiktar" value="${on.miktar || ""}" /></div>
           <div class="field"><label>Birim</label><input class="input" id="eeBirim" placeholder="KG, Adet…" value="${kacisEt(on.birim || "")}" /></div>
           <div class="field"><label>Reyon</label><input class="input" id="eeReyon" /></div>
@@ -137,6 +139,23 @@ function eksikUrunEkleModalAc(onDoldur, basariCallback) {
     </div>`;
   const kapat = () => { root.innerHTML = ""; };
   root.querySelector('[data-role="iptal"]').onclick = kapat;
+
+  // Katalog autocomplete
+  const eeKodEl = root.querySelector("#eeKod");
+  const eeAdEl = root.querySelector("#eeAd");
+  const eeBirimEl = root.querySelector("#eeBirim");
+  function katalogDoldur(u) {
+    if (!u) return;
+    if (eeKodEl && !eeKodEl.value) eeKodEl.value = u.stokKodu || "";
+    if (eeAdEl && !eeAdEl.value) eeAdEl.value = u.ad || "";
+    if (eeBirimEl && u.birim) eeBirimEl.value = u.birim;
+  }
+  eeAdEl?.addEventListener("change", () => katalogDoldur(katalogCache.find(u => u.ad === eeAdEl.value)));
+  eeKodEl?.addEventListener("change", () => {
+    const u = katalogCache.find(u => u.stokKodu === eeKodEl.value);
+    if (u && eeAdEl) eeAdEl.value = u.ad || "";
+    katalogDoldur(u);
+  });
   root.querySelector('[data-role="backdrop"]').onclick = (e) => { if (e.target.dataset.role === "backdrop") kapat(); };
   root.querySelector('[data-role="onay"]').onclick = async () => {
     const siparisId = document.getElementById("eeSiparis").value;
@@ -239,18 +258,10 @@ function render() {
   bos.classList.add("u-hidden");
 
   // Stok gelenler üstte
-  const ara = (document.getElementById("eksikAraInput")?.value || "").toLowerCase().trim();
-  const durumFiltre = document.getElementById("eksikDurumFiltre")?.value || "";
-
   const siraliGruplar = [...gruplar].sort((a, b) => {
     const da = stokDurumu(a), db = stokDurumu(b);
     const oncelik = (d) => (d.sinif === "badge-green" ? 0 : d.sinif === "badge-amber" ? 1 : 2);
     return oncelik(da) - oncelik(db);
-  }).filter((g) => {
-    if (ara && !(g.ad || "").toLowerCase().includes(ara) && !(g.kod || "").toLowerCase().includes(ara)) return false;
-    if (durumFiltre === "stokta" && stokDurumu(g).sinif !== "badge-green") return false;
-    if (durumFiltre === "yok" && stokDurumu(g).sinif === "badge-green") return false;
-    return true;
   });
 
   const stokGelenSayisi = siraliGruplar.filter((g) => stokDurumu(g).sinif === "badge-green").length;
@@ -339,47 +350,27 @@ function detayModalAc(grup) {
   root.querySelectorAll("[data-topla]").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const [siparisId, urunId] = btn.dataset.topla.split("|");
-      const kayit = grup.kayitlar.find(k => k.siparisId === siparisId && k.urunId === urunId);
-      const orijinalMiktar = kayit?.miktar || 0;
-
-      const miktarRoot = document.getElementById("modalRoot");
-      miktarRoot.innerHTML = `
-        <div class="modal-backdrop" data-role="backdrop2">
-          <div class="modal" style="max-width:360px;">
-            <h3>✅ Toplandı İşaretle</h3>
-            <p style="font-size:13px;">Siparişte istenen: <strong>${sayiBicimle(orijinalMiktar)} ${kacisEt(kayit?.birim || "")}</strong></p>
-            <div class="field">
-              <label>Toplanan Miktar</label>
-              <input class="input" type="text" inputmode="decimal" id="toplamaMiktarInput"
-                value="${orijinalMiktar}" style="font-size:16px;" />
-            </div>
-            <div class="modal__actions">
-              <button class="btn btn-ghost" id="toplamIptal">Vazgeç</button>
-              <button class="btn btn-green" id="toplamOnayla">✅ Toplandı</button>
-            </div>
-          </div>
-        </div>`;
-      document.getElementById("toplamIptal").onclick = () => { miktarRoot.innerHTML = ""; };
-      document.getElementById("toplamOnayla").onclick = async () => {
-        const yeniMiktar = ondalikOku(document.getElementById("toplamaMiktarInput").value);
-        yukleniyorGoster("İşaretleniyor…");
-        try {
-          await urunGuncelle(siparisId, urunId, {
-            toplandi: true, eksik: false,
-            ...(yeniMiktar !== orijinalMiktar ? { gercekMiktar: yeniMiktar } : {}),
-            toplayanKullanici: mevcutKullanici.ad || mevcutKullanici.uid
-          });
-          yukleniyorKapat();
-          toast("Ürün toplandı olarak işaretlendi.", "success");
-          miktarRoot.innerHTML = "";
-          kapat();
-          yukle();
-        } catch (err) {
-          yukleniyorKapat();
-          console.error(err);
-          toast("İşaretlenirken hata oluştu.", "error");
-        }
-      };
+      const onay = await onayIste({
+        baslik: "Toplandı Olarak İşaretle",
+        metin: "Bu ürün artık stokta var diyerek o siparişte toplandı olarak işaretlenecek.",
+        onayMetni: "İşaretle"
+      });
+      if (!onay) return;
+      yukleniyorGoster("İşaretleniyor…");
+      try {
+        await urunGuncelle(siparisId, urunId, {
+          toplandi: true, eksik: false,
+          toplayanKullanici: mevcutKullanici.ad || mevcutKullanici.uid
+        });
+        yukleniyorKapat();
+        toast("Ürün toplandı olarak işaretlendi.", "success");
+        kapat();
+        yukle();
+      } catch (err) {
+        yukleniyorKapat();
+        console.error(err);
+        toast("İşaretlenirken hata oluştu.", "error");
+      }
     });
   });
 
