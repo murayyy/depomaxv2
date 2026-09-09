@@ -47,6 +47,8 @@ stoklariDinle((map) => {
 });
 
 document.getElementById("yenileBtn").addEventListener("click", yukle);
+document.getElementById("eksikAraInput")?.addEventListener("input", render);
+document.getElementById("eksikDurumFiltre")?.addEventListener("change", render);
 
 document.getElementById("urunEkleBtn").addEventListener("click", () => eksikUrunEkleModalAc());
 
@@ -180,7 +182,7 @@ function eksikUrunEkleModalAc(onDoldur, basariCallback) {
         miktar: ondalikOku(document.getElementById("eeMiktar").value),
         birim: document.getElementById("eeBirim").value.trim(),
         reyon: document.getElementById("eeReyon").value.trim(),
-        barkod: document.getElementById("eeBarkod").value.trim(),
+        barkod: root.querySelector("#eeBarkod")?.value.trim() || "",
         aciklama: document.getElementById("eeAciklama").value.trim(),
         eksik: true,
         toplayanKullanici: mevcutKullanici.ad || mevcutKullanici.uid
@@ -260,6 +262,8 @@ function stokDurumu(grup) {
 function render() {
   const kapsayici = document.getElementById("eksikListesi");
   const bos = document.getElementById("bosDurum");
+  const ara = (document.getElementById("eksikAraInput")?.value || "").toLowerCase().trim();
+  const durumFiltre = document.getElementById("eksikDurumFiltre")?.value || "";
 
   if (gruplar.length === 0) {
     kapsayici.innerHTML = "";
@@ -274,6 +278,11 @@ function render() {
     const da = stokDurumu(a), db = stokDurumu(b);
     const oncelik = (d) => (d.sinif === "badge-green" ? 0 : d.sinif === "badge-amber" ? 1 : 2);
     return oncelik(da) - oncelik(db);
+  }).filter(g => {
+    if (ara && !(g.ad || "").toLowerCase().includes(ara) && !(g.kod || "").toLowerCase().includes(ara)) return false;
+    if (durumFiltre === "stokta" && stokDurumu(g).sinif !== "badge-green") return false;
+    if (durumFiltre === "yok" && stokDurumu(g).sinif === "badge-green") return false;
+    return true;
   });
 
   const stokGelenSayisi = siraliGruplar.filter((g) => stokDurumu(g).sinif === "badge-green").length;
