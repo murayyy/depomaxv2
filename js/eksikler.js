@@ -144,13 +144,25 @@ function eksikUrunEkleModalAc(onDoldur, basariCallback) {
   const eeKodEl = root.querySelector("#eeKod");
   const eeAdEl = root.querySelector("#eeAd");
   const eeBirimEl = root.querySelector("#eeBirim");
+  const eeReyonEl = root.querySelector("#eeReyon");
+  const eeBarkodEl = root.querySelector("#eeBarkod");
   function katalogDoldur(u) {
     if (!u) return;
     if (eeKodEl && !eeKodEl.value) eeKodEl.value = u.stokKodu || "";
     if (eeAdEl && !eeAdEl.value) eeAdEl.value = u.ad || "";
     if (eeBirimEl && u.birim) eeBirimEl.value = u.birim;
+    if (eeReyonEl && u.reyon) eeReyonEl.value = u.reyon;
+    if (eeBarkodEl && u.barkod) eeBarkodEl.value = u.barkod;
   }
-  eeAdEl?.addEventListener("change", () => katalogDoldur(katalogCache.find(u => u.ad === eeAdEl.value)));
+  eeAdEl?.addEventListener("change", () => {
+    const u = katalogCache.find(u => u.ad === eeAdEl.value);
+    if (u) {
+      if (!eeKodEl.value) eeKodEl.value = u.stokKodu || "";
+      if (eeBirimEl && u.birim) eeBirimEl.value = u.birim;
+      if (eeReyonEl && u.reyon) eeReyonEl.value = u.reyon;
+      if (eeBarkodEl && u.barkod) eeBarkodEl.value = u.barkod;
+    }
+  });
   eeKodEl?.addEventListener("change", () => {
     const u = katalogCache.find(u => u.stokKodu === eeKodEl.value);
     if (u && eeAdEl) eeAdEl.value = u.ad || "";
