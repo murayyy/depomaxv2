@@ -105,7 +105,11 @@ function satirHtml(k) {
           <div style="display:flex;gap:4px;margin-top:4px;">
             <input class="input" data-rol="lat" value="${k.lat || ""}" placeholder="Enlem (örn. 39.9)" style="font-size:12.5px;" />
             <input class="input" data-rol="lng" value="${k.lng || ""}" placeholder="Boylam (örn. 32.8)" style="font-size:12.5px;" />
-          </div>` : ""}
+          </div>
+          <label style="display:flex;align-items:center;gap:6px;margin-top:6px;cursor:pointer;font-size:12.5px;">
+            <input type="checkbox" data-rol="franchisee" ${k.franchisee ? "checked" : ""} style="width:14px;height:14px;" />
+            Franchise kullanıcısı
+          </label>` : ""}
       </td>
       <td>${tarihBicimle(k.olusturulmaTarihi)}</td>
       <td>${k.uid === mevcutKullanici.uid ? "" : `<button class="btn btn-danger btn-sm" data-rol="sil">Sil</button>`}</td>
@@ -121,6 +125,7 @@ function kartHtml(k) {
           <div class="row-card__code">${kacisEt(k.eposta)}</div>
         </div>
         <span class="badge badge-gray">${ROL_ETIKETI[k.rol] || k.rol}</span>
+        ${k.franchisee ? '<span class="badge badge-blue" style="font-size:10px;">Franchise</span>' : ""}
       </div>
       <div class="field" style="margin-top:10px;">
         <label class="row-card__label">Rol</label>
@@ -163,6 +168,15 @@ function baglaOlaylar(kapsayici) {
       };
       satir.querySelectorAll('[data-rol="subeAdi"],[data-rol="adres"],[data-rol="telefon"],[data-rol="lat"],[data-rol="lng"]')
         .forEach((inp) => inp.addEventListener("change", saveSubeFields));
+
+      // Franchise toggle
+      const franchiseeChk = satir.querySelector('[data-rol="franchisee"]');
+      if (franchiseeChk) {
+        franchiseeChk.addEventListener("change", async () => {
+          await kullaniciRolGuncelle(uid, "sube", { franchisee: franchiseeChk.checked });
+          toast(franchiseeChk.checked ? "Franchise olarak işaretlendi." : "Franchise kaldırıldı.", "success");
+        });
+      }
     }
     const silBtn = satir.querySelector('[data-rol="sil"]');
     if (silBtn) {
@@ -210,6 +224,15 @@ function yeniKullaniciModalAc() {
           <label>Şube Adı</label>
           <input class="input" id="ykSubeAdi" placeholder="Örn. Bozüyük Şubesi" />
         </div>
+        <div class="field u-hidden" id="ykFranchiseAlani">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:500;">
+            <input type="checkbox" id="ykFranchise" style="width:16px;height:16px;" />
+            Franchise kullanıcısı
+          </label>
+          <p style="font-size:12px;color:var(--color-ink-soft);margin:4px 0 0 24px;">
+            Franchise kullanıcılar sipariş verebilir ancak toplanıyor/kontrol gibi iç durumları görmez.
+          </p>
+        </div>
         <div class="field u-hidden" id="ykPlakaAlani">
           <label>Araç Plakası</label>
           <input class="input" id="ykPlaka" placeholder="Örn. 34 ABC 123" />
@@ -224,7 +247,9 @@ function yeniKullaniciModalAc() {
   const rolSec = root.querySelector("#ykRol");
   const subeAdiAlani = root.querySelector("#ykSubeAdiAlani");
   const guncelle = () => {
-    subeAdiAlani.classList.toggle("u-hidden", rolSec.value !== "sube");
+    const subeMi = rolSec.value === "sube";
+    subeAdiAlani.classList.toggle("u-hidden", !subeMi);
+    root.querySelector("#ykFranchiseAlani").classList.toggle("u-hidden", !subeMi);
     root.querySelector("#ykPlakaAlani").classList.toggle("u-hidden", rolSec.value !== "surucu");
   };
   rolSec.addEventListener("change", guncelle);
@@ -238,6 +263,7 @@ function yeniKullaniciModalAc() {
     const sifre = document.getElementById("ykSifre").value;
     const rol = document.getElementById("ykRol").value;
     const subeAdi = document.getElementById("ykSubeAdi").value.trim();
+    const franchisee = document.getElementById("ykFranchise")?.checked || false;
     if (!ad || !eposta || sifre.length < 6) {
       toast("Lütfen ad, e-posta girin ve en az 6 karakterli bir şifre belirleyin.", "error");
       return;
@@ -246,7 +272,7 @@ function yeniKullaniciModalAc() {
     if (rol === "sube" && !subeAdi) { toast("Şube rolü için şube adı girilmeli.", "error"); return; }
     if (rol === "surucu" && !plaka) { toast("Sürücü rolü için plaka girilmeli.", "error"); return; }
     try {
-      const ekstraAlanlar = rol === "sube" ? { subeAdi } : rol === "surucu" ? { plaka } : {};
+      const ekstraAlanlar = rol === "sube" ? { subeAdi, franchisee } : rol === "surucu" ? { plaka } : {};
       await kullaniciOlustur({ ad, eposta, sifre, rol, ...ekstraAlanlar });
       kapat();
       toast(`${ad} eklendi.`, "success");
