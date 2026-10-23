@@ -34,13 +34,22 @@ export function kullanicilariDinle(callback) {
  * Yeni bir personel hesabı oluşturur: Authentication'da hesap açar +
  * Firestore'da rol belgesini yazar. Admin'in kendi oturumunu etkilemez.
  */
-export async function kullaniciOlustur({ ad, eposta, sifre, rol }) {
+export async function kullaniciOlustur({ ad, eposta, sifre, rol, franchisee = false, subeAdi = "" }) {
   const cred = await createUserWithEmailAndPassword(ikincilAuth, eposta, sifre);
   const uid = cred.user.uid;
-  await setDoc(doc(db, KULLANICILAR, uid), {
+
+  const veri = {
     ad, eposta, rol,
     olusturulmaTarihi: serverTimestamp()
-  });
+  };
+
+  // Franchise alanı — sadece şube rolünde anlamlı
+  if (rol === "sube") {
+    veri.franchisee = franchisee;
+    if (subeAdi.trim()) veri.subeAdi = subeAdi.trim();
+  }
+
+  await setDoc(doc(db, KULLANICILAR, uid), veri);
   await ikincilCikisYap(ikincilAuth); // ikincil oturumu temizle (admin'in ana oturumu etkilenmez)
   return uid;
 }
