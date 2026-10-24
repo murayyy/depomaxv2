@@ -347,9 +347,9 @@ function renderSiparisler(liste) {
         </div>
       </div>
       <div class="order-card__actions">
-        ${!franchiseeKullanici && DUZENLENEBILIR.includes(s.durum) ? `<button class="btn btn-ghost btn-sm" data-urun-ekle="${s.id}">+ Ürün Ekle</button>` : ""}
+        ${(franchiseeKullanici ? s.durum === "beklemede" : DUZENLENEBILIR.includes(s.durum)) ? `<button class="btn btn-ghost btn-sm" data-urun-ekle="${s.id}">✏️ Düzenle</button>` : ""}
         ${teslimAlinabilir(s) ? `<button class="btn btn-green btn-sm" data-teslim="${s.id}">✅ Teslim Aldım</button>` : s.durum === "sevk_edildi" && !franchiseeKullanici ? `<span class="u-text-soft" style="font-size:12px;">Aktarım bekleniyor…</span>` : ""}
-        ${!franchiseeKullanici ? `<button class="btn btn-ghost btn-sm" data-detay="${s.id}">Detay</button>` : ""}
+        <button class="btn btn-ghost btn-sm" data-detay="${s.id}">Detay</button>
       </div>
     </div>`;
   }).join("");
