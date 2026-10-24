@@ -621,7 +621,6 @@ async function teslimAlModalAc(siparisId) {
     toast("✅ Teslimat onaylandı!", "success");
   };
 }
-
 function urunEkleModalAc(siparisId) {
   const siparis = siparislerCache.find(s => s.id === siparisId);
   const kontrolSonrasi = siparis && ["tamamlandi", "sevk_edildi"].includes(siparis.durum);
