@@ -49,8 +49,7 @@ sayfaKorumasi(["sube", "fabrika"], (kullanici) => {
   mevcutKullanici = kullanici;
   franchiseeKullanici = !!kullanici.franchisee;
   document.getElementById("kullaniciAdi").textContent = kullanici.ad || kullanici.uid;
-  document.getElementById("rolEtiketi").textContent = franchiseeKullanici
-    ? "Franchise" : kullanici.rol;
+  document.getElementById("rolEtiketi").textContent = kullanici.rol;
 
   // Franchise kullanıcılar "katalog dışı ürün" ve "excel yükle" butonlarını görmez
   if (franchiseeKullanici) {
