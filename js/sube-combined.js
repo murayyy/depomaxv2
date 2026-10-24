@@ -5,7 +5,7 @@ import { auth, signOut, sayfaKorumasi } from "./firebase.js";
 import {
   katalogDinle, subeSimarisiOlustur,
   subeSiparisleriDinle, urunleriniGetir, urunEkle,
-  teslimatKaydet, teslimatYenidenOnayla
+  teslimatKaydet, teslimatYenidenOnayla, siparisGuncelle
 } from "./veri.js";
 import {
   arayuzHazirla, toast, onayIste, ondalikOku,
@@ -18,7 +18,7 @@ arayuzHazirla();
    ORTAK DURUM
    ============================================================ */
 let mevcutKullanici = null;
-let franchiseeKullanici = false; // Franchise kullanıcı mı?
+let franchiseeKullanici = false;
 let katalogCache = [];
 let ozelKalemler = [];
 const miktarSakla = new Map();
@@ -42,24 +42,62 @@ document.querySelectorAll("[data-sekme]").forEach(btn =>
   btn.addEventListener("click", () => sekmeGoster(btn.dataset.sekme))
 );
 
-/* ============================================================
-   SAYFA KORUMASI — tek seferlik
-   ============================================================ */
+const TASLAK_KEY = "sube_taslak";
+
+function taslakKaydet() {
+  if (miktarSakla.size === 0 && notSakla.size === 0 && ozelKalemler.length === 0) return;
+  const veri = {
+    miktarlar: [...miktarSakla.entries()],
+    notlar: [...notSakla.entries()],
+    ozel: ozelKalemler,
+    tarih: Date.now()
+  };
+  try { localStorage.setItem(TASLAK_KEY, JSON.stringify(veri)); } catch (e) {}
+}
+
+function taslakYukle() {
+  try {
+    const json = localStorage.getItem(TASLAK_KEY);
+    if (!json) return false;
+    const veri = JSON.parse(json);
+    // 24 saatten eski taslağı sil
+    if (Date.now() - veri.tarih > 24 * 60 * 60 * 1000) { localStorage.removeItem(TASLAK_KEY); return false; }
+    (veri.miktarlar || []).forEach(([k, v]) => miktarSakla.set(k, v));
+    (veri.notlar || []).forEach(([k, v]) => notSakla.set(k, v));
+    (veri.ozel || []).forEach(o => ozelKalemler.push(o));
+    return miktarSakla.size > 0 || ozelKalemler.length > 0;
+  } catch (e) { return false; }
+}
+
+function taslakSil() {
+  try { localStorage.removeItem(TASLAK_KEY); } catch (e) {}
+}
 sayfaKorumasi(["sube", "fabrika"], (kullanici) => {
   mevcutKullanici = kullanici;
   franchiseeKullanici = !!kullanici.franchisee;
   document.getElementById("kullaniciAdi").textContent = kullanici.ad || kullanici.uid;
   document.getElementById("rolEtiketi").textContent = kullanici.rol;
 
-  // Franchise kullanıcılar "katalog dışı ürün" ve "excel yükle" butonlarını görmez
   if (franchiseeKullanici) {
     document.getElementById("katalogDisiEkleBtn")?.classList.add("u-hidden");
     document.querySelector(".excel-yukle-alani")?.classList.add("u-hidden");
   }
 
   katalogDinle((liste) => {
+    const eskiBoyut = katalogCache.length;
     katalogCache = liste.filter(u => u.aktif !== false);
-    katalogGuncellendi();
+    const taslakVardi = taslakYukle();
+    // Eğer kullanıcı miktar girdiyse ve katalog zaten yüklüyse yeniden render etme
+    if (eskiBoyut > 0 && miktarSakla.size > 0) {
+      katalogFiltrele(); // Sadece filtrele, DOM'u yıkma
+    } else {
+      katalogGuncellendi();
+    }
+    if (taslakVardi) {
+      renderOzelKalemler();
+      butonGuncelle();
+      toast("📝 Kaydedilmiş taslak yüklendi.", "info", 4000);
+    }
   });
 
   siparisleriBaslat();
@@ -99,38 +137,48 @@ document.addEventListener("input", (e) => {
     const val = ondalikOku(e.target.value);
     if (id) { if (val > 0) miktarSakla.set(id, e.target.value); else miktarSakla.delete(id); }
     butonGuncelle();
+    taslakKaydet();
   }
   if (e.target.classList.contains("aciklama-input")) {
     const id = e.target.dataset.id;
     if (id) { if (e.target.value.trim()) notSakla.set(id, e.target.value); else notSakla.delete(id); }
   }
-  if (e.target.id === "urunAraInput") renderKatalog();
+  if (e.target.id === "urunAraInput") katalogFiltrele();
 });
 
-document.getElementById("kategoriFiltre")?.addEventListener("change", () => renderKatalog());
-document.getElementById("siralamaFiltre")?.addEventListener("change", () => renderKatalog());
+document.getElementById("kategoriFiltre")?.addEventListener("change", () => katalogFiltrele());
+document.getElementById("siralamaFiltre")?.addEventListener("change", () => renderKatalog()); // Sıralama değişince yeniden sırala
 
 function butonGuncelle() {
   const herhangi = miktarSakla.size > 0 || ozelKalemler.length > 0;
   document.getElementById("siparisGonderBtn").disabled = !herhangi;
+
+  // Toplam KG hesapla
+  let toplamKg = 0;
+  miktarSakla.forEach((val, id) => {
+    const urun = katalogCache.find(u => u.id === id);
+    if (urun && String(urun.birim || "").trim().toLowerCase() === "kg") {
+      toplamKg += ondalikOku(val) || 0;
+    }
+  });
+  const tonajEl = document.getElementById("siparisToplamKg");
+  if (tonajEl) {
+    if (toplamKg > 0) {
+      tonajEl.textContent = `Toplam: ${sayiBicimle(toplamKg)} KG`;
+      tonajEl.style.display = "";
+    } else {
+      tonajEl.style.display = "none";
+    }
+  }
 }
 
+// Katalog ilk kez veya sıralama/katalog değişince tam render
 function renderKatalog() {
   const tbody = document.getElementById("katalogGovde");
   const kartlar = document.getElementById("katalogKartlar");
-  const ara = (document.getElementById("urunAraInput")?.value || "").toLowerCase().trim();
-  const seciliKat = (document.getElementById("kategoriFiltre")?.value || "").trim();
   const siralama = document.getElementById("siralamaFiltre")?.value || "sira";
 
-  const filtrelenmis = katalogCache.filter(u => {
-    const katOk = !seciliKat || (u.kategori || "").trim() === seciliKat;
-    const araOk = !ara || (u.ad || "").toLowerCase().includes(ara) ||
-      (u.stokKodu || "").toLowerCase().includes(ara) ||
-      (u.barkod || "").toLowerCase().includes(ara);
-    return katOk && araOk;
-  });
-
-  const sirali = [...filtrelenmis].sort((a, b) => {
+  const sirali = [...katalogCache].sort((a, b) => {
     if (siralama === "kod") return (a.stokKodu || "").localeCompare(b.stokKodu || "", "tr");
     if (siralama === "ad") return (a.ad || "").localeCompare(b.ad || "", "tr");
     return (Number(a.sira) || 999) - (Number(b.sira) || 999);
@@ -146,32 +194,86 @@ function renderKatalog() {
 
   let tabloHtml = "", kartHtml = "";
   gruplar.forEach((urunler, kategori) => {
-    tabloHtml += `<tr><td colspan="6" style="background:var(--color-surface-2);font-weight:700;font-size:12.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--color-ink-soft);padding:8px 12px;">${kacisEt(kategori)}</td></tr>`;
-    kartHtml += `<div style="background:var(--color-surface-2);font-weight:700;font-size:12px;text-transform:uppercase;color:var(--color-ink-soft);padding:8px 12px;border-radius:var(--radius-sm);margin:14px 0 6px;">${kacisEt(kategori)}</div>`;
+    tabloHtml += `<tr class="kat-baslik" data-kategori="${kacisEt(kategori)}"><td colspan="6" style="background:var(--color-surface-2);font-weight:700;font-size:12.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--color-ink-soft);padding:8px 12px;">${kacisEt(kategori)}</td></tr>`;
+    kartHtml += `<div class="kat-baslik-kart" data-kategori="${kacisEt(kategori)}" style="background:var(--color-surface-2);font-weight:700;font-size:12px;text-transform:uppercase;color:var(--color-ink-soft);padding:8px 12px;border-radius:var(--radius-sm);margin:14px 0 6px;">${kacisEt(kategori)}</div>`;
     urunler.forEach(u => {
-      tabloHtml += `<tr>
+      const araAnahtar = [(u.ad || ""), (u.stokKodu || ""), (u.barkod || ""), (u.kategori || "")].join(" ").toLowerCase();
+      tabloHtml += `<tr data-uid="${u.id}" data-ara="${araAnahtar}" data-kat="${kacisEt((u.kategori || "").trim() || "Diğer")}">
         <td class="cell-code" style="font-size:12px;">${kacisEt(u.stokKodu || "—")}</td>
         <td><div style="font-weight:600;">${kacisEt(u.ad)}</div></td>
         <td>${kacisEt(u.birim || "")}</td>
         <td>${u.minMiktar ? sayiBicimle(u.minMiktar) : "—"}</td>
-        <td><input type="text" inputmode="decimal" class="cell-qty-input miktar-input" data-id="${u.id}" value="${miktarSakla.get(u.id) || ""}" placeholder="0" style="width:80px;" /></td>
-        <td><input type="text" class="input aciklama-input" data-id="${u.id}" value="${kacisEt(notSakla.get(u.id) || "")}" placeholder="Not…" style="min-width:120px;font-size:12.5px;" /></td>
+        <td><input type="text" inputmode="decimal" class="cell-qty-input miktar-input" data-id="${u.id}" placeholder="0" style="width:80px;" /></td>
+        <td><input type="text" class="input aciklama-input" data-id="${u.id}" placeholder="Not…" style="min-width:120px;font-size:12.5px;" /></td>
       </tr>`;
-      kartHtml += `<div class="row-card">
+      kartHtml += `<div class="row-card" data-uid="${u.id}" data-ara="${araAnahtar}" data-kat="${kacisEt((u.kategori || "").trim() || "Diğer")}">
         <div class="row-card__top">
           <div>
             <div class="row-card__name">${kacisEt(u.ad)}</div>
             <div class="row-card__code">${kacisEt(u.stokKodu || "")} · ${kacisEt(u.birim || "")}</div>
           </div>
         </div>
-        <input type="text" inputmode="decimal" class="cell-qty-input miktar-input" data-id="${u.id}" value="${miktarSakla.get(u.id) || ""}" placeholder="Miktar…" style="margin-top:8px;" />
-        <input type="text" class="input aciklama-input" data-id="${u.id}" value="${kacisEt(notSakla.get(u.id) || "")}" placeholder="Not…" style="margin-top:6px;font-size:12.5px;" />
+        <input type="text" inputmode="decimal" class="cell-qty-input miktar-input" data-id="${u.id}" placeholder="Miktar…" style="margin-top:8px;" />
+        <input type="text" class="input aciklama-input" data-id="${u.id}" placeholder="Not…" style="margin-top:6px;font-size:12.5px;" />
       </div>`;
     });
   });
 
   tbody.innerHTML = tabloHtml;
   kartlar.innerHTML = kartHtml;
+
+  // Arama haritasını doldur
+  katalogCache.forEach(u => {
+    urunAraHaritasi.set(u.id, {
+      ara: [(u.ad || ""), (u.stokKodu || ""), (u.barkod || ""), (u.kategori || "")].join(" ").toLowerCase(),
+      kat: (u.kategori || "").trim() || "Diğer"
+    });
+  });
+
+  // Mevcut miktarları geri yükle
+  miktarSakla.forEach((val, id) => {
+    const inp = document.querySelector(`.miktar-input[data-id="${id}"]`);
+    if (inp) inp.value = val;
+  });
+  notSakla.forEach((val, id) => {
+    const inp = document.querySelector(`.aciklama-input[data-id="${id}"]`);
+    if (inp) inp.value = val;
+  });
+
+  katalogFiltrele(); // Mevcut filtre/aramayı uygula
+  butonGuncelle();
+}
+
+// Arama/kategori filtresi — DOM yeniden oluşturmaz, sadece göster/gizle
+// uid → {ara, kat} haritası — HTML attribute yerine bellek kullan
+const urunAraHaritasi = new Map();
+
+function katalogFiltrele() {
+  const ara = (document.getElementById("urunAraInput")?.value || "").toLowerCase().trim();
+  const seciliKat = (document.getElementById("kategoriFiltre")?.value || "").trim();
+
+  document.querySelectorAll("#katalogGovde tr[data-uid]").forEach(tr => {
+    const bilgi = urunAraHaritasi.get(tr.dataset.uid) || {};
+    const araOk = !ara || (bilgi.ara || "").includes(ara);
+    const katOk = !seciliKat || bilgi.kat === seciliKat;
+    tr.style.display = (araOk && katOk) ? "" : "none";
+  });
+
+  document.querySelectorAll("#katalogGovde tr.kat-baslik").forEach(tr => {
+    tr.style.display = (!seciliKat || tr.dataset.kategori === seciliKat) ? "" : "none";
+  });
+
+  document.querySelectorAll("#katalogKartlar .row-card[data-uid]").forEach(kart => {
+    const bilgi = urunAraHaritasi.get(kart.dataset.uid) || {};
+    const araOk = !ara || (bilgi.ara || "").includes(ara);
+    const katOk = !seciliKat || bilgi.kat === seciliKat;
+    kart.style.display = (araOk && katOk) ? "" : "none";
+  });
+
+  document.querySelectorAll("#katalogKartlar .kat-baslik-kart").forEach(el => {
+    el.style.display = (!seciliKat || el.dataset.kategori === seciliKat) ? "" : "none";
+  });
+
   butonGuncelle();
 }
 
@@ -244,12 +346,20 @@ document.getElementById("siparisGonderBtn")?.addEventListener("click", async () 
       ad: k.ad, stokKodu: "", barkod: "", birim: k.birim,
       miktar: k.miktar, kategori: "Özel Talep", katalogDisi: true, subeNotu: k.not || ""
     }))];
-    await subeSimarisiOlustur({ subeAdi: mevcutKullanici.subeAdi || mevcutKullanici.ad, subeId: mevcutKullanici.uid, olusturan: mevcutKullanici.uid, satirlar: tumSatirlar });
-    miktarSakla.clear(); notSakla.clear(); ozelKalemler.length = 0;
+    if (duzenlemeSiparisId) {
+      await siparisGuncelle(duzenlemeSiparisId, { durum: "toplaniyor", geriGonderildi: false });
+      duzenlemeSiparisId = null;
+      const sendBtn = document.getElementById("siparisGonderBtn");
+      sendBtn.textContent = "Siparişi Gönder";
+      sendBtn.style.background = "";
+    } else {
+      await subeSimarisiOlustur({ subeAdi: mevcutKullanici.subeAdi || mevcutKullanici.ad, subeId: mevcutKullanici.uid, olusturan: mevcutKullanici.uid, satirlar: tumSatirlar });
+    }
+    miktarSakla.clear(); notSakla.clear(); ozelKalemler.length = 0; taslakSil();
     document.querySelectorAll(".miktar-input, .aciklama-input").forEach(i => { i.value = ""; });
     renderOzelKalemler(); butonGuncelle();
     toast("✅ Sipariş gönderildi!", "success", 5000);
-    sekmeGoster("gecmis"); // Siparişlerim'e geç
+    sekmeGoster("gecmis");
   } catch (err) {
     console.error(err); toast("Sipariş gönderilemedi: " + (err.message || err), "error");
   } finally {
@@ -281,26 +391,26 @@ document.getElementById("excelYukleInput")?.addEventListener("change", async (e)
 /* ============================================================
    SİPARİŞLERİM — geçmiş
    ============================================================ */
+const FRANCHISE_DURUM_BİLGİ = {
+  beklemede:        { etiket: "📋 Alındı", sinif: "badge-gray" },
+  toplaniyor:       { etiket: "📋 Alındı", sinif: "badge-gray" },
+  toplandi:         { etiket: "📋 Alındı", sinif: "badge-gray" },
+  kontrol_ediliyor: { etiket: "📋 Alındı", sinif: "badge-gray" },
+  tamamlandi:       { etiket: "📦 Hazırlandı", sinif: "badge-green" },
+  sevk_edildi:      { etiket: "🚚 Yolda", sinif: "badge-blue" },
+  teslim_edildi:    { etiket: "🎉 Teslim Edildi", sinif: "badge-green" },
+  arsivlendi:       { etiket: "🗂 Arşiv", sinif: "badge-gray" }
+};
+
 const DURUM_BİLGİ = {
   toplaniyor: { etiket: "⏳ Hazırlanıyor", sinif: "badge-amber" },
+  beklemede: { etiket: "↩ Düzenleme Bekliyor", sinif: "badge-red" },
   toplandi: { etiket: "✅ Toplandı", sinif: "badge-green" },
   kontrol_ediliyor: { etiket: "🔍 Kontrol", sinif: "badge-blue" },
   tamamlandi: { etiket: "📦 Hazır", sinif: "badge-green" },
   sevk_edildi: { etiket: "🚚 Yolda", sinif: "badge-blue" },
   teslim_edildi: { etiket: "🎉 Teslim Edildi", sinif: "badge-green" },
   arsivlendi: { etiket: "🗂 Arşiv", sinif: "badge-gray" }
-};
-
-// Franchise kullanıcılara gösterilen sadeleştirilmiş durum etiketleri
-const FRANCHISE_DURUM_BİLGİ = {
-  beklemede:       { etiket: "📋 Alındı", sinif: "badge-gray" },
-  toplaniyor:      { etiket: "📋 Alındı", sinif: "badge-gray" },
-  toplandi:        { etiket: "📋 Alındı", sinif: "badge-gray" },
-  kontrol_ediliyor:{ etiket: "📋 Alındı", sinif: "badge-gray" },
-  tamamlandi:      { etiket: "📦 Hazırlandı", sinif: "badge-green" },
-  sevk_edildi:     { etiket: "🚚 Yolda", sinif: "badge-blue" },
-  teslim_edildi:   { etiket: "🎉 Teslim Edildi", sinif: "badge-green" },
-  arsivlendi:      { etiket: "🗂 Arşiv", sinif: "badge-gray" }
 };
 
 const DUZENLENEBILIR = ["toplaniyor", "toplandi", "kontrol_ediliyor", "tamamlandi"];
@@ -327,6 +437,7 @@ function renderSiparisler(liste) {
   siparislerCache = liste;
   const kapsayici = document.getElementById("gecmisListesi");
   const sayacEl = document.getElementById("gecmisSayac");
+  if (!kapsayici) return; // DOM henüz hazır değil
   if (sayacEl) sayacEl.textContent = `${liste.length} sipariş`;
 
   if (!liste.length) {
@@ -347,12 +458,17 @@ function renderSiparisler(liste) {
         </div>
       </div>
       <div class="order-card__actions">
-        ${(franchiseeKullanici ? s.durum === "beklemede" : DUZENLENEBILIR.includes(s.durum)) ? `<button class="btn btn-ghost btn-sm" data-urun-ekle="${s.id}">✏️ Düzenle</button>` : ""}
+        ${s.durum === "beklemede" ? `<button class="btn btn-primary btn-sm" data-duzenle="${s.id}">✏️ Düzenle ve Tekrar Gönder</button>` : ""}
+        ${!franchiseeKullanici && DUZENLENEBILIR.includes(s.durum) ? `<button class="btn btn-ghost btn-sm" data-urun-ekle="${s.id}">+ Ürün Ekle</button>` : ""}
         ${teslimAlinabilir(s) ? `<button class="btn btn-green btn-sm" data-teslim="${s.id}">✅ Teslim Aldım</button>` : s.durum === "sevk_edildi" && !franchiseeKullanici ? `<span class="u-text-soft" style="font-size:12px;">Aktarım bekleniyor…</span>` : ""}
         <button class="btn btn-ghost btn-sm" data-detay="${s.id}">Detay</button>
       </div>
     </div>`;
   }).join("");
+
+  kapsayici.querySelectorAll("[data-duzenle]").forEach(btn =>
+    btn.addEventListener("click", () => siparisiDuzenle(btn.dataset.duzenle))
+  );
 
   kapsayici.querySelectorAll("[data-detay]").forEach(btn =>
     btn.addEventListener("click", () => detayModalAc(siparislerCache.find(s => s.id === btn.dataset.detay)))
@@ -394,12 +510,14 @@ async function teslimAlModalAc(siparisId) {
     <div class="modal-backdrop" data-role="backdrop">
       <div class="modal" style="max-width:580px;">
         <h3>✅ Teslimat Onayı</h3>
-        <p style="font-size:13px;color:var(--color-ink-soft);">Gelen ürünleri işaretleyin, gelmeyen veya eksik olanları belirtin.</p>
-        <div style="display:flex;gap:8px;margin-bottom:10px;">
-          <button class="btn btn-ghost btn-sm" id="tumunuSec">Tümünü Seç</button>
+        <p style="font-size:13px;color:var(--color-ink-soft);">Gelen ürünleri işaretleyin.</p>
+        <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+          <button class="btn btn-ghost btn-sm" id="tumunuSec">Tümünü İşaretle</button>
           <button class="btn btn-ghost btn-sm" id="temizle">Temizle</button>
+          <button class="btn btn-ghost btn-sm" id="ekstraEkleBtn">+ Listede Olmayan Ürün</button>
         </div>
-        <div id="teslimUrunler" style="max-height:420px;overflow-y:auto;">⏳</div>
+        <div id="teslimUrunler" style="max-height:380px;overflow-y:auto;">⏳</div>
+        <div id="ekstraUrunler"></div>
         <div id="teslimOzet" style="margin-top:10px;font-size:13px;font-weight:600;"></div>
         <div class="modal__actions">
           <button class="btn btn-ghost" data-role="iptal">Vazgeç</button>
@@ -413,87 +531,103 @@ async function teslimAlModalAc(siparisId) {
   root.querySelector('[data-role="backdrop"]').onclick = (e) => { if (e.target.dataset.role === "backdrop") kapat(); };
 
   const urunler = await urunleriniGetir(siparisId);
-  // Gönderilen ürünler — eksik olanları dahil et ama göster, katalog dışı da dahil
-  const sirali = [...urunler]
-    .filter(u => u.miktar > 0)
+  // Sadece gönderilen ürünler — eksik olanları çıkar
+  const gonderilen = urunler
+    .filter(u => !u.eksik && u.miktar > 0)
     .sort((a, b) => (a.kod || "zzz").localeCompare(b.kod || "zzz", "tr"));
 
+  let ekstraUrunler = []; // Listede olmayan ürünler
+
   function ozetiGuncelle() {
-    const toplam = sirali.length;
+    const toplam = gonderilen.length + ekstraUrunler.length;
     const secili = root.querySelectorAll('input[data-tip="geldi"]:checked').length;
-    const gelmedi = root.querySelectorAll('input[data-tip="gelmedi"]:checked').length;
     document.getElementById("teslimOzet").textContent =
-      `✅ ${secili} teslim · ❌ ${gelmedi} gelmedi · ⬜ ${toplam - secili - gelmedi} işaretlenmedi`;
+      `✅ ${secili} / ${toplam} ürün işaretlendi`;
   }
 
-  document.getElementById("teslimUrunler").innerHTML = sirali.map((u) => {
-    const eksikMi = u.eksik;
-    const miktar = u.gercekMiktar ?? u.miktar;
-    return `<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--color-border);">
-      <div style="flex:1;">
-        <div style="font-weight:600;font-size:13px;">${kacisEt(u.ad)}${u.katalogDisi ? ' <span class="badge badge-amber" style="font-size:10px;">Özel</span>' : ""}</div>
-        <div style="font-size:11.5px;color:var(--color-ink-soft);">${kacisEt(u.kod || "—")} · ${sayiBicimle(miktar)} ${kacisEt(u.birim || "")}</div>
-      </div>
-      <div style="display:flex;gap:8px;align-items:center;flex-shrink:0;">
-        <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:13px;font-weight:500;color:#10B981;">
-          <input type="checkbox" data-uid="${u.id}" data-tip="geldi" ${!eksikMi ? "checked" : ""} style="width:16px;height:16px;" /> Geldi
-        </label>
-        <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:13px;font-weight:500;color:#EF4444;">
-          <input type="checkbox" data-uid="${u.id}" data-tip="gelmedi" ${eksikMi ? "checked" : ""} style="width:16px;height:16px;" /> Gelmedi
-        </label>
-        <input class="input kismi-miktar" data-uid="${u.id}" type="text" inputmode="decimal"
-          value="${miktar}" placeholder="Miktar"
-          style="width:70px;font-size:12px;" title="Kısmi miktar" />
-      </div>
-    </div>`;
-  }).join("");
+  function renderListe() {
+    document.getElementById("teslimUrunler").innerHTML = gonderilen.map((u) => {
+      const miktar = u.gercekMiktar ?? u.miktar;
+      return `<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--color-border);">
+        <input type="checkbox" data-uid="${u.id}" data-tip="geldi" style="width:18px;height:18px;flex-shrink:0;cursor:pointer;" />
+        <div style="flex:1;">
+          <div style="font-weight:600;font-size:13px;">${kacisEt(u.ad)}${u.katalogDisi ? ' <span class="badge badge-amber" style="font-size:10px;">Özel</span>' : ""}</div>
+          <div style="font-size:11.5px;color:var(--color-ink-soft);">${kacisEt(u.kod || "—")}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
+          <input type="text" inputmode="decimal" class="input teslim-miktar" data-uid="${u.id}"
+            value="${miktar}" style="width:70px;font-size:13px;text-align:right;" />
+          <span style="font-size:12px;color:var(--color-ink-soft);">${kacisEt(u.birim || "")}</span>
+        </div>
+      </div>`;
+    }).join("");
 
-  // Geldi/Gelmedi birbirini dışlasın
-  root.querySelectorAll('input[data-tip]').forEach(cb => {
-    cb.addEventListener("change", () => {
-      const uid = cb.dataset.uid;
-      if (cb.checked) {
-        const diger = cb.dataset.tip === "geldi" ? "gelmedi" : "geldi";
-        const digerCb = root.querySelector(`input[data-uid="${uid}"][data-tip="${diger}"]`);
-        if (digerCb) digerCb.checked = false;
-      }
-      ozetiGuncelle();
+    root.querySelectorAll('input[data-tip="geldi"]').forEach(cb => {
+      cb.addEventListener("change", ozetiGuncelle);
     });
-  });
 
-  // Tümünü seç / temizle
+    // Ekstra ürünler
+    document.getElementById("ekstraUrunler").innerHTML = ekstraUrunler.length
+      ? `<div style="margin-top:10px;font-weight:700;font-size:12px;color:var(--color-ink-soft);margin-bottom:6px;">📦 LİSTEDE OLMAYAN GELENLER</div>` +
+        ekstraUrunler.map((e, i) => `
+          <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--color-border);">
+            <div style="flex:1;">
+              <div style="font-weight:600;font-size:13px;">${kacisEt(e.ad)}</div>
+              <div style="font-size:11.5px;color:var(--color-ink-soft);">${sayiBicimle(e.miktar)} ${kacisEt(e.birim)}</div>
+            </div>
+            <button class="btn btn-danger btn-sm" onclick="this.closest('div').remove();ekstraUrunler.splice(${i},1);ozetiGuncelle();">✕</button>
+          </div>`).join("")
+      : "";
+
+    ozetiGuncelle();
+  }
+
+  renderListe();
+
   document.getElementById("tumunuSec").onclick = () => {
     root.querySelectorAll('input[data-tip="geldi"]').forEach(cb => { cb.checked = true; });
-    root.querySelectorAll('input[data-tip="gelmedi"]').forEach(cb => { cb.checked = false; });
     ozetiGuncelle();
   };
   document.getElementById("temizle").onclick = () => {
-    root.querySelectorAll('input[data-tip]').forEach(cb => { cb.checked = false; });
+    root.querySelectorAll('input[data-tip="geldi"]').forEach(cb => { cb.checked = false; });
     ozetiGuncelle();
   };
 
-  ozetiGuncelle();
+  // Listede olmayan ürün ekle
+  document.getElementById("ekstraEkleBtn").onclick = () => {
+    const adInput = prompt("Ürün adı:");
+    if (!adInput?.trim()) return;
+    const miktarInput = prompt("Miktar:");
+    const birimInput = prompt("Birim (KG, Adet...):");
+    ekstraUrunler.push({
+      ad: adInput.trim(),
+      miktar: ondalikOku(miktarInput || "1") || 1,
+      birim: birimInput?.trim() || "Adet"
+    });
+    renderListe();
+  };
 
   root.querySelector('[data-role="onayla"]').onclick = async () => {
-    const teslimatKalemleri = sirali.map(u => {
-      const geldi = root.querySelector(`input[data-uid="${u.id}"][data-tip="geldi"]`)?.checked;
-      const gelmedi = root.querySelector(`input[data-uid="${u.id}"][data-tip="gelmedi"]`)?.checked;
-      const kismiMiktar = ondalikOku(root.querySelector(`.kismi-miktar[data-uid="${u.id}"]`)?.value || "0");
-      const siparisMiktari = u.gercekMiktar ?? u.miktar;
-      return {
+    const teslimatKalemleri = [
+      ...gonderilen.map(u => ({
         urunId: u.id, ad: u.ad, kod: u.kod || "",
         birim: u.birim || "",
-        siparisMiktari,
-        gelenMiktar: geldi ? (kismiMiktar || siparisMiktari) : 0,
-        durum: geldi ? "tamam" : gelmedi ? "eksik" : "tamam"
-      };
-    });
-    const params = {
+        siparisMiktari: u.gercekMiktar ?? u.miktar,
+        gelenMiktar: root.querySelector(`input[data-uid="${u.id}"][data-tip="geldi"]`)?.checked
+          ? (ondalikOku(root.querySelector(`.teslim-miktar[data-uid="${u.id}"]`)?.value) || (u.gercekMiktar ?? u.miktar)) : 0,
+        durum: root.querySelector(`input[data-uid="${u.id}"][data-tip="geldi"]`)?.checked
+          ? "tamam" : "eksik"
+      })),
+      ...ekstraUrunler.map(e => ({
+        urunId: "", ad: e.ad, kod: "", birim: e.birim,
+        siparisMiktari: 0, gelenMiktar: e.miktar, durum: "fazla"
+      }))
+    ];
+    await teslimatKaydet(siparisId, {
       teslimatKalemleri,
       onaylayanKullanici: mevcutKullanici.ad || mevcutKullanici.uid,
       subeAdi: mevcutKullanici.subeAdi || mevcutKullanici.ad
-    };
-    await teslimatKaydet(siparisId, params);
+    });
     kapat();
     toast("✅ Teslimat onaylandı!", "success");
   };
@@ -530,7 +664,14 @@ function urunEkleModalAc(siparisId) {
   root.querySelector('[data-role="backdrop"]').onclick = (e) => { if (e.target.dataset.role === "backdrop") kapat(); };
   const ueKod = root.querySelector("#ueKod"), ueAd = root.querySelector("#ueAd");
   const ueBirim = root.querySelector("#ueBirim");
-  function doldur(u) { if (!u) return; if (!ueKod.value) ueKod.value = u.stokKodu || ""; if (!ueAd.value) ueAd.value = u.ad || ""; if (!ueBirim.value) ueBirim.value = u.birim || ""; }
+  let _secilenUrun = null;
+  function doldur(u) {
+    if (!u) return;
+    _secilenUrun = u;
+    if (!ueKod.value) ueKod.value = u.stokKodu || "";
+    if (!ueAd.value) ueAd.value = u.ad || "";
+    if (!ueBirim.value) ueBirim.value = u.birim || "";
+  }
   ueAd.addEventListener("change", () => doldur(katalogCache.find(u => u.ad === ueAd.value)));
   ueKod.addEventListener("change", () => doldur(katalogCache.find(u => u.stokKodu === ueKod.value)));
   root.querySelector('[data-role="ekle"]').onclick = async () => {
@@ -540,6 +681,9 @@ function urunEkleModalAc(siparisId) {
       kod: ueKod.value.trim(), ad,
       miktar: ondalikOku(document.getElementById("ueMiktar").value),
       birim: ueBirim.value.trim(),
+      reyon: _secilenUrun?.reyon || "",
+      barkod: _secilenUrun?.barkod || "",
+      kategori: _secilenUrun?.kategori || "",
       eksik: kontrolSonrasi ? true : false,
       subeEkledi: true,
       subeNotu: document.getElementById("ueNot").value.trim()
@@ -547,4 +691,44 @@ function urunEkleModalAc(siparisId) {
     kapat();
     toast(kontrolSonrasi ? "Eksikler listesine eklendi." : "Ürün eklendi.", "success");
   };
+}
+
+// Taslak kaydet butonu
+document.getElementById("taslakKaydetBtn")?.addEventListener("click", () => {
+  taslakKaydet();
+  toast("💾 Taslak kaydedildi. Çıkıp geri geldiğinizde yüklenir.", "success", 4000);
+});
+
+/* ============================================================
+   SİPARİŞ DÜZENLEME — beklemede siparişi yeniden gönder
+   ============================================================ */
+let duzenlemeSiparisId = null; // Hangi siparişi düzenliyoruz
+
+async function siparisiDuzenle(siparisId) {
+  toast("⏳ Sipariş yükleniyor…", "info", 2000);
+  try {
+    const urunler = await urunleriniGetir(siparisId);
+    // Mevcut miktarları miktarSakla'ya yükle
+    miktarSakla.clear(); notSakla.clear();
+    urunler.forEach(u => {
+      const katalogUrun = katalogCache.find(k => k.stokKodu === u.kod || k.ad === u.ad);
+      if (katalogUrun && u.miktar > 0) {
+        miktarSakla.set(katalogUrun.id, String(u.miktar));
+        if (u.subeNotu) notSakla.set(katalogUrun.id, u.subeNotu);
+      }
+    });
+    duzenlemeSiparisId = siparisId;
+    renderKatalog();
+    butonGuncelle();
+    // Gönder butonunu "Güncelle" olarak değiştir
+    const btn = document.getElementById("siparisGonderBtn");
+    btn.textContent = "✅ Güncelle ve Gönder";
+    btn.style.background = "#F59E0B";
+    // Sipariş Ver sekmesine geç
+    sekmeGoster("siparis");
+    toast("✏️ Miktarları düzenleyin ve tekrar gönderin.", "info", 5000);
+  } catch (err) {
+    console.error(err);
+    toast("Sipariş yüklenemedi.", "error");
+  }
 }
