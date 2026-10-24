@@ -493,12 +493,12 @@ async function detayModalAc(siparis) {
     document.getElementById("detayIcerik").innerHTML = `
       <div style="margin-bottom:12px;"><span class="badge ${d.sinif}">${d.etiket}</span> · ${urunler.length} ürün${siparis.toplamKg ? " · " + sayiBicimle(siparis.toplamKg) + " KG" : ""}</div>
       <div class="table-wrap"><table class="data-table">
-        <thead><tr><th>Kod</th><th>Ürün</th><th>İstenen</th><th>Durum</th></tr></thead>
+        <thead><tr><th>Kod</th><th>Ürün</th><th>İstenen</th>${!franchiseeKullanici ? "<th>Durum</th>" : ""}</tr></thead>
         <tbody>${urunler.map(u => {
           const durum = u.eksik ? `<span class="badge badge-red">Eksik</span>` : u.toplandi ? `<span class="badge badge-green">✓</span>` : "—";
           const fark = u.gercekMiktar !== undefined && u.gercekMiktar !== u.miktar
             ? `<span class="badge badge-amber">→ ${sayiBicimle(u.gercekMiktar)}</span>` : "";
-          return `<tr><td class="cell-code">${kacisEt(u.kod || "")}</td><td>${kacisEt(u.ad)}${u.katalogDisi ? ' <span class="badge badge-amber" style="font-size:10px;">Özel</span>' : ""}</td><td>${sayiBicimle(u.miktar)} ${kacisEt(u.birim || "")} ${fark}</td><td>${durum}</td></tr>`;
+          return `<tr><td class="cell-code">${kacisEt(u.kod || "")}</td><td>${kacisEt(u.ad)}${u.katalogDisi ? ' <span class="badge badge-amber" style="font-size:10px;">Özel</span>' : ""}</td><td>${sayiBicimle(u.miktar)} ${kacisEt(u.birim || "")} ${fark}</td>${!franchiseeKullanici ? `<td>${durum}</td>` : ""}</tr>`;
         }).join("")}</tbody>
       </table></div>`;
   } catch (err) { document.getElementById("detayIcerik").textContent = "Yüklenemedi."; }
