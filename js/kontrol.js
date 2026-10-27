@@ -27,6 +27,7 @@ let sonBulunamadiBarkod = null;
 let stokMap = new Map(); // Sipariş açılınca ilgili ürünler için doldurulur
 
 /* ---------------- Bildirimler: sekme/durum geçişlerini canlı izle ---------------- */
+const bekleyenMikroAktarimlari = new Map(); // siparisId -> { ad, kodlar, zamanAsimi }
 let bilinenSiparisDurumlari = new Map();
 let bildirimIlkYukleme = true;
 tumSiparisleriCanliDinle((tumListe) => {
@@ -41,7 +42,46 @@ tumSiparisleriCanliDinle((tumListe) => {
       toast(`🚚 Sipariş sevke çevrildi: ${g.ad}`, "success", 5000);
     }
   });
+  mikroAktarimSonuclariniIsle(tumListe);
 });
+
+/* ---------------- Mikro aktarım sonuçları ----------------
+   "Sisteme Aktar" denen siparişler sunucuda (mikro_aktar.py) Mikro'ya yazılır.
+   Sonuç siparişin mikroAktarim alanına düşer; bu ekrandan istenmiş olanlar için
+   bildirim gösterilir ve gözaltı miktarları sıfırlanır. */
+
+function mikroAktarimSonuclariniIsle(tumListe) {
+  if (!bekleyenMikroAktarimlari.size) return;
+  bekleyenMikroAktarimlari.forEach((bekleyen, id) => {
+    const s = tumListe.find((x) => x.id === id);
+    const durum = s && s.mikroAktarim && s.mikroAktarim.durum;
+    if (durum === "tamam") {
+      clearTimeout(bekleyen.zamanAsimi);
+      bekleyenMikroAktarimlari.delete(id);
+      if (bekleyen.kodlar.length) {
+        stokGozaltiSifirla(bekleyen.kodlar).catch((e) => console.error("Gözaltı sıfırlanamadı", e));
+      }
+      const uyari = (s.mikroAktarim.uyarilar || []).length;
+      sesCal("basari");
+      toast(
+        `✅ ${bekleyen.ad}: Mikro'da evrak ${s.mikroAktarim.evrak} oluştu (${s.mikroAktarim.satir} satır).` +
+          (uyari ? ` ${uyari} ürün fiyatsız yazıldı, Mikro'da kontrol edin.` : ""),
+        "success",
+        8000
+      );
+    } else if (durum === "hata") {
+      clearTimeout(bekleyen.zamanAsimi);
+      bekleyenMikroAktarimlari.delete(id);
+      sesCal("hata");
+      toast(
+        `❌ ${bekleyen.ad} Mikro'ya aktarılamadı: ${s.mikroAktarim.mesaj || "bilinmeyen hata"}. ` +
+          "Düzeltip tekrar deneyin ya da butona Shift ile basıp CSV indirin.",
+        "error",
+        12000
+      );
+    }
+  });
+}
 
 /* ---------------- Başlangıç / yetki kontrolü ---------------- */
 sayfaKorumasi(["kontrolor"], (kullanici) => {
@@ -119,8 +159,13 @@ function renderSiparisListesi(liste) {
     const toplam = s.toplamUrun || 0;
     const kontrolEdilen = s.kontrolEdilenUrun || 0;
     const yuzde = toplam ? Math.round((kontrolEdilen / toplam) * 100) : 0;
+    const mikroDurum = s.mikroAktarim && s.mikroAktarim.durum;
     const durumRozeti = s.sistemeAktarildi
-      ? '<span class="badge badge-red">Sisteme Aktarıldı</span>'
+      ? `<span class="badge badge-red">Sisteme Aktarıldı${s.mikroAktarim && s.mikroAktarim.evrak ? " · " + kacisEt(s.mikroAktarim.evrak) : ""}</span>`
+      : mikroDurum === "bekliyor" || mikroDurum === "isleniyor"
+      ? '<span class="badge badge-amber">⏳ Mikro\'ya yazılıyor</span>'
+      : mikroDurum === "hata"
+      ? `<span class="badge badge-red" title="${kacisEt(s.mikroAktarim.mesaj || "")}">⚠ Mikro aktarım hatası</span>`
       : ({
           tamamlandi: '<span class="badge badge-amber">Sevk Bekliyor</span>',
           sevk_edildi: '<span class="badge badge-green">Sevk Edildi</span>',
@@ -219,7 +264,8 @@ function siparisAc(siparis) {
   document.getElementById("detaySiparisAdi").textContent = siparis.ad;
   document.getElementById("detaySiparisAdi").insertAdjacentHTML("beforeend",
     `${siparis.paletSayisi ? ` <span class="badge badge-blue">${siparis.paletSayisi} Palet</span>` : ""}` +
-    `${siparis.sistemeAktarildi ? ` <span class="badge badge-red">Sisteme Aktarıldı</span>` : ""}`);
+    `${siparis.sistemeAktarildi ? ` <span class="badge badge-red">Sisteme Aktarıldı${siparis.mikroAktarim && siparis.mikroAktarim.evrak ? " · " + kacisEt(siparis.mikroAktarim.evrak) : ""}</span>` : ""}` +
+    `${!siparis.sistemeAktarildi && siparis.mikroAktarim && siparis.mikroAktarim.durum === "hata" ? ` <span class="badge badge-red">⚠ ${kacisEt(siparis.mikroAktarim.mesaj || "Mikro aktarım hatası")}</span>` : ""}`);
 
   const saltOkunur = siparis.durum === "tamamlandi" || siparis.durum === "sevk_edildi";
   document.getElementById("tamamlaBtn").classList.toggle("u-hidden", siparis.durum !== "toplandi" && siparis.durum !== "kontrol_ediliyor");
@@ -735,46 +781,109 @@ document.getElementById("sevkeCevirBtn").addEventListener("click", async () => {
   };
 });
 
-/* ---------------- Sisteme aktar (kod,miktar CSV) ---------------- */
-document.getElementById("sistemeAktarBtn").addEventListener("click", async () => {
-  const toplananlar = urunlerCache
-    .filter((u) => u.toplandi && u.kod)
+/* ---------------- Sisteme aktar: Mikro'ya otomatik ----------------
+   Normal tık : sipariş Mikro'ya Depolar Arası Satış Fişi olarak yazılır (sunucu yapar).
+   Shift + tık: eski yöntem, CSV iner ve sipariş "aktarıldı" işaretlenir. */
+function aktarilacakUrunler() {
+  return urunlerCache
+    .filter((u) => u.toplandi && !u.eksik && u.kod)
     .slice()
     .sort((a, b) => String(a.kod).localeCompare(String(b.kod)));
-  if (toplananlar.length === 0) {
-    toast("Aktarılacak toplanmış ürün bulunamadı.", "error");
-    return;
-  }
-  // Not: Türkçe Windows/Excel ayarlarında CSV ayracı virgül değil noktalı
-  // virgüldür; ondalık ayracı da nokta değil virgüldür ("12.5" değil "12,5").
-  const satirlar = toplananlar.map((u) => {
-    const miktarMetni = String(u.miktar || 0).replace(".", ",");
-    return `="${u.kod}";${miktarMetni}`;
-  });
-  const BOM = "\uFEFF";
-  const blob = new Blob([BOM + satirlar.join("\n")], { type: "text/csv;charset=utf-8;" });
+}
+
+function sistemeAktarCsvIndir(toplananlar) {
+  // Türkçe Excel: ; ayraç, virgüllü ondalık, ="0001" ile baştaki sıfırlar korunur.
+  const satirlar = toplananlar.map((u) => `="${u.kod}";${String(u.miktar || 0).replace(".", ",")}`);
+  const blob = new Blob(["\uFEFF" + satirlar.join("\n")], { type: "text/csv;charset=utf-8;" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
   const paletEki = aktifSiparis.paletSayisi ? `_${aktifSiparis.paletSayisi}Palet` : "";
   a.download = `${(aktifSiparis.ad || "siparis").replace(/[^\wçğıöşüÇĞİÖŞÜ\- ]/g, "_")}${paletEki}_sisteme_aktar.csv`;
   a.click();
+}
 
-  await siparisGuncelle(aktifSiparis.id, { sistemeAktarildi: true, sistemeAktarTarihi: serverTimestamp() });
-
-  // Toplanan ürünlerin gözaltı miktarını sıfırla — artık Mikro'ya işlendi
-  const toplamananKodlar = urunlerCache
-    .filter((u) => u.toplandi && u.kod)
-    .map((u) => u.kod);
-  if (toplamananKodlar.length) await stokGozaltiSifirla(toplamananKodlar);
-
-  toast("CSV dosyası indirildi ve sipariş 'Sisteme Aktarıldı' işaretlendi.", "success");
-  // Sevk Edildi sekmesinde kal
+function sevkEdildiListesineDon() {
   document.querySelectorAll("[data-sekme]").forEach((b) => b.classList.remove("is-active"));
   document.querySelector('[data-sekme="sevkedildi"]').classList.add("is-active");
   sekmeYukle("sevkedildi");
-  document.getElementById("detayGorunumu").classList.add("u-hidden");
-  document.getElementById("listeGorunumu").classList.remove("u-hidden");
-  aktifSiparis = null; urunlerCache = [];
+  geriDon();
+}
+
+document.getElementById("sistemeAktarBtn").addEventListener("click", async (e) => {
+  if (!aktifSiparis) return;
+  const siparis = aktifSiparis;
+  const mikroDurum = siparis.mikroAktarim && siparis.mikroAktarim.durum;
+
+  if (siparis.sistemeAktarildi) {
+    const evrak = siparis.mikroAktarim && siparis.mikroAktarim.evrak;
+    toast(`Bu sipariş zaten aktarılmış${evrak ? " (Mikro evrak " + evrak + ")" : ""}.`, "error");
+    return;
+  }
+  if (mikroDurum === "bekliyor" || mikroDurum === "isleniyor" || bekleyenMikroAktarimlari.has(siparis.id)) {
+    toast("Bu sipariş şu an Mikro'ya yazılıyor, bekleyin.", "error");
+    return;
+  }
+
+  const toplananlar = aktarilacakUrunler();
+  if (toplananlar.length === 0) {
+    toast("Aktarılacak toplanmış ürün bulunamadı.", "error");
+    return;
+  }
+  const kodlar = toplananlar.map((u) => u.kod);
+
+  /* --- Shift + tık: eski CSV yöntemi --- */
+  if (e.shiftKey) {
+    sistemeAktarCsvIndir(toplananlar);
+    await siparisGuncelle(siparis.id, {
+      sistemeAktarildi: true,
+      sistemeAktarTarihi: serverTimestamp(),
+      mikroAktarim: { durum: "csv", istekTarihi: serverTimestamp() }
+    });
+    await stokGozaltiSifirla(kodlar);
+    toast("CSV indirildi ve sipariş 'Sisteme Aktarıldı' işaretlendi. Mikro'ya elle aktarın.", "success");
+    sevkEdildiListesineDon();
+    return;
+  }
+
+  /* --- Normal: Mikro'ya otomatik --- */
+  const onay = await onayIste({
+    baslik: "Mikro'ya Aktar",
+    metin: `${toplananlar.length} ürün Mikro'ya Depolar Arası Satış Fişi olarak yazılacak (eksikler hariç). Devam edilsin mi?`,
+    onayMetni: "Mikro'ya Aktar"
+  });
+  if (!onay) return;
+
+  try {
+    await siparisGuncelle(siparis.id, {
+      mikroAktarim: {
+        durum: "bekliyor",
+        istekTarihi: serverTimestamp(),
+        isteyen: mevcutKullanici ? (mevcutKullanici.ad || mevcutKullanici.uid) : "",
+        satirSayisi: toplananlar.length
+      }
+    });
+  } catch (err) {
+    toast("Aktarım isteği kaydedilemedi: " + (err.message || err), "error");
+    return;
+  }
+
+  const ad = siparis.ad || "Sipariş";
+  bekleyenMikroAktarimlari.set(siparis.id, {
+    ad,
+    kodlar,
+    zamanAsimi: setTimeout(() => {
+      if (!bekleyenMikroAktarimlari.has(siparis.id)) return;
+      bekleyenMikroAktarimlari.delete(siparis.id);
+      toast(
+        `${ad}: sunucudan 2 dakikadır yanıt yok, API kapalı olabilir. İstek sırada; API açılınca aktarılır.`,
+        "error",
+        12000
+      );
+    }, 120000)
+  });
+
+  toast(`⏳ ${ad} Mikro'ya gönderildi. Sonuç birkaç saniye içinde burada görünecek.`, "info", 5000);
+  sevkEdildiListesineDon();
 });
 
 /* ---------------- Barkod tabancası ---------------- */
