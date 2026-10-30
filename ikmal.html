@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8" />
+<link rel="manifest" href="/manifest.json" />
+<meta name="theme-color" content="#0F52BA" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-title" content="Depomax" />
+<link rel="apple-touch-icon" href="/icon-192.png" />
+<link rel="icon" type="image/svg+xml" href="favicon.svg" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Toplama Gözü İkmal — Depomax</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  .ikmal-liste { display: flex; flex-direction: column; gap: 8px; }
+  .ikmal-kart { display: flex; align-items: center; gap: 14px; padding: 12px 14px; background: var(--color-surface-1);
+    border: 1px solid var(--color-border); border-left: 5px solid #F59E0B; border-radius: var(--radius-sm); flex-wrap: wrap; }
+  .ikmal-kart.bos { border-left-color: #EF4444; }
+  .ikmal-kart.yeni { animation: ikmalYanip 1s ease-in-out 3; }
+  @keyframes ikmalYanip { 50% { background: #FEF3C7; } }
+  @media (prefers-reduced-motion: reduce) { .ikmal-kart.yeni { animation: none; } }
+  .ikmal-kart__ana { flex: 1; min-width: 180px; }
+  .ikmal-kart__ad { font-weight: 700; font-size: 14.5px; }
+  .ikmal-kart__meta { font-size: 12px; color: var(--color-ink-soft); margin-top: 3px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .ikmal-kart__miktar { text-align: right; min-width: 110px; }
+  .ikmal-kart__sayi { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .ikmal-kart__sayi.bos { color: #EF4444; }
+  .ikmal-kart__alt { font-size: 11.5px; color: var(--color-ink-soft); }
+  .seviye-bar { height: 6px; background: var(--color-surface-2); border-radius: 3px; overflow: hidden; margin-top: 5px; width: 110px; margin-left: auto; }
+  .seviye-bar__ic { height: 100%; background: #F59E0B; }
+  .ses-uyari { display: flex; gap: 10px; align-items: center; padding: 10px 14px; border-radius: var(--radius-sm);
+    background: #FEF3C7; color: #92400E; font-size: 13px; margin-bottom: 14px; flex-wrap: wrap; }
+  .hareket-satir { display: flex; gap: 10px; font-size: 12.5px; padding: 8px 0; border-bottom: 1px solid var(--color-border); }
+  .sayac-rozet { display: inline-block; min-width: 20px; padding: 0 6px; border-radius: 99px; background: #EF4444; color: #fff; font-size: 11px; font-weight: 700; text-align: center; margin-left: 4px; }
+  td.sayi, th.sayi { text-align: right; font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+<div class="app-shell">
+  <header class="topbar">
+    <div class="topbar__brand"><span class="topbar__mark">D</span> Depomax</div>
+    <nav class="topbar__nav">
+      <a class="topbar__link" href="index.html">⬅ Ana Sayfa</a>
+      <a class="topbar__link" href="raf.html">🗄 Raflar</a>
+      <a class="topbar__link is-active" href="ikmal.html">🔔 İkmal</a>
+    </nav>
+    <div class="topbar__user">
+      <span class="role-chip" id="rolEtiketi">…</span>
+      <span id="kullaniciAdi">…</span>
+      <button class="btn btn-ghost btn-sm" id="cikisBtn">Çıkış</button>
+    </div>
+  </header>
+
+  <main class="page">
+    <div class="page__header">
+      <div>
+        <div class="page__title">Toplama Gözü İkmal</div>
+        <div class="page__subtitle" id="ozetYazi">Yükleniyor…</div>
+      </div>
+      <div class="u-flex" style="gap:8px;flex-wrap:wrap;">
+        <button class="btn btn-ghost" id="gecmisBtn">📋 Geçmiş</button>
+      </div>
+    </div>
+
+    <div class="toolbar" style="margin-bottom:16px;">
+      <div class="toolbar__group">
+        <button class="btn btn-ghost btn-sm is-active" data-sekme="bekleyen">🔔 Doldurulacak <span class="sayac-rozet u-hidden" id="sekmeSayac">0</span></button>
+        <button class="btn btn-ghost btn-sm" data-sekme="tum">📋 Tüm Gözler</button>
+      </div>
+    </div>
+
+    <!-- SES İZNİ: tarayıcılar sesi ancak kullanıcı bir kez dokunduktan sonra çalar -->
+    <div class="ses-uyari" id="sesUyari">
+      🔈 Sesli uyarı için bir kez dokunun.
+      <button class="btn btn-primary btn-sm" id="sesAcBtn">Sesli uyarıyı aç</button>
+    </div>
+
+    <!-- DOLDURULACAK -->
+    <section id="bekleyenBloku">
+      <div class="ikmal-liste" id="bekleyenListe"></div>
+      <div class="empty-state u-hidden" id="bekleyenBos">
+        <div class="empty-state__icon">✅</div>
+        <div class="empty-state__title">Doldurulacak göz yok</div>
+        <div class="empty-state__text">Bir ürün uyarı seviyesine indiğinde burada görünür ve ses çalar.</div>
+      </div>
+    </section>
+
+    <!-- TÜM GÖZLER -->
+    <section id="tumBloku" class="u-hidden">
+      <div class="toolbar" style="margin-bottom:14px;gap:8px;flex-wrap:wrap;">
+        <input class="input" id="gozAra" placeholder="🔍 Ürün adı, kod veya reyon…" style="max-width:260px;" autocomplete="off" />
+        <div class="toolbar__group">
+          <button class="btn btn-ghost btn-sm" id="yenileBtn">↻ Yenile</button>
+          <button class="btn btn-ghost btn-sm" id="excelIndirBtn">⬇ Excel</button>
+          <button class="btn btn-ghost btn-sm" id="excelYukleBtn">📄 Excel'den Yükle</button>
+          <input type="file" id="excelYukleInput" accept=".xlsx,.xls,.csv" class="u-hidden" />
+          <button class="btn btn-primary btn-sm" id="yeniGozBtn">+ Göz Tanımla</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr><th>Reyon</th><th>Kod</th><th>Ürün</th><th class="sayi">Gözde</th><th class="sayi">Uyarı Seviyesi</th><th>Durum</th><th>Son İkmal</th><th></th></tr>
+          </thead>
+          <tbody id="gozTablosu"></tbody>
+        </table>
+      </div>
+      <div class="row-cards" id="gozKartlar"></div>
+      <div class="empty-state u-hidden" id="tumBos">
+        <div class="empty-state__icon">🗂</div>
+        <div class="empty-state__title">Henüz toplama gözü tanımlanmamış</div>
+        <div class="empty-state__text">"+ Göz Tanımla" ile tek tek ya da "Excel'den Yükle" ile toplu ekleyin.<br>
+          Excel sütunları: Stok Kodu, Gözdeki Miktar, Uyarı Seviyesi (Ürün Adı, Reyon, Birim isteğe bağlı; boşsa katalogdan alınır).</div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div id="modalRoot"></div>
+
+<script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.getRegistrations().then((regs) => regs.forEach((r) => r.unregister()));
+  }
+</script>
+<script type="module" src="js/ikmal.js"></script>
+</body>
+</html>
