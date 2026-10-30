@@ -6,8 +6,8 @@ import {
   siparisleriDinle, siparisOlustur, siparisGuncelle, tumSiparisleriCanliDinle,
   urunleriDinle, urunleriTopluEkle, urunEkle, urunGuncelle, urunSil,
   stokDusur, stokGeriEkle, katalogDinle, siparisiSil, siparisiGeriGonder
-} from "./veri.js";
-import { stoklariDinle, stokRozetiHtml } from "./stok.js";
+} from "./veri.js?v=20261030c";
+import { stoklariDinle, stokRozetiHtml } from "./stok.js?v=20261030c";
 import {
   arayuzHazirla, toast, onayIste, yukleniyorGoster, yukleniyorKapat,
   reyonKarsilastir, excelDosyasiniOku, excelOlarakIndir, tarihBicimle,

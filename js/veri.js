@@ -9,7 +9,7 @@
 //   durum: "toplaniyor" -> "toplandi" -> "kontrol_ediliyor" -> "tamamlandi" -> "sevk_edildi"
 // ============================================================================
 import { db } from "./firebase.js";
-import { ondalikOku } from "./utils.js";
+import { ondalikOku, toast } from "./utils.js";
 import {
   collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot,
   query, where, orderBy, serverTimestamp, writeBatch, getDocs,
@@ -737,7 +737,7 @@ const _gozIkmalGerekli = (miktar, seviye) => (Number(seviye) || 0) > 0 && _yuvar
 /** Gözdeki miktarı fark kadar değiştirir. Takip edilmeyen ürün için null döner. */
 export async function gozMiktarDegistir(stokKodu, fark) {
   if (!stokKodu || !Number(fark)) return null;
-  const ref = doc(db, TOPLAMA_GOZLERI, String(stokKodu));
+  const ref = doc(db, TOPLAMA_GOZLERI, String(stokKodu).trim());
   try {
     return await runTransaction(db, async (tx) => {
       const snap = await tx.get(ref);
@@ -752,7 +752,8 @@ export async function gozMiktarDegistir(stokKodu, fark) {
       return { onceki, yeni, ikmalGerekli };
     });
   } catch (e) {
-    console.warn("Toplama gözü güncellenemedi:", stokKodu, e.message);
+    console.warn("Toplama gözü güncellenemedi:", stokKodu, e.code, e.message);
+    try { toast(`Toplama gözü güncellenemedi (${stokKodu}): ${e.code || e.message}`, "error", 8000); } catch (_) {}
     return null;
   }
 }
@@ -864,6 +865,13 @@ export function ikmalBekleyenleriDinle(callback) {
       .map((c) => ({ id: c.doc.id, ...c.doc.data() }));
     callback(liste, yeniGelenler);
   }, (err) => console.error("ikmalBekleyenleriDinle:", err));
+}
+
+/** Tüm tanımlı gözleri canlı dinler (sadece "Tüm Gözler" sekmesi açıkken kullanılır). */
+export function tumGozleriDinle(callback) {
+  return onSnapshot(collection(db, TOPLAMA_GOZLERI), (snap) => {
+    callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+  }, (err) => console.error("tumGozleriDinle:", err));
 }
 
 /** Tüm tanımlı gözler — tek seferlik okuma (sürekli dinlemez). */

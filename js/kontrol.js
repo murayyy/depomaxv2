@@ -2,8 +2,8 @@
 // KONTROL EKRANI MANTIĞI
 // ============================================================================
 import { auth, signOut, sayfaKorumasi } from "./firebase.js";
-import { siparisleriDinle, siparisGuncelle, urunleriDinle, urunGuncelle, urunEkle, tumSiparisleriCanliDinle, siparisArsivle, suruculeriGetir, stokDusur, stokGeriEkle, stokGozaltiSifirla, katalogDinle, siparisAlanAta, alanlariDinle, siparisiSil, siparisiGeriGonder, stokKodlariGetir } from "./veri.js";
-import { stoklariDinle, stokRozetiHtml } from "./stok.js";
+import { siparisleriDinle, siparisGuncelle, urunleriDinle, urunGuncelle, urunEkle, tumSiparisleriCanliDinle, siparisArsivle, suruculeriGetir, stokDusur, stokGeriEkle, stokGozaltiSifirla, katalogDinle, siparisAlanAta, alanlariDinle, siparisiSil, siparisiGeriGonder, stokKodlariGetir } from "./veri.js?v=20261030c";
+import { stoklariDinle, stokRozetiHtml } from "./stok.js?v=20261030c";
 import { serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
   arayuzHazirla, toast, onayIste, girdiIste,

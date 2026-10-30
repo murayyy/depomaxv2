@@ -8,9 +8,9 @@
 import { auth, signOut, sayfaKorumasi } from "./firebase.js";
 import {
   ikmalBekleyenleriDinle, gozIkmalYap, gozKaydet, gozSil, gozleriTopluKaydet,
-  tumGozleriGetir, gozHareketleriniGetir, katalogDinle,
+  tumGozleriGetir, tumGozleriDinle, gozHareketleriniGetir, katalogDinle,
   rafKalemleriniBul, rafKalemiGuncelle, rafKalemiSil, rafHareketiKaydet
-} from "./veri.js?v=20261030b";
+} from "./veri.js?v=20261030c";
 import {
   arayuzHazirla, toast, onayIste, kacisEt, sayiBicimle, ondalikOku, sesCal,
   reyonKarsilastir, excelDosyasiniOku, tarihBicimle
@@ -65,7 +65,8 @@ document.querySelectorAll("[data-sekme]").forEach((btn) => {
     aktifSekme = btn.dataset.sekme;
     document.getElementById("bekleyenBloku").classList.toggle("u-hidden", aktifSekme !== "bekleyen");
     document.getElementById("tumBloku").classList.toggle("u-hidden", aktifSekme !== "tum");
-    if (aktifSekme === "tum" && !tumGozlerYuklendi) tumGozleriYukle();
+    if (aktifSekme === "tum") tumGozleriDinlemeyeBasla();
+    else tumGozleriDinlemeyiBirak();
   });
 });
 
@@ -323,7 +324,22 @@ function doldurModalAc(g) {
 }
 
 /* ---------------- Tüm gözler ---------------- */
+// "Tüm Gözler" sekmesi açıkken liste canlıdır: toplandıkça rakamlar anında düşer.
+let tumGozIptal = null;
+function tumGozleriDinlemeyeBasla() {
+  if (tumGozIptal) return;
+  tumGozIptal = tumGozleriDinle((liste) => {
+    tumGozler = liste;
+    tumGozlerYuklendi = true;
+    renderTumGozler();
+  });
+}
+function tumGozleriDinlemeyiBirak() {
+  if (tumGozIptal) { tumGozIptal(); tumGozIptal = null; tumGozlerYuklendi = false; }
+}
+
 async function tumGozleriYukle() {
+  if (tumGozIptal) return; // canlı dinleniyor, ayrıca okumaya gerek yok
   try {
     tumGozler = await tumGozleriGetir();
     tumGozlerYuklendi = true;
