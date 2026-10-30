@@ -9,6 +9,7 @@ import {
   katalogDinle
 } from "./veri.js";
 import { arayuzHazirla, toast, onayIste, kacisEt, sayiBicimle, ondalikOku } from "./utils.js";
+import { ikmalUyarisiniBaslat } from "./ikmal-uyari.js";
 
 arayuzHazirla();
 
@@ -29,6 +30,7 @@ sayfaKorumasi(["depocu", "admin"], (kullanici) => {
     render();
   });
   katalogDinle((liste) => { katalogCache = liste.filter((u) => u.aktif !== false); });
+  ikmalUyarisiniBaslat(); // toplama gözü azalınca bu sayfada da ses + sayaç
 });
 
 document.getElementById("cikisBtn").addEventListener("click", async () => {
