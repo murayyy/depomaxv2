@@ -877,24 +877,19 @@ export async function gozHareketleriniGetir(adet = 50) {
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
 
-/** Bir ürünün raflardaki kalemleri (SKT'si yakın olan önce). Sadece o ürünün kalemlerini okur. */
+/** Bir ürünün raflardaki kalemleri (SKT'si yakın olan önce).
+ *  Her rafın kalemlerine ayrı ayrı bakar: mevcut kurallarla çalışır, ek indeks istemez.
+ *  Okuma: raf sayısı kadar + bulunan kalemler (raf başına en az 1). */
 export async function rafKalemleriniBul(stokKodu) {
   if (!stokKodu) return [];
-  let snap;
-  try {
-    snap = await getDocs(query(collectionGroup(db, "kalemler"), where("stokKodu", "==", String(stokKodu))));
-  } catch (e) {
-    // İndeks henüz yoksa Firestore hata mesajında tek tıkla oluşturma bağlantısı verir
-    console.error("rafKalemleriniBul (indeks gerekebilir):", e.message);
-    throw e;
-  }
-  const kalemler = snap.docs
-    .map((d) => ({ id: d.id, rafId: d.ref.parent.parent?.id || "", ...d.data() }))
+  const kod = String(stokKodu);
+  const raflarSnap = await getDocs(collection(db, RAFLAR));
+  const sonuclar = await Promise.all(raflarSnap.docs.map(async (raf) => {
+    const snap = await getDocs(query(collection(db, RAFLAR, raf.id, "kalemler"), where("stokKodu", "==", kod)));
+    return snap.docs.map((d) => ({ id: d.id, rafId: raf.id, rafAd: raf.data().ad || raf.id, ...d.data() }));
+  }));
+  const kalemler = sonuclar.flat()
     .filter((k) => (Number(k.miktar) || 0) > 0 || (Number(k.palet) || 0) > 0);
-  const rafIdler = [...new Set(kalemler.map((k) => k.rafId).filter(Boolean))];
-  const raflar = await Promise.all(rafIdler.map((id) => getDoc(doc(db, "raflar", id))));
-  const rafAdlari = new Map(raflar.filter((r) => r.exists()).map((r) => [r.id, r.data().ad]));
-  kalemler.forEach((k) => { k.rafAd = rafAdlari.get(k.rafId) || k.rafId; });
   kalemler.sort((a, b) => (a.skt || "9999").localeCompare(b.skt || "9999") || (a.girisTarihi || "").localeCompare(b.girisTarihi || ""));
   return kalemler;
 }

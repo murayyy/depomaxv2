@@ -10,7 +10,7 @@ import {
   ikmalBekleyenleriDinle, gozIkmalYap, gozKaydet, gozSil, gozleriTopluKaydet,
   tumGozleriGetir, gozHareketleriniGetir, katalogDinle,
   rafKalemleriniBul, rafKalemiGuncelle, rafKalemiSil, rafHareketiKaydet
-} from "./veri.js";
+} from "./veri.js?v=20261030b";
 import {
   arayuzHazirla, toast, onayIste, kacisEt, sayiBicimle, ondalikOku, sesCal,
   reyonKarsilastir, excelDosyasiniOku, tarihBicimle
@@ -254,8 +254,11 @@ function doldurModalAc(g) {
     }
     rafSec.innerHTML = liste.map((k) => `<option value="${kacisEt(k.id)}">${kacisEt(k.rafAd)} · Kat ${k.kat || "?"}/Böl.${k.bolme || "?"} · ${sayiBicimle(k.miktar)} ${kacisEt(k.birim || "")}${k.skt ? " · SKT " + kacisEt(k.skt) : ""}</option>`).join("");
     rafSec.dispatchEvent(new Event("change"));
-  }).catch(() => {
-    rafSec.innerHTML = '<option value="">Raflar okunamadı (yöneticiye haber verin)</option>';
+  }).catch((err) => {
+    console.error("Raflar okunamadı:", err);
+    rafSec.innerHTML = `<option value="">Raflar okunamadı: ${kacisEt(err.code || err.message || "bilinmeyen hata")}</option>`;
+    root.querySelector('input[name="dlKaynak"][value="direkt"]').checked = true;
+    kaynakDegisti();
   });
 
   input.addEventListener("input", () => {
