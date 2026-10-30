@@ -13,7 +13,7 @@ import { ondalikOku } from "./utils.js";
 import {
   collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot,
   query, where, orderBy, serverTimestamp, writeBatch, getDocs,
-  setDoc, getDoc, increment, collectionGroup
+  setDoc, getDoc, increment, collectionGroup, runTransaction, limit as fsLimit
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const SIPARISLER = "siparisler";
@@ -524,6 +524,7 @@ export async function paletlemeYardimciEkle(siparisId, yardimci) {
 // ============================================================================
 export async function stokDusur(stokKodu, miktar) {
   if (!stokKodu || !miktar) return;
+  gozMiktarDegistir(stokKodu, -Number(miktar)); // toplama gözünden düş (takip ediliyorsa)
   try {
     const ref = doc(db, "stoklar", stokKodu);
     await updateDoc(ref, { gozaltiMiktar: increment(Number(miktar)) });
@@ -537,6 +538,7 @@ export async function stokDusur(stokKodu, miktar) {
 
 export async function stokGeriEkle(stokKodu, miktar) {
   if (!stokKodu || !miktar) return;
+  gozMiktarDegistir(stokKodu, Number(miktar)); // toplama gözüne geri koy (takip ediliyorsa)
   try {
     await updateDoc(doc(db, "stoklar", stokKodu), {
       gozaltiMiktar: increment(-Number(miktar))
@@ -708,4 +710,168 @@ export async function stokKodlariGetir(kodlar) {
     snap.docs.forEach(d => map.set(d.id, { kod: d.id, ...d.data() }));
   }
   return map;
+}
+
+/* ============================================================================
+   TOPLAMA GÖZLERİ (ikmal takibi)
+   toplamaGozleri/{stokKodu} -> {
+     kod, ad, reyon, birim,
+     miktar,            // gözde şu an duran miktar
+     uyariSeviyesi,     // bu miktara veya altına inince depocuya uyarı
+     ikmalGerekli,      // miktar <= uyariSeviyesi ise true (depocu ekranı bunu dinler)
+     ikmalBaslangic,    // uyarının başladığı an
+     sonIkmal: { miktar, yapan, tarih }
+   }
+   gozHareketleri/{otoId} -> { kod, ad, tip: "ikmal"|"sayim"|"tanim"|"silindi", miktar, onceki, sonra, yapan, not, tarih }
+
+   - Toplayıcı "toplandı" deyince gözden düşer, işareti kaldırırsa geri eklenir
+     (stokDusur / stokGeriEkle içinden çağrılır).
+   - Sadece depocunun tanımladığı ürünler takip edilir; tanımsız ürün için hiçbir şey yapılmaz.
+   ============================================================================ */
+const TOPLAMA_GOZLERI = "toplamaGozleri";
+const GOZ_HAREKETLERI = "gozHareketleri";
+
+const _yuvarla = (n) => Math.round((Number(n) || 0) * 1000) / 1000;
+const _gozIkmalGerekli = (miktar, seviye) => (Number(seviye) || 0) > 0 && _yuvarla(miktar) <= Number(seviye);
+
+/** Gözdeki miktarı fark kadar değiştirir. Takip edilmeyen ürün için null döner. */
+export async function gozMiktarDegistir(stokKodu, fark) {
+  if (!stokKodu || !Number(fark)) return null;
+  const ref = doc(db, TOPLAMA_GOZLERI, String(stokKodu));
+  try {
+    return await runTransaction(db, async (tx) => {
+      const snap = await tx.get(ref);
+      if (!snap.exists()) return null;
+      const g = snap.data();
+      const onceki = _yuvarla(g.miktar);
+      const yeni = _yuvarla(onceki + Number(fark));
+      const ikmalGerekli = _gozIkmalGerekli(yeni, g.uyariSeviyesi);
+      const patch = { miktar: yeni, ikmalGerekli, guncellemeTarihi: serverTimestamp() };
+      if (ikmalGerekli && !g.ikmalGerekli) patch.ikmalBaslangic = serverTimestamp();
+      tx.update(ref, patch);
+      return { onceki, yeni, ikmalGerekli };
+    });
+  } catch (e) {
+    console.warn("Toplama gözü güncellenemedi:", stokKodu, e.message);
+    return null;
+  }
+}
+
+/** Depocu gözü doldurdu: koyduğu miktar eklenir, kimin koyduğu kaydedilir. */
+export async function gozIkmalYap(stokKodu, eklenen, yapan, not = "") {
+  const miktar = _yuvarla(eklenen);
+  if (!stokKodu || miktar <= 0) throw new Error("Koyulan miktar 0'dan büyük olmalı.");
+  const ref = doc(db, TOPLAMA_GOZLERI, String(stokKodu));
+  const sonuc = await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists()) throw new Error("Bu ürün için toplama gözü tanımlı değil.");
+    const g = snap.data();
+    const onceki = _yuvarla(g.miktar);
+    const yeni = _yuvarla(onceki + miktar);
+    const ikmalGerekli = _gozIkmalGerekli(yeni, g.uyariSeviyesi);
+    tx.update(ref, {
+      miktar: yeni,
+      ikmalGerekli,
+      ...(ikmalGerekli ? {} : { ikmalBaslangic: null }),
+      sonIkmal: { miktar, yapan, tarih: serverTimestamp() },
+      guncellemeTarihi: serverTimestamp()
+    });
+    return { onceki, yeni, ikmalGerekli, ad: g.ad || "" };
+  });
+  await addDoc(collection(db, GOZ_HAREKETLERI), {
+    kod: String(stokKodu), ad: sonuc.ad, tip: "ikmal",
+    miktar, onceki: sonuc.onceki, sonra: sonuc.yeni, yapan, not, tarih: serverTimestamp()
+  });
+  return sonuc;
+}
+
+/** Göz tanımla / düzenle. veri: { ad, reyon, birim, miktar, uyariSeviyesi } */
+export async function gozKaydet(stokKodu, veri, yapan, tip = "tanim") {
+  const kod = String(stokKodu || "").trim();
+  if (!kod) throw new Error("Stok kodu zorunlu.");
+  if (kod.includes("/")) throw new Error("Stok kodunda '/' olamaz.");
+  const ref = doc(db, TOPLAMA_GOZLERI, kod);
+  const eski = await getDoc(ref);
+  const onceki = eski.exists() ? _yuvarla(eski.data().miktar) : 0;
+  const miktar = _yuvarla(veri.miktar);
+  const uyariSeviyesi = _yuvarla(veri.uyariSeviyesi);
+  const ikmalGerekli = _gozIkmalGerekli(miktar, uyariSeviyesi);
+  await setDoc(ref, {
+    kod, ad: veri.ad || "", reyon: veri.reyon || "", birim: veri.birim || "",
+    miktar, uyariSeviyesi, ikmalGerekli,
+    ...(ikmalGerekli && !(eski.exists() && eski.data().ikmalGerekli) ? { ikmalBaslangic: serverTimestamp() } : {}),
+    ...(ikmalGerekli ? {} : { ikmalBaslangic: null }),
+    guncellemeTarihi: serverTimestamp()
+  }, { merge: true });
+  if (!eski.exists() || onceki !== miktar) {
+    await addDoc(collection(db, GOZ_HAREKETLERI), {
+      kod, ad: veri.ad || "", tip: eski.exists() ? tip : "tanim",
+      miktar: _yuvarla(miktar - onceki), onceki, sonra: miktar, yapan, not: veri.not || "", tarih: serverTimestamp()
+    });
+  }
+  return { ikmalGerekli };
+}
+
+/** Excel'den toplu göz tanımı. satirlar: [{ kod, ad, reyon, birim, miktar, uyariSeviyesi }] */
+export async function gozleriTopluKaydet(satirlar, yapan) {
+  let yazilan = 0;
+  for (let i = 0; i < satirlar.length; i += 400) {
+    const batch = writeBatch(db);
+    satirlar.slice(i, i + 400).forEach((s) => {
+      const kod = String(s.kod || "").trim();
+      if (!kod || kod.includes("/")) return;
+      const miktar = _yuvarla(s.miktar);
+      const uyariSeviyesi = _yuvarla(s.uyariSeviyesi);
+      const ikmalGerekli = _gozIkmalGerekli(miktar, uyariSeviyesi);
+      batch.set(doc(db, TOPLAMA_GOZLERI, kod), {
+        kod, ad: s.ad || "", reyon: s.reyon || "", birim: s.birim || "",
+        miktar, uyariSeviyesi, ikmalGerekli,
+        ikmalBaslangic: ikmalGerekli ? serverTimestamp() : null,
+        guncellemeTarihi: serverTimestamp()
+      }, { merge: true });
+      yazilan++;
+    });
+    await batch.commit();
+  }
+  await addDoc(collection(db, GOZ_HAREKETLERI), {
+    kod: "", ad: `${yazilan} göz Excel'den yüklendi`, tip: "tanim",
+    miktar: 0, onceki: 0, sonra: 0, yapan, not: "Toplu yükleme", tarih: serverTimestamp()
+  });
+  return yazilan;
+}
+
+export async function gozSil(stokKodu, yapan) {
+  const ref = doc(db, TOPLAMA_GOZLERI, String(stokKodu));
+  const snap = await getDoc(ref);
+  await deleteDoc(ref);
+  if (snap.exists()) {
+    const g = snap.data();
+    await addDoc(collection(db, GOZ_HAREKETLERI), {
+      kod: String(stokKodu), ad: g.ad || "", tip: "silindi",
+      miktar: 0, onceki: _yuvarla(g.miktar), sonra: 0, yapan, not: "", tarih: serverTimestamp()
+    });
+  }
+}
+
+/** Sadece doldurulması gereken gözleri canlı dinler (kota dostu: az belge). */
+export function ikmalBekleyenleriDinle(callback) {
+  const q = query(collection(db, TOPLAMA_GOZLERI), where("ikmalGerekli", "==", true));
+  return onSnapshot(q, (snap) => {
+    const liste = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const yeniGelenler = snap.docChanges()
+      .filter((c) => c.type === "added" && !c.doc.metadata.hasPendingWrites)
+      .map((c) => ({ id: c.doc.id, ...c.doc.data() }));
+    callback(liste, yeniGelenler);
+  }, (err) => console.error("ikmalBekleyenleriDinle:", err));
+}
+
+/** Tüm tanımlı gözler — tek seferlik okuma (sürekli dinlemez). */
+export async function tumGozleriGetir() {
+  const snap = await getDocs(collection(db, TOPLAMA_GOZLERI));
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
+
+export async function gozHareketleriniGetir(adet = 50) {
+  const snap = await getDocs(query(collection(db, GOZ_HAREKETLERI), orderBy("tarih", "desc"), fsLimit(adet)));
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
