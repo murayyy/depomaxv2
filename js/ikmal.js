@@ -8,7 +8,8 @@
 import { auth, signOut, sayfaKorumasi } from "./firebase.js";
 import {
   ikmalBekleyenleriDinle, gozIkmalYap, gozKaydet, gozSil, gozleriTopluKaydet,
-  tumGozleriGetir, gozHareketleriniGetir, katalogDinle
+  tumGozleriGetir, gozHareketleriniGetir, katalogDinle,
+  rafKalemleriniBul, rafKalemiGuncelle, rafKalemiSil, rafHareketiKaydet
 } from "./veri.js";
 import {
   arayuzHazirla, toast, onayIste, kacisEt, sayiBicimle, ondalikOku, sesCal,
@@ -175,12 +176,12 @@ function renderBekleyenler() {
   });
 }
 
-/* ---------------- Doldurdum modalı (miktar zorunlu) ---------------- */
+/* ---------------- Doldurdum modalı (miktar zorunlu, kaynak: raf / direkt) ---------------- */
 function doldurModalAc(g) {
   const root = document.getElementById("modalRoot");
   root.innerHTML = `
     <div class="modal-backdrop" data-role="backdrop">
-      <div class="modal" style="max-width:380px;">
+      <div class="modal" style="max-width:420px;">
         <h3>✓ Doldurdum — ${kacisEt(g.ad || g.kod)}</h3>
         <p style="font-size:13px;">
           <span class="reyon-tag">${kacisEt(g.reyon || "—")}</span>
@@ -191,8 +192,25 @@ function doldurModalAc(g) {
           <input class="input" type="text" inputmode="decimal" id="dlMiktar" placeholder="Örn. 25" autocomplete="off" />
         </div>
         <div class="field">
-          <label>Not (isteğe bağlı)</label>
-          <input class="input" id="dlNot" placeholder="Örn. D1 rafından 1 palet" />
+          <label>Nereden geldi?</label>
+          <div class="u-flex" style="gap:14px;flex-wrap:wrap;font-size:13.5px;">
+            <label style="display:flex;gap:6px;align-items:center;"><input type="radio" name="dlKaynak" value="raf" checked /> Raftan</label>
+            <label style="display:flex;gap:6px;align-items:center;"><input type="radio" name="dlKaynak" value="direkt" /> Direkt gelen ürün</label>
+          </div>
+        </div>
+        <div id="dlRafBolum" style="background:var(--color-surface-2);padding:10px;border-radius:8px;margin-bottom:8px;">
+          <div class="field" style="margin-bottom:8px;">
+            <label>Hangi raftan?</label>
+            <select class="select" id="dlRaf"><option value="">Raflar yükleniyor…</option></select>
+          </div>
+          <div class="field" style="margin-bottom:0;">
+            <label>Raftan düşülecek miktar <span id="dlRafBirim" class="u-text-soft"></span></label>
+            <input class="input" type="text" inputmode="decimal" id="dlRafMiktar" placeholder="Göze koyduğunuzla aynıysa boş bırakın" autocomplete="off" />
+          </div>
+        </div>
+        <div class="field">
+          <label id="dlNotEtiket">Not (isteğe bağlı)</label>
+          <input class="input" id="dlNot" placeholder="" />
         </div>
         <div class="u-text-soft" style="font-size:12px;" id="dlSonuc"></div>
         <div class="modal__actions">
@@ -204,30 +222,94 @@ function doldurModalAc(g) {
   const kapat = () => { root.innerHTML = ""; };
   const input = document.getElementById("dlMiktar");
   const sonuc = document.getElementById("dlSonuc");
+  const rafSec = document.getElementById("dlRaf");
+  const rafBolum = document.getElementById("dlRafBolum");
+  const notInput = document.getElementById("dlNot");
+  let kalemler = [];
   input.focus();
+
+  const kaynak = () => root.querySelector('input[name="dlKaynak"]:checked').value;
+  const seciliKalem = () => kalemler.find((k) => k.id === rafSec.value);
+
+  function kaynakDegisti() {
+    const raf = kaynak() === "raf";
+    rafBolum.classList.toggle("u-hidden", !raf);
+    document.getElementById("dlNotEtiket").textContent = raf ? "Not (isteğe bağlı)" : "Tedarikçi / not (isteğe bağlı)";
+    notInput.placeholder = raf ? "" : "Örn. fabrikadan geldi";
+  }
+  root.querySelectorAll('input[name="dlKaynak"]').forEach((r) => r.addEventListener("change", kaynakDegisti));
+  rafSec.addEventListener("change", () => {
+    const k = seciliKalem();
+    document.getElementById("dlRafBirim").textContent = k ? `(${k.birim || ""}, rafta ${sayiBicimle(k.miktar)})` : "";
+  });
+
+  // Ürünün raflardaki yerleri (SKT'si yakın olan önce)
+  rafKalemleriniBul(g.kod || g.id).then((liste) => {
+    kalemler = liste;
+    if (!liste.length) {
+      rafSec.innerHTML = '<option value="">Bu ürün hiçbir rafta kayıtlı değil</option>';
+      root.querySelector('input[name="dlKaynak"][value="direkt"]').checked = true;
+      kaynakDegisti();
+      return;
+    }
+    rafSec.innerHTML = liste.map((k) => `<option value="${kacisEt(k.id)}">${kacisEt(k.rafAd)} · Kat ${k.kat || "?"}/Böl.${k.bolme || "?"} · ${sayiBicimle(k.miktar)} ${kacisEt(k.birim || "")}${k.skt ? " · SKT " + kacisEt(k.skt) : ""}</option>`).join("");
+    rafSec.dispatchEvent(new Event("change"));
+  }).catch(() => {
+    rafSec.innerHTML = '<option value="">Raflar okunamadı (yöneticiye haber verin)</option>';
+  });
+
   input.addEventListener("input", () => {
     const m = ondalikOku(input.value) || 0;
     sonuc.textContent = m > 0 ? `Kayıttan sonra gözde ${sayiBicimle((Number(g.miktar) || 0) + m)} ${g.birim || ""} olacak.` : "";
   });
   root.querySelector('[data-role="iptal"]').onclick = kapat;
   root.querySelector('[data-role="backdrop"]').onclick = (e) => { if (e.target.dataset.role === "backdrop") kapat(); };
+
   const kaydet = async () => {
     const miktar = ondalikOku(input.value) || 0;
     if (miktar <= 0) { toast("Göze koyduğunuz miktarı girin.", "error"); input.focus(); return; }
+    const rafdan = kaynak() === "raf";
+    const kalem = rafdan ? seciliKalem() : null;
+    if (rafdan && !kalem) { toast("Hangi raftan aldığınızı seçin ya da 'Direkt gelen ürün' deyin.", "error"); return; }
+    const rafMiktarStr = document.getElementById("dlRafMiktar").value.trim();
+    const rafMiktar = rafdan ? (rafMiktarStr ? ondalikOku(rafMiktarStr) || 0 : miktar) : 0;
+    if (rafdan && rafMiktar > (Number(kalem.miktar) || 0)) {
+      toast(`Rafta sadece ${sayiBicimle(kalem.miktar)} ${kalem.birim || ""} görünüyor. Raftan düşülecek miktarı düzeltin.`, "error");
+      return;
+    }
     const btn = root.querySelector('[data-role="kaydet"]');
     btn.disabled = true;
+    const not = notInput.value.trim();
     try {
-      const s = await gozIkmalYap(g.id, miktar, kullaniciAdi(), document.getElementById("dlNot").value.trim());
+      const s = await gozIkmalYap(g.id, miktar, kullaniciAdi(), not,
+        rafdan ? { tip: "raf", rafAd: kalem.rafAd } : { tip: "direkt" });
+
+      if (rafdan) {
+        const kalan = (Number(kalem.miktar) || 0) - rafMiktar;
+        try {
+          if (kalan <= 0) await rafKalemiSil(kalem.rafId, kalem.id);
+          else await rafKalemiGuncelle(kalem.rafId, kalem.id, { miktar: Math.round(kalan * 1000) / 1000 });
+          await rafHareketiKaydet({
+            rafId: kalem.rafId, rafAd: kalem.rafAd, tip: "cikis",
+            stokKodu: kalem.stokKodu, ad: kalem.ad, miktar: rafMiktar, palet: 0, birim: kalem.birim,
+            yapan: kullaniciAdi(), not: `Toplama gözüne (${g.reyon || "reyon yok"})${not ? ". " + not : ""}`
+          });
+        } catch (e) {
+          toast(`Göz dolduruldu ama raftan düşülemedi: ${e.message || e}. Raflar sayfasından elle düşün.`, "error", 9000);
+        }
+      }
+
       kapat();
       if (tumGozlerYuklendi) {
         tumGozler = tumGozler.map((x) => x.id === g.id
-          ? { ...x, miktar: s.yeni, ikmalGerekli: s.ikmalGerekli, sonIkmal: { miktar, yapan: kullaniciAdi(), tarih: null } }
+          ? { ...x, miktar: s.yeni, ikmalGerekli: s.ikmalGerekli, sonIkmal: { miktar, yapan: kullaniciAdi(), tarih: null, kaynak: rafdan ? "raf" : "direkt", rafAd: kalem?.rafAd || "" } }
           : x);
         renderTumGozler();
       }
-      toast(s.ikmalGerekli
+      const nereden = rafdan ? ` ${kalem.rafAd} rafından ${sayiBicimle(rafMiktar)} ${kalem.birim || ""} düşüldü.` : " (direkt gelen)";
+      toast((s.ikmalGerekli
         ? `Kaydedildi. Gözde ${sayiBicimle(s.yeni)} ${g.birim || ""} var, hâlâ uyarı seviyesinin altında.`
-        : `Kaydedildi. Gözde ${sayiBicimle(s.yeni)} ${g.birim || ""} var.`, s.ikmalGerekli ? "info" : "success");
+        : `Kaydedildi. Gözde ${sayiBicimle(s.yeni)} ${g.birim || ""} var.`) + nereden, s.ikmalGerekli ? "info" : "success", 6000);
     } catch (err) {
       btn.disabled = false;
       toast("Kaydedilemedi: " + (err.message || err), "error");
@@ -260,7 +342,8 @@ function durumRozeti(g) {
 
 function sonIkmalYazi(g) {
   if (!g.sonIkmal) return "—";
-  return `${sayiBicimle(g.sonIkmal.miktar)} · ${kacisEt(g.sonIkmal.yapan || "")}<br><span class="u-text-soft" style="font-size:11px;">${g.sonIkmal.tarih ? tarihBicimle(g.sonIkmal.tarih) : "az önce"}</span>`;
+  const kaynakYazi = g.sonIkmal.kaynak === "raf" ? ` · ${kacisEt(g.sonIkmal.rafAd || "raf")}` : g.sonIkmal.kaynak === "direkt" ? " · direkt" : "";
+  return `${sayiBicimle(g.sonIkmal.miktar)} · ${kacisEt(g.sonIkmal.yapan || "")}${kaynakYazi}<br><span class="u-text-soft" style="font-size:11px;">${g.sonIkmal.tarih ? tarihBicimle(g.sonIkmal.tarih) : "az önce"}</span>`;
 }
 
 function renderTumGozler() {
@@ -482,7 +565,7 @@ document.getElementById("gecmisBtn").addEventListener("click", async () => {
                 <div style="flex:1;">
                   <div style="font-weight:600;">${kacisEt(h.ad || h.kod)}</div>
                   <div style="font-size:11px;color:var(--color-ink-soft);">
-                    ${h.kod ? kacisEt(h.kod) + " · " : ""}${h.tip === "ikmal" ? "+" + sayiBicimle(h.miktar) + " · " : ""}${h.tip !== "tanim" || h.kod ? sayiBicimle(h.onceki) + " → " + sayiBicimle(h.sonra) : ""}${h.not ? " · " + kacisEt(h.not) : ""}
+                    ${h.kod ? kacisEt(h.kod) + " · " : ""}${h.tip === "ikmal" ? "+" + sayiBicimle(h.miktar) + (h.kaynak === "raf" ? " (" + kacisEt(h.rafAd || "raf") + ")" : h.kaynak === "direkt" ? " (direkt)" : "") + " · " : ""}${h.tip !== "tanim" || h.kod ? sayiBicimle(h.onceki) + " → " + sayiBicimle(h.sonra) : ""}${h.not ? " · " + kacisEt(h.not) : ""}
                   </div>
                 </div>
                 <div style="font-size:11px;color:var(--color-ink-soft);text-align:right;">${kacisEt(h.yapan || "")}<br>${tarihBicimle(h.tarih)}</div>

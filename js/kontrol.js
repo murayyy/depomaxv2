@@ -451,6 +451,7 @@ function baglaSatirOlaylari(kapsayici, saltOkunur) {
           patch.miktarDuzeltildi = true;
           patch.miktarDuzeltenKullanici = mevcutKullanici.ad || mevcutKullanici.uid;
         }
+        toplananMiktarFarkiniUygula(urun, yeniMiktar);
         urunGuncelle(aktifSiparis.id, uid, patch);
       }, 400));
     }
@@ -465,12 +466,14 @@ function baglaSatirOlaylari(kapsayici, saltOkunur) {
           if (eskiEksikti) {
             patch.duzeltildi = true;
             patch.duzeltenkKullanici = mevcutKullanici.ad || mevcutKullanici.uid;
-            if (urun?.kod) stokDusur(urun.kod, urun.miktar);
           }
+          // Daha önce toplanmamışsa düş (eksikten ya da işaretsizden toplandıya)
+          if (urun?.kod && !urun.toplandi) stokDusur(urun.kod, urun.miktar);
+          if (urun) { urun.toplandi = true; urun.eksik = false; }
         } else {
           patch.duzeltildi = false;
-          // Cache'e bakmadan her zaman geri ekle
-          if (urun?.kod) stokGeriEkle(urun.kod, urun.miktar);
+          if (urun?.kod && urun.toplandi) stokGeriEkle(urun.kod, urun.miktar);
+          if (urun) urun.toplandi = false;
         }
         urunGuncelle(aktifSiparis.id, uid, patch);
       });
@@ -487,7 +490,10 @@ function baglaSatirOlaylari(kapsayici, saltOkunur) {
             // Toplayıcı "toplandı" demişti ama kontrolör "eksik" buldu — kontrolör tespiti
             patch.kontrolorEksikTespiti = true;
             patch.kontrolorEksikTespitiKullanici = mevcutKullanici.ad || mevcutKullanici.uid;
+            // Ürün alınmamış: düşülen stok/göz geri eklenir
+            if (urun.kod) stokGeriEkle(urun.kod, urun.miktar);
           }
+          if (urun) { urun.toplandi = false; urun.eksik = true; }
         } else {
           patch.kontrolorEksikTespiti = false;
         }
@@ -513,6 +519,16 @@ function baglaSatirOlaylari(kapsayici, saltOkunur) {
       }, 500));
     }
   });
+}
+
+/* Toplanmış ürünün miktarı değişince stok/göz farkını uygula.
+   Önbellekteki ürünü hemen günceller ki art arda değişikliklerde fark iki kez sayılmasın. */
+function toplananMiktarFarkiniUygula(urun, yeniMiktar) {
+  if (!urun || !urun.toplandi || !urun.kod) return;
+  const fark = (Number(yeniMiktar) || 0) - (Number(urun.miktar) || 0);
+  if (fark > 0) stokDusur(urun.kod, fark);
+  else if (fark < 0) stokGeriEkle(urun.kod, -fark);
+  urun.miktar = Number(yeniMiktar) || 0;
 }
 
 /* ---------------- Barkod tarama ---------------- */

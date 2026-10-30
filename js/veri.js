@@ -758,7 +758,7 @@ export async function gozMiktarDegistir(stokKodu, fark) {
 }
 
 /** Depocu gözü doldurdu: koyduğu miktar eklenir, kimin koyduğu kaydedilir. */
-export async function gozIkmalYap(stokKodu, eklenen, yapan, not = "") {
+export async function gozIkmalYap(stokKodu, eklenen, yapan, not = "", kaynak = { tip: "direkt" }) {
   const miktar = _yuvarla(eklenen);
   if (!stokKodu || miktar <= 0) throw new Error("Koyulan miktar 0'dan büyük olmalı.");
   const ref = doc(db, TOPLAMA_GOZLERI, String(stokKodu));
@@ -773,14 +773,15 @@ export async function gozIkmalYap(stokKodu, eklenen, yapan, not = "") {
       miktar: yeni,
       ikmalGerekli,
       ...(ikmalGerekli ? {} : { ikmalBaslangic: null }),
-      sonIkmal: { miktar, yapan, tarih: serverTimestamp() },
+      sonIkmal: { miktar, yapan, tarih: serverTimestamp(), kaynak: kaynak.tip, rafAd: kaynak.rafAd || "" },
       guncellemeTarihi: serverTimestamp()
     });
     return { onceki, yeni, ikmalGerekli, ad: g.ad || "" };
   });
   await addDoc(collection(db, GOZ_HAREKETLERI), {
     kod: String(stokKodu), ad: sonuc.ad, tip: "ikmal",
-    miktar, onceki: sonuc.onceki, sonra: sonuc.yeni, yapan, not, tarih: serverTimestamp()
+    miktar, onceki: sonuc.onceki, sonra: sonuc.yeni, yapan, not,
+    kaynak: kaynak.tip, rafAd: kaynak.rafAd || "", tarih: serverTimestamp()
   });
   return sonuc;
 }
@@ -874,4 +875,26 @@ export async function tumGozleriGetir() {
 export async function gozHareketleriniGetir(adet = 50) {
   const snap = await getDocs(query(collection(db, GOZ_HAREKETLERI), orderBy("tarih", "desc"), fsLimit(adet)));
   return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
+
+/** Bir ürünün raflardaki kalemleri (SKT'si yakın olan önce). Sadece o ürünün kalemlerini okur. */
+export async function rafKalemleriniBul(stokKodu) {
+  if (!stokKodu) return [];
+  let snap;
+  try {
+    snap = await getDocs(query(collectionGroup(db, "kalemler"), where("stokKodu", "==", String(stokKodu))));
+  } catch (e) {
+    // İndeks henüz yoksa Firestore hata mesajında tek tıkla oluşturma bağlantısı verir
+    console.error("rafKalemleriniBul (indeks gerekebilir):", e.message);
+    throw e;
+  }
+  const kalemler = snap.docs
+    .map((d) => ({ id: d.id, rafId: d.ref.parent.parent?.id || "", ...d.data() }))
+    .filter((k) => (Number(k.miktar) || 0) > 0 || (Number(k.palet) || 0) > 0);
+  const rafIdler = [...new Set(kalemler.map((k) => k.rafId).filter(Boolean))];
+  const raflar = await Promise.all(rafIdler.map((id) => getDoc(doc(db, "raflar", id))));
+  const rafAdlari = new Map(raflar.filter((r) => r.exists()).map((r) => [r.id, r.data().ad]));
+  kalemler.forEach((k) => { k.rafAd = rafAdlari.get(k.rafId) || k.rafId; });
+  kalemler.sort((a, b) => (a.skt || "9999").localeCompare(b.skt || "9999") || (a.girisTarihi || "").localeCompare(b.girisTarihi || ""));
+  return kalemler;
 }

@@ -474,7 +474,9 @@ function baglaSatirOlaylari(kapsayici, saltOkunur) {
     const miktarInput = satir.querySelector('[data-rol="miktar"]');
     if (miktarInput) {
       miktarInput.addEventListener("input", debounce(() => {
-        urunGuncelle(aktifSiparis.id, uid, { miktar: ondalikOku(miktarInput.value) });
+        const yeniMiktar = ondalikOku(miktarInput.value);
+        toplananMiktarFarkiniUygula(urunlerCache.find((u) => u.id === uid), yeniMiktar);
+        urunGuncelle(aktifSiparis.id, uid, { miktar: yeniMiktar });
       }, 400));
     }
     const toplandiCb = satir.querySelector('[data-rol="toplandi"]');
@@ -484,10 +486,11 @@ function baglaSatirOlaylari(kapsayici, saltOkunur) {
         const patch = toplandiCb.checked ? { toplandi: true, eksik: false } : { toplandi: false };
         if (toplandiCb.checked) {
           patch.toplayanKullanici = mevcutKullanici.ad || mevcutKullanici.uid;
-          if (urun?.kod) stokDusur(urun.kod, urun.miktar);
+          if (urun?.kod && !urun.toplandi) stokDusur(urun.kod, urun.miktar);
+          if (urun) { urun.toplandi = true; urun.eksik = false; }  // önbellek hemen güncellenir
         } else {
-          // Cache'e bakmadan her zaman geri ekle — cache gecikmeli olabilir
-          if (urun?.kod) stokGeriEkle(urun.kod, urun.miktar);
+          if (urun?.kod && urun.toplandi) stokGeriEkle(urun.kod, urun.miktar);
+          if (urun) urun.toplandi = false;
         }
         urunGuncelle(aktifSiparis.id, uid, patch);
       });
@@ -495,8 +498,16 @@ function baglaSatirOlaylari(kapsayici, saltOkunur) {
     const eksikCb = satir.querySelector('[data-rol="eksik"]');
     if (eksikCb) {
       eksikCb.addEventListener("change", () => {
+        const urun = urunlerCache.find((u) => u.id === uid);
         const patch = eksikCb.checked ? { eksik: true, toplandi: false } : { eksik: false };
-        if (eksikCb.checked) patch.toplayanKullanici = mevcutKullanici.ad || mevcutKullanici.uid;
+        if (eksikCb.checked) {
+          patch.toplayanKullanici = mevcutKullanici.ad || mevcutKullanici.uid;
+          // Toplandı işaretliyken eksiğe çevrildiyse düşülen stok/göz geri eklenir
+          if (urun?.kod && urun.toplandi) stokGeriEkle(urun.kod, urun.miktar);
+          if (urun) { urun.toplandi = false; urun.eksik = true; }
+        } else if (urun) {
+          urun.eksik = false;
+        }
         urunGuncelle(aktifSiparis.id, uid, patch);
       });
     }
@@ -508,6 +519,16 @@ function baglaSatirOlaylari(kapsayici, saltOkunur) {
       });
     }
   });
+}
+
+/* Toplanmış ürünün miktarı değişince stok/göz farkını uygula.
+   Önbellekteki ürünü hemen günceller ki art arda değişikliklerde fark iki kez sayılmasın. */
+function toplananMiktarFarkiniUygula(urun, yeniMiktar) {
+  if (!urun || !urun.toplandi || !urun.kod) return;
+  const fark = (Number(yeniMiktar) || 0) - (Number(urun.miktar) || 0);
+  if (fark > 0) stokDusur(urun.kod, fark);
+  else if (fark < 0) stokGeriEkle(urun.kod, -fark);
+  urun.miktar = Number(yeniMiktar) || 0;
 }
 
 /* ---------------- Mevcut siparişe Excel'den ürün ekle ---------------- */
@@ -664,14 +685,22 @@ function taramaSonucModalAc(urun) {
   root.querySelector('[data-role="backdrop"]').onclick = (e) => { if (e.target.dataset.role === "backdrop") devamEt(); };
   root.querySelector('[data-role="toplandi"]').onclick = async () => {
     const miktar = ondalikOku(document.getElementById("tsMiktar").value);
+    const guncel = urunlerCache.find((u) => u.id === urun.id) || urun;
+    // Stoktan düş: zaten toplanmışsa sadece miktar farkı, değilse tamamı
+    if (guncel.kod) {
+      if (guncel.toplandi) toplananMiktarFarkiniUygula(guncel, miktar);
+      else stokDusur(guncel.kod, miktar);
+    }
+    guncel.toplandi = true; guncel.eksik = false; guncel.miktar = miktar;
     await urunGuncelle(aktifSiparis.id, urun.id, { toplandi: true, eksik: false, miktar, toplayanKullanici: mevcutKullanici.ad || mevcutKullanici.uid });
-    // Stoktan düş
-    if (urun.kod) stokDusur(urun.kod, miktar);
     toast(`${urun.ad} toplandı. Stok güncellendi.`, "success");
     devamEt();
   };
   root.querySelector('[data-role="eksik"]').onclick = async () => {
     const miktar = ondalikOku(document.getElementById("tsMiktar").value);
+    const guncel = urunlerCache.find((u) => u.id === urun.id) || urun;
+    if (guncel.kod && guncel.toplandi) stokGeriEkle(guncel.kod, guncel.miktar);
+    guncel.toplandi = false; guncel.eksik = true;
     await urunGuncelle(aktifSiparis.id, urun.id, { eksik: true, toplandi: false, miktar, toplayanKullanici: mevcutKullanici.ad || mevcutKullanici.uid });
     toast(`${urun.ad} eksik olarak işaretlendi.`, "info");
     devamEt();
