@@ -6,7 +6,7 @@ import {
   katalogDinle, subeSimarisiOlustur,
   subeSiparisleriDinle, urunleriniGetir, urunEkle,
   teslimatKaydet, teslimatYenidenOnayla, siparisGuncelle
-} from "./veri.js";
+} from "./veri.js?v=20261112";
 import {
   arayuzHazirla, toast, onayIste, ondalikOku,
   sayiBicimle, kacisEt, excelDosyasiniOku, tarihBicimle
@@ -628,6 +628,16 @@ async function teslimAlModalAc(siparisId) {
       onaylayanKullanici: mevcutKullanici.ad || mevcutKullanici.uid,
       subeAdi: mevcutKullanici.subeAdi || mevcutKullanici.ad
     });
+    // Mikro'ya nakliye fişi yazılmışsa: sunucu, tam gelen satırları Mikro'da "teslim alındı" yapar.
+    // (Fiş henüz yazılmadıysa sunucu yazdığı anda teslimi görüp onayı kendisi yapar.)
+    const sip = siparislerCache.find((x) => x.id === siparisId);
+    if (sip && sip.mikroAktarim && sip.mikroAktarim.durum === "tamam" && sip.mikroAktarim.tip === "nakliye") {
+      try {
+        await siparisGuncelle(siparisId, { mikroOnay: { durum: "bekliyor", istekTarihi: new Date() } });
+      } catch (err) {
+        console.error("Mikro onay isteği gönderilemedi:", err);
+      }
+    }
     kapat();
     toast("✅ Teslimat onaylandı!", "success");
   };

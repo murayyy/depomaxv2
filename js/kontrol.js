@@ -29,7 +29,10 @@ let stokMap = new Map(); // Sipariş açılınca ilgili ürünler için doldurul
 /* ---------------- Bildirimler: sekme/durum geçişlerini canlı izle ---------------- */
 // Mikro'ya otomatik aktarım AÇ/KAPA. false: "Sisteme Aktar" eskisi gibi CSV indirir.
 // Tekrar açmak için true yapın (sunucuda mikro_aktar.py da çalışıyor olmalı).
-const MIKRO_OTOMATIK_AKTARIM = false;
+const MIKRO_OTOMATIK_AKTARIM = true;
+// Otomatik aktarım Mikro'ya DEPOLAR ARASI NAKLİYE fişi yazar (yolda); şube "Teslim Aldım"
+// deyince sunucu nakliyeyi Mikro'da onaylar. Franchise şubeler ve fabrika siparişleri
+// otomatik aktarılmaz: onlarda "Sisteme Aktar" eskisi gibi CSV indirir.
 const bekleyenMikroAktarimlari = new Map(); // siparisId -> { ad, kodlar, zamanAsimi }
 let bilinenSiparisDurumlari = new Map();
 let bildirimIlkYukleme = true;
@@ -67,7 +70,7 @@ function mikroAktarimSonuclariniIsle(tumListe) {
       const uyari = (s.mikroAktarim.uyarilar || []).length;
       sesCal("basari");
       toast(
-        `✅ ${bekleyen.ad}: Mikro'da evrak ${s.mikroAktarim.evrak} oluştu (${s.mikroAktarim.satir} satır).` +
+        `✅ ${bekleyen.ad}: Mikro'da nakliye fişi ${s.mikroAktarim.evrak} oluştu (${s.mikroAktarim.satir} satır, yolda).` +
           (uyari ? ` ${uyari} ürün fiyatsız yazıldı, Mikro'da kontrol edin.` : ""),
         "success",
         8000
@@ -174,13 +177,19 @@ function renderSiparisListesi(liste) {
           sevk_edildi: '<span class="badge badge-green">Sevk Edildi</span>',
           arsivlendi: '<span class="badge badge-gray">🗂 Arşiv</span>'
         }[s.durum] || '<span class="badge badge-blue">Kontrol Bekliyor</span>');
+    const mo = s.mikroOnay && s.mikroOnay.durum;
+    const onayRozeti = !MIKRO_OTOMATIK_AKTARIM || !mo ? ""
+      : mo === "tamam" ? ' <span class="badge badge-green">✅ Mikro: şube teslim aldı</span>'
+      : mo === "kismi" ? ` <span class="badge badge-amber" title="Mikro'dan kontrol edin">⚠ Mikro: ${(s.mikroOnay.bekleyen || []).length} satır yolda</span>`
+      : mo === "hata" ? ` <span class="badge badge-red" title="${kacisEt(s.mikroOnay.mesaj || "")}">⚠ Mikro onay hatası</span>`
+      : ' <span class="badge badge-gray">⏳ Mikro onayı bekleniyor</span>';
     const butonMetni = s.durum === "sevk_edildi" ? "Görüntüle →" : s.durum === "tamamlandi" ? "Sevke Hazırla →" : "Kontrol Et →";
     return `
       <div class="card order-card${s.sistemeAktarildi ? " is-aktarildi" : ""}" data-id="${s.id}">
         <div class="order-card__main">
           <div class="order-card__name">${kacisEt(s.ad)}</div>
           <div class="order-card__meta">
-            ${durumRozeti}
+            ${durumRozeti}${onayRozeti}
             ${s.kaynak === "fabrika" ? '<span class="badge badge-blue">🏭 FABRİKA</span>' : ""}
             <span>${toplam} ürün</span>
             ${s.toplamKg ? `<span>${sayiBicimle(s.toplamKg)} KG</span>` : ""}
@@ -864,8 +873,22 @@ document.getElementById("sistemeAktarBtn").addEventListener("click", async (e) =
   }
   const kodlar = toplananlar.map((u) => u.kod);
 
-  /* --- CSV yöntemi: otomatik aktarım kapalıyken her zaman, açıkken Shift + tık --- */
-  if (!MIKRO_OTOMATIK_AKTARIM || e.shiftKey) {
+  /* --- Otomatik aktarılabilir mi? Franchise şube ve fabrika siparişi: hayır (CSV) --- */
+  let csvSebebi = "";
+  if (MIKRO_OTOMATIK_AKTARIM && !e.shiftKey) {
+    if (siparis.kaynak === "fabrika") csvSebebi = "Fabrika siparişi";
+    else if (siparis.subeId) {
+      try {
+        const { db } = await import("./firebase.js");
+        const { getDoc, doc: fsDoc } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+        const k = await getDoc(fsDoc(db, "kullanicilar", siparis.subeId));
+        if (k.exists() && k.data().franchisee) csvSebebi = "Franchise şube";
+      } catch (err) { console.warn("Şube bilgisi okunamadı:", err); }
+    }
+  }
+
+  /* --- CSV yöntemi: otomatik kapalıyken, Shift + tıkta, franchise ve fabrikada --- */
+  if (!MIKRO_OTOMATIK_AKTARIM || e.shiftKey || csvSebebi) {
     sistemeAktarCsvIndir(toplananlar);
     await siparisGuncelle(siparis.id, {
       sistemeAktarildi: true,
@@ -873,7 +896,9 @@ document.getElementById("sistemeAktarBtn").addEventListener("click", async (e) =
       mikroAktarim: { durum: "csv", istekTarihi: serverTimestamp() }
     });
     await stokGozaltiSifirla(kodlar);
-    toast("CSV dosyası indirildi ve sipariş 'Sisteme Aktarıldı' işaretlendi.", "success");
+    toast(csvSebebi
+      ? `${csvSebebi}: CSV indirildi, Mikro'ya elle aktarın (satış faturası). Sipariş 'Sisteme Aktarıldı' işaretlendi.`
+      : "CSV dosyası indirildi ve sipariş 'Sisteme Aktarıldı' işaretlendi.", "success", csvSebebi ? 7000 : 4000);
     sevkEdildiListesineDon();
     return;
   }
@@ -881,7 +906,7 @@ document.getElementById("sistemeAktarBtn").addEventListener("click", async (e) =
   /* --- Normal: Mikro'ya otomatik --- */
   const onay = await onayIste({
     baslik: "Mikro'ya Aktar",
-    metin: `${toplananlar.length} ürün Mikro'ya Depolar Arası Satış Fişi olarak yazılacak (eksikler hariç). Devam edilsin mi?`,
+    metin: `${toplananlar.length} ürün Mikro'ya depolar arası NAKLİYE fişi olarak yazılacak (eksikler hariç). Mal yolda görünür, şube "Teslim Aldım" deyince Mikro'da onaylanır. Devam edilsin mi?`,
     onayMetni: "Mikro'ya Aktar"
   });
   if (!onay) return;
