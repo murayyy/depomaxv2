@@ -28,6 +28,8 @@
     <div class="toolbar" style="margin-bottom:20px;">
       <div class="toolbar__group">
         <button class="btn btn-ghost btn-sm is-active" data-sekme="siparis">🛒 Sipariş Ver</button>
+        <button class="btn btn-ghost btn-sm" data-sekme="siparislerim">📋 Siparişlerim</button>
+        <button class="btn btn-ghost btn-sm" data-sekme="merkez">🏭 Merkezden Gelen <span class="fs-sayac u-hidden" id="merkezSayac">0</span></button>
         <button class="btn btn-ghost btn-sm" data-sekme="giris">📥 Stok Girişi</button>
         <button class="btn btn-ghost btn-sm" data-sekme="gecmis">🕐 Geçmiş</button>
       </div>
@@ -66,6 +68,36 @@
       <div id="ozelKalemlerAlani" class="u-hidden" style="margin-top:20px;">
         <div style="font-weight:700;font-size:13px;margin-bottom:8px;">🟠 Katalog Dışı Talepler</div>
         <div id="ozelKalemlerListe"></div>
+      </div>
+    </div>
+
+    <!-- SİPARİŞLERİM (fabrikanın merkezden istedikleri) -->
+    <div id="siparislerimBloku" class="u-hidden">
+      <div class="page__header">
+        <div>
+          <div class="page__title">Siparişlerim</div>
+          <div class="page__subtitle">Merkezden istediğiniz ürünler ve depodaki durumu.</div>
+        </div>
+      </div>
+      <div class="order-grid" id="siparislerimListe"></div>
+      <div class="empty-state u-hidden" id="siparislerimBos">
+        <div class="empty-state__icon">📋</div>
+        <div class="empty-state__title">Henüz sipariş vermediniz</div>
+      </div>
+    </div>
+
+    <!-- MERKEZDEN GELEN (merkezin fabrikadan istedikleri) -->
+    <div id="merkezBloku" class="u-hidden">
+      <div class="page__header">
+        <div>
+          <div class="page__title">Merkezden Gelen Siparişler</div>
+          <div class="page__subtitle">Hazırladığınız miktarları girin, sevk edince "Gönderildi" deyin.</div>
+        </div>
+      </div>
+      <div class="order-grid" id="merkezListe"></div>
+      <div class="empty-state u-hidden" id="merkezBos">
+        <div class="empty-state__icon">🏭</div>
+        <div class="empty-state__title">Merkezden sipariş yok</div>
       </div>
     </div>
 
@@ -110,6 +142,10 @@
   </main>
 </div>
 <div id="modalRoot"></div>
-<script type="module" src="js/fabrika.js"></script>
+<style>
+  .fs-sayac { display:inline-block; min-width:18px; padding:0 6px; border-radius:99px; background:#EF4444; color:#fff; font-size:11px; font-weight:700; text-align:center; margin-left:2px; }
+  .fs-tablo td.sayi, .fs-tablo th.sayi { text-align:right; font-variant-numeric:tabular-nums; }
+</style>
+<script type="module" src="js/fabrika.js?v=20261112"></script>
 </body>
 </html>

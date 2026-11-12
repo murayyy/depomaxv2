@@ -62,6 +62,7 @@
         <button class="btn btn-ghost btn-sm" data-sekme="alanlar">📍 Toplama Alanları</button>
         <button class="btn btn-ghost btn-sm" data-sekme="teslimat">🚚 Teslimat Raporu</button>
         <button class="btn btn-ghost btn-sm" data-sekme="arac">🚛 Araç Raporu</button>
+        <button class="btn btn-ghost btn-sm" data-sekme="fabrika">🏭 Fabrika Siparişleri <span class="fs-sayac u-hidden" id="fabrikaSayac">0</span></button>
         <button class="btn btn-primary u-hidden" id="yeniKullaniciBtn">+ Yeni Kullanıcı</button>
         <button class="btn btn-primary u-hidden" id="yeniKatalogBtn">+ Ürün Ekle</button>
       </div>
@@ -153,6 +154,24 @@
       </div>
     </div><!-- /aracBloku -->
 
+    <!-- MERKEZ → FABRİKA SİPARİŞLERİ -->
+    <div id="fabrikaBloku" class="u-hidden">
+      <div class="toolbar" style="margin-bottom:14px;gap:8px;flex-wrap:wrap;">
+        <button class="btn btn-primary" id="fabrikaSiparisBtn">+ Fabrikaya Sipariş Ver</button>
+        <select class="select" id="fabrikaDurumFiltre" style="max-width:220px;">
+          <option value="acik">Açık olanlar</option>
+          <option value="gonderildi">Teslim alınacaklar</option>
+          <option value="hepsi">Tümü (son 90 gün)</option>
+        </select>
+      </div>
+      <div class="order-grid" id="fabrikaListe"></div>
+      <div class="empty-state u-hidden" id="fabrikaBos">
+        <div class="empty-state__icon">🏭</div>
+        <div class="empty-state__title">Bu filtrede fabrika siparişi yok</div>
+        <div class="empty-state__text">"+ Fabrikaya Sipariş Ver" ile fabrikadan ürün isteyin.</div>
+      </div>
+    </div><!-- /fabrikaBloku -->
+
     <!-- TOPLAMA ALANLARI -->
     <div id="alanlarBloku" class="u-hidden">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
@@ -170,7 +189,14 @@
   </main>
 </div>
 
-<script type="module" src="js/admin.js?v=3"></script>
+<div id="modalRoot"></div>
+<style>
+  .fs-sayac { display:inline-block; min-width:18px; padding:0 6px; border-radius:99px; background:#3B82F6; color:#fff; font-size:11px; font-weight:700; text-align:center; margin-left:2px; }
+  .fs-tablo td.sayi, .fs-tablo th.sayi { text-align:right; font-variant-numeric:tabular-nums; }
+  .fs-sonuc { display:flex; justify-content:space-between; gap:8px; padding:7px 10px; border-bottom:1px solid var(--color-border); cursor:pointer; font-size:13px; }
+  .fs-sonuc:hover, .fs-sonuc:focus-visible { background:var(--color-surface-2); outline:none; }
+</style>
+<script type="module" src="js/admin.js?v=20261112"></script>
   <script>
     // Eski service worker'ı temizle
     if ('serviceWorker' in navigator) {
