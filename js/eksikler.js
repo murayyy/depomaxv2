@@ -6,7 +6,7 @@
 // verisiyle karşılaştırır. Stok gelmiş ürünler üstte ve yeşil rozetle çıkar.
 // ============================================================================
 import { auth, signOut, sayfaKorumasi } from "./firebase.js";
-import { tumSiparisleriGetir, urunleriniGetir, urunGuncelle, urunEkle, urunSil, raflaraGoreUrunBul, katalogDinle } from "./veri.js";
+import { tumSiparisleriGetir, urunleriniGetir, urunGuncelle, urunEkle, urunSil, rafKalemHaritasiGetir, katalogDinle, stokDusur } from "./veri.js?v=20261112";
 import { stoklariDinle, stokBildirimGoruldu } from "./stok.js";
 import { arayuzHazirla, toast, onayIste, girdiIste, kacisEt, sayiBicimle, ondalikOku, yukleniyorGoster, yukleniyorKapat } from "./utils.js";
 
@@ -17,6 +17,7 @@ let katalogCache = [];
 let stokMap = new Map();
 let gruplar = []; // son yüklenen eksik ürün grupları
 let mevcutSiparisler = []; // "ürün ekle" açılır listesi için
+let rafHaritasi = null;     // stok kodu/ad -> raflardaki kalemler (sayfa yüklenirken bir kez okunur)
 
 sayfaKorumasi(["toplayici", "kontrolor"], (kullanici) => {
   katalogDinle((liste) => { katalogCache = liste.filter(u => u.aktif !== false); });
@@ -229,6 +230,8 @@ async function yukle() {
     });
 
     gruplar = grupla(eksikKayitlari);
+    try { rafHaritasi = await rafKalemHaritasiGetir(); }
+    catch (e) { console.warn("Raf bilgisi okunamadı:", e); rafHaritasi = new Map(); }
     document.getElementById("yukleniyorDurum").classList.add("u-hidden");
     render();
   } catch (err) {
@@ -315,11 +318,14 @@ function render() {
     btn.addEventListener("click", () => detayModalAc(siraliGruplar[Number(btn.dataset.detay)]));
   });
 
-  // Raf bilgilerini arka planda async yükle
+  // Raf bilgileri: sayfa yüklenirken bir kez okunan haritadan (ek okuma yok)
   siraliGruplar.forEach((grup, idx) => {
-    raflaraGoreUrunBul(grup.kod, grup.ad).then((rafSonuclari) => {
+    const rafSonuclari = rafHaritasi
+      ? (rafHaritasi.get("kod:" + String(grup.kod || "").trim()) || rafHaritasi.get("ad:" + String(grup.ad || "").trim().toLocaleLowerCase("tr")) || [])
+      : null;
+    {
       const div = document.getElementById(`raf-bilgi-${idx}`);
-      if (!div) return;
+      if (!div || rafSonuclari === null) return;
       if (!rafSonuclari.length) {
         div.innerHTML = '<span style="opacity:.4;">Rafta kayıt yok</span>';
         return;
@@ -332,7 +338,7 @@ function render() {
         (ilk.kat ? ` Kat ${ilk.kat}/Böl.${ilk.bolme}` : "") +
         ` · ${sayiBicimle(ilk.miktar)} ${kacisEt(ilk.birim || "")}` +
         sktUyari + girisUyari + ekRaf;
-    }).catch(() => {});
+    }
   });
 }
 
@@ -400,6 +406,8 @@ function detayModalAc(grup) {
             ...(yeniMiktar !== orijinalMiktar ? { gercekMiktar: yeniMiktar } : {}),
             toplayanKullanici: mevcutKullanici.ad || mevcutKullanici.uid
           });
+          // Toplama ekranındaki gibi: gözaltı ve toplama gözü toplanan miktar kadar düşer
+          if (kayit?.kod && yeniMiktar > 0) stokDusur(kayit.kod, yeniMiktar);
           yukleniyorKapat();
           toast("Ürün toplandı olarak işaretlendi.", "success");
           miktarRoot.innerHTML = "";

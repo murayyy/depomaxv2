@@ -389,7 +389,7 @@ function satirHtml(u, saltOkunur) {
     <tr class="${durumSinifi(u)}" data-uid="${u.id}">
       <td class="cell-code">${kacisEt(u.kod)}</td>
       <td>${kacisEt(u.ad)}${u.katalogDisi ? ' <span class="badge badge-amber" style="font-size:10px;">Özel Talep</span>' : ""}</td>
-      <td><input type="text" inputmode="decimal" class="cell-qty-input" data-rol="miktar" value="${u.miktar || 0}" ${saltOkunur ? "disabled" : ""} /></td>
+      <td><input type="text" inputmode="decimal" class="cell-qty-input" data-rol="miktar" value="${etkinMiktar(u)}" ${saltOkunur ? "disabled" : ""} />${istenenRozeti(u)}</td>
       <td>${kacisEt(u.birim || "—")}</td>
       <td>${depoStokHucresi(u.kod)}</td>
       <td><span class="reyon-tag">${kacisEt(u.reyon || "—")}</span></td>
@@ -415,7 +415,7 @@ function kartHtml(u, saltOkunur) {
         <span class="reyon-tag">${kacisEt(u.reyon || "—")}</span>
       </div>
       <div class="row-card__grid">
-        <div><div class="row-card__label">Miktar</div><input type="text" inputmode="decimal" class="cell-qty-input" data-rol="miktar" value="${u.miktar || 0}" ${saltOkunur ? "disabled" : ""} /></div>
+        <div><div class="row-card__label">Miktar</div><input type="text" inputmode="decimal" class="cell-qty-input" data-rol="miktar" value="${etkinMiktar(u)}" ${saltOkunur ? "disabled" : ""} />${istenenRozeti(u)}</div>
         <div><div class="row-card__label">Birim</div>${kacisEt(u.birim || "—")}</div>
         <div><div class="row-card__label">Depo Stok</div>${depoStokHucresi(u.kod)}</div>
         <div><div class="row-card__label">Açıklama</div>${kacisEt(u.aciklama || "—")}</div>
@@ -446,8 +446,9 @@ function baglaSatirOlaylari(kapsayici, saltOkunur) {
       miktarInput.addEventListener("input", debounce(() => {
         const urun = urunlerCache.find((u) => u.id === uid);
         const yeniMiktar = ondalikOku(miktarInput.value);
-        const patch = { miktar: yeniMiktar };
-        if (urun && urun.miktar !== yeniMiktar && urun.toplayanKullanici) {
+        const gercekVar = urun && urun.gercekMiktar !== undefined && urun.gercekMiktar !== null;
+        const patch = gercekVar ? { gercekMiktar: yeniMiktar } : { miktar: yeniMiktar };
+        if (urun && !gercekVar && urun.miktar !== yeniMiktar && urun.toplayanKullanici) {
           patch.orijinalMiktar = urun.orijinalMiktar ?? urun.miktar;
           patch.miktarDuzeltildi = true;
           patch.miktarDuzeltenKullanici = mevcutKullanici.ad || mevcutKullanici.uid;
@@ -469,11 +470,11 @@ function baglaSatirOlaylari(kapsayici, saltOkunur) {
             patch.duzeltenkKullanici = mevcutKullanici.ad || mevcutKullanici.uid;
           }
           // Daha önce toplanmamışsa düş (eksikten ya da işaretsizden toplandıya)
-          if (urun?.kod && !urun.toplandi) stokDusur(urun.kod, urun.miktar);
+          if (urun?.kod && !urun.toplandi) stokDusur(urun.kod, etkinMiktar(urun));
           if (urun) { urun.toplandi = true; urun.eksik = false; }
         } else {
           patch.duzeltildi = false;
-          if (urun?.kod && urun.toplandi) stokGeriEkle(urun.kod, urun.miktar);
+          if (urun?.kod && urun.toplandi) stokGeriEkle(urun.kod, etkinMiktar(urun));
           if (urun) urun.toplandi = false;
         }
         urunGuncelle(aktifSiparis.id, uid, patch);
@@ -492,7 +493,7 @@ function baglaSatirOlaylari(kapsayici, saltOkunur) {
             patch.kontrolorEksikTespiti = true;
             patch.kontrolorEksikTespitiKullanici = mevcutKullanici.ad || mevcutKullanici.uid;
             // Ürün alınmamış: düşülen stok/göz geri eklenir
-            if (urun.kod) stokGeriEkle(urun.kod, urun.miktar);
+            if (urun.kod) stokGeriEkle(urun.kod, etkinMiktar(urun));
           }
           if (urun) { urun.toplandi = false; urun.eksik = true; }
         } else {
@@ -524,12 +525,24 @@ function baglaSatirOlaylari(kapsayici, saltOkunur) {
 
 /* Toplanmış ürünün miktarı değişince stok/göz farkını uygula.
    Önbellekteki ürünü hemen günceller ki art arda değişikliklerde fark iki kez sayılmasın. */
+/* Eksikler sayfasında "Toplandı" denirken miktar değiştirilirse yeni miktar
+   gercekMiktar alanına yazılır, miktar (istenen) olduğu gibi kalır.
+   Ekranda, CSV'de ve Excel'de geçerli olan miktar budur. */
+function etkinMiktar(u) {
+  return u && u.gercekMiktar !== undefined && u.gercekMiktar !== null ? Number(u.gercekMiktar) || 0 : Number(u?.miktar) || 0;
+}
+function istenenRozeti(u) {
+  if (!u || u.gercekMiktar === undefined || u.gercekMiktar === null || Number(u.gercekMiktar) === Number(u.miktar)) return "";
+  return `<div class="u-text-soft" style="font-size:11px;margin-top:2px;" title="Eksikler sayfasında değiştirildi">istenen ${sayiBicimle(u.miktar)}</div>`;
+}
+
 function toplananMiktarFarkiniUygula(urun, yeniMiktar) {
   if (!urun || !urun.toplandi || !urun.kod) return;
-  const fark = (Number(yeniMiktar) || 0) - (Number(urun.miktar) || 0);
+  const fark = (Number(yeniMiktar) || 0) - etkinMiktar(urun);
   if (fark > 0) stokDusur(urun.kod, fark);
   else if (fark < 0) stokGeriEkle(urun.kod, -fark);
-  urun.miktar = Number(yeniMiktar) || 0;
+  if (urun.gercekMiktar !== undefined && urun.gercekMiktar !== null) urun.gercekMiktar = Number(yeniMiktar) || 0;
+  else urun.miktar = Number(yeniMiktar) || 0;
 }
 
 /* ---------------- Barkod tarama ---------------- */
@@ -614,7 +627,7 @@ document.getElementById("excelIndirBtn").addEventListener("click", () => {
   const liste = siraliListe();
   const basliklar = ["Ürün Kodu", "Ürün Adı", "Miktar", "Birim", "Reyon", "Barkod", "Toplandı", "Eksik", "Kontrol", "Not"];
   const satirlar = liste.map((u) => [
-    u.kod, u.ad, u.miktar || 0, u.birim, u.reyon, u.barkod,
+    u.kod, u.ad, etkinMiktar(u), u.birim, u.reyon, u.barkod,
     u.toplandi ? "Evet" : "", u.eksik ? "Evet" : "", u.kontrol ? "Evet" : "", u.kontrolNotu || ""
   ]);
   const dosyaAdi = `${(aktifSiparis.ad || "siparis").replace(/[^\wçğıöşüÇĞİÖŞÜ\- ]/g, "_")}_kontrol_tamam.xlsx`;
@@ -813,7 +826,7 @@ function aktarilacakUrunler() {
 
 function sistemeAktarCsvIndir(toplananlar) {
   // Türkçe Excel: ; ayraç, virgüllü ondalık, ="0001" ile baştaki sıfırlar korunur.
-  const satirlar = toplananlar.map((u) => `="${u.kod}";${String(u.miktar || 0).replace(".", ",")}`);
+  const satirlar = toplananlar.map((u) => `="${u.kod}";${String(etkinMiktar(u)).replace(".", ",")}`);
   const blob = new Blob(["\uFEFF" + satirlar.join("\n")], { type: "text/csv;charset=utf-8;" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);

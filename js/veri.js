@@ -999,3 +999,26 @@ export function fabrikaSiparisiIptal(id, iptalEdenAd) {
     durum: "iptal", iptalEdenAd: iptalEdenAd || "", iptalTarihi: serverTimestamp(), guncellemeTarihi: serverTimestamp()
   });
 }
+
+
+/** Tüm raf kalemlerini bir kez okuyup ürün koduna (ve adına) göre harita döner.
+ *  Eksikler sayfası her ürün için ayrı ayrı okumak yerine bunu bir kez çağırır.
+ *  Okuma: raf sayısı + toplam kalem sayısı. */
+export async function rafKalemHaritasiGetir() {
+  const raflarSnap = await getDocs(collection(db, RAFLAR));
+  const listeler = await Promise.all(raflarSnap.docs.map(async (raf) => {
+    const snap = await getDocs(collection(db, RAFLAR, raf.id, "kalemler"));
+    return snap.docs.map((d) => ({ id: d.id, rafId: raf.id, rafAdi: raf.data().ad || raf.id, ...d.data() }));
+  }));
+  const harita = new Map();
+  const ekle = (anahtar, k) => { if (!anahtar) return; if (!harita.has(anahtar)) harita.set(anahtar, []); harita.get(anahtar).push(k); };
+  listeler.flat()
+    .filter((k) => (Number(k.miktar) || 0) > 0 || (Number(k.palet) || 0) > 0)
+    .forEach((k) => {
+      ekle(k.stokKodu ? "kod:" + String(k.stokKodu).trim() : "", k);
+      ekle(k.ad ? "ad:" + String(k.ad).trim().toLocaleLowerCase("tr") : "", k);
+    });
+  harita.forEach((liste) => liste.sort((a, b) =>
+    (a.skt || "9999").localeCompare(b.skt || "9999") || (a.girisTarihi || "").localeCompare(b.girisTarihi || "")));
+  return harita;
+}
