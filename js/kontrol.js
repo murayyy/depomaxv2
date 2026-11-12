@@ -2,7 +2,7 @@
 // KONTROL EKRANI MANTIĞI
 // ============================================================================
 import { auth, signOut, sayfaKorumasi } from "./firebase.js";
-import { siparisleriDinle, siparisGuncelle, urunleriDinle, urunGuncelle, urunEkle, tumSiparisleriCanliDinle, siparisArsivle, suruculeriGetir, stokDusur, stokGeriEkle, stokGozaltiSifirla, katalogDinle, siparisAlanAta, alanlariDinle, siparisiSil, siparisiGeriGonder, stokKodlariGetir } from "./veri.js?v=20261030c";
+import { siparisleriDinle, siparisGuncelle, urunleriDinle, urunGuncelle, urunEkle, tumSiparisleriCanliDinle, siparisArsivle, suruculeriGetir, stokDusur, stokGeriEkle, stokGozaltiSifirla, katalogDinle, siparisAlanAta, alanlariDinle, siparisiSil, siparisiGeriGonder, stokKodlariGetir } from "./veri.js?v=20261112";
 import { stoklariDinle, stokRozetiHtml } from "./stok.js?v=20261030c";
 import { serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
@@ -181,6 +181,7 @@ function renderSiparisListesi(liste) {
           <div class="order-card__name">${kacisEt(s.ad)}</div>
           <div class="order-card__meta">
             ${durumRozeti}
+            ${s.kaynak === "fabrika" ? '<span class="badge badge-blue">🏭 FABRİKA</span>' : ""}
             <span>${toplam} ürün</span>
             ${s.toplamKg ? `<span>${sayiBicimle(s.toplamKg)} KG</span>` : ""}
             <span>${s.eksikUrun || 0} eksik bildirildi</span>

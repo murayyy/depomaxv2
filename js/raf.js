@@ -7,7 +7,7 @@ import {
   rafKalemleriDinle, rafKalemiEkle, rafKalemiGuncelle, rafKalemiSil,
   rafHareketiKaydet, rafHareketleriniGetir, tumRaflariGetir,
   katalogDinle
-} from "./veri.js?v=20261030c";
+} from "./veri.js?v=20261112";
 import { arayuzHazirla, toast, onayIste, kacisEt, sayiBicimle, ondalikOku } from "./utils.js";
 import { ikmalUyarisiniBaslat } from "./ikmal-uyari.js?v=20261030c";
 

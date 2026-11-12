@@ -6,7 +6,7 @@ import {
   siparisleriDinle, siparisOlustur, siparisGuncelle, tumSiparisleriCanliDinle,
   urunleriDinle, urunleriTopluEkle, urunEkle, urunGuncelle, urunSil,
   stokDusur, stokGeriEkle, katalogDinle, siparisiSil, siparisiGeriGonder
-} from "./veri.js?v=20261030c";
+} from "./veri.js?v=20261112";
 import { stoklariDinle, stokRozetiHtml } from "./stok.js?v=20261030c";
 import {
   arayuzHazirla, toast, onayIste, yukleniyorGoster, yukleniyorKapat,
@@ -140,6 +140,7 @@ function renderSiparisListesi(liste) {
           <div class="order-card__meta">
             ${durumRozeti}
             ${aciliyetRozeti}
+            ${s.kaynak === "fabrika" ? '<span class="badge badge-blue">🏭 FABRİKA</span>' : ""}
             <span>${toplam} ürün</span>
             ${s.toplamKg ? `<span>${sayiBicimle(s.toplamKg)} KG</span>` : ""}
             <span>${tarihBicimle(s.olusturulmaTarihi)}</span>

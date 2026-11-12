@@ -208,7 +208,7 @@ export function katalogUrunSil(id) {
    Katalogdaki aktif ürünleri, şubenin girdiği miktarlarla birleştirip
    "siparisler" koleksiyonuna yazar (miktar > 0 olan ürünler dahil edilir).
    ============================================================================ */
-export async function subeSimarisiOlustur({ subeAdi, subeId, olusturan, satirlar }) {
+export async function subeSimarisiOlustur({ subeAdi, subeId, olusturan, satirlar, ekAlanlar = {} }) {
   // satirlar: [{ katalogId, kod, ad, birim, reyon, aciklama, miktar }, ...]
   const gecerli = satirlar.filter((s) => (ondalikOku(s.miktar) || 0) > 0);
   if (gecerli.length === 0) throw new Error("Hiç ürün seçilmedi.");
@@ -225,7 +225,8 @@ export async function subeSimarisiOlustur({ subeAdi, subeId, olusturan, satirlar
     toplamUrun: gecerli.length,
     toplananUrun: 0,
     eksikUrun: 0,
-    kontrolEdilenUrun: 0
+    kontrolEdilenUrun: 0,
+    ...ekAlanlar   // örn. { kaynak: "fabrika" } — toplama/kontrolde FABRİKA etiketi
   });
 
   const batch = writeBatch(db);
@@ -900,4 +901,101 @@ export async function rafKalemleriniBul(stokKodu) {
     .filter((k) => (Number(k.miktar) || 0) > 0 || (Number(k.palet) || 0) > 0);
   kalemler.sort((a, b) => (a.skt || "9999").localeCompare(b.skt || "9999") || (a.girisTarihi || "").localeCompare(b.girisTarihi || ""));
   return kalemler;
+}
+
+
+/* ============================================================================
+   MERKEZ → FABRİKA SİPARİŞLERİ
+   fabrikaSiparisleri/{id} -> {
+     no, durum: "bekliyor" | "hazirlaniyor" | "gonderildi" | "teslim_alindi" | "iptal",
+     olusturanAd, olusturmaTarihi, termin ("YYYY-AA-GG"), not,
+     kalemler: [{ katalogId, kod, ad, birim, miktar, gonderilen, gelen }],
+     gonderenAd, gonderimTarihi, gonderimNotu,
+     teslimAlanAd, teslimTarihi, teslimNotu,
+     ozet: { tamam, eksik, fazla }
+   }
+   Kalemler tek belgede durur: bir siparişi açmak = 1 okuma.
+   ============================================================================ */
+const FABRIKA_SIPARISLERI = "fabrikaSiparisleri";
+
+export async function fabrikaSiparisiOlustur({ kalemler, termin, not, olusturanAd }) {
+  const gecerli = (kalemler || []).filter((k) => (Number(k.miktar) || 0) > 0);
+  if (!gecerli.length) throw new Error("En az bir ürün ekleyin.");
+  const no = "FS-" + new Date().toISOString().slice(2, 10).replace(/-/g, "") + "-" + Math.random().toString(36).slice(2, 6).toUpperCase();
+  const ref = await addDoc(collection(db, FABRIKA_SIPARISLERI), {
+    no, durum: "bekliyor",
+    olusturanAd: olusturanAd || "", olusturmaTarihi: serverTimestamp(),
+    termin: termin || "", not: not || "",
+    kalemler: gecerli.map((k) => ({
+      katalogId: k.katalogId || "", kod: k.kod || "", ad: k.ad || "", birim: k.birim || "",
+      miktar: Number(k.miktar) || 0, gonderilen: null, gelen: null
+    })),
+    guncellemeTarihi: serverTimestamp()
+  });
+  return { id: ref.id, no };
+}
+
+/** Son 90 günün fabrika siparişlerini canlı dinler (admin ve fabrika ekranı). */
+export function fabrikaSiparisleriniDinle(callback) {
+  const sinir = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+  const q = query(collection(db, FABRIKA_SIPARISLERI), where("olusturmaTarihi", ">=", sinir), orderBy("olusturmaTarihi", "desc"));
+  return onSnapshot(q, (snap) => {
+    callback(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+  }, (err) => console.error("fabrikaSiparisleriniDinle:", err));
+}
+
+/** Fabrika: hazırlanan/gönderilen miktarları kaydeder. gonder=true ise "gonderildi" olur. */
+export async function fabrikaSiparisiHazirla(id, { gonderilenler, gonderenAd, not, gonder }) {
+  const ref = doc(db, FABRIKA_SIPARISLERI, id);
+  return runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists()) throw new Error("Sipariş bulunamadı.");
+    const s = snap.data();
+    if (["teslim_alindi", "iptal"].includes(s.durum)) throw new Error("Bu sipariş kapanmış, değiştirilemez.");
+    if (s.durum === "gonderildi" && !gonder) throw new Error("Sipariş zaten gönderildi.");
+    const kalemler = s.kalemler.map((k, i) => ({
+      ...k, gonderilen: gonderilenler[i] === undefined || gonderilenler[i] === null ? k.gonderilen : Number(gonderilenler[i]) || 0
+    }));
+    tx.update(ref, {
+      kalemler,
+      durum: gonder ? "gonderildi" : "hazirlaniyor",
+      gonderenAd: gonderenAd || "",
+      gonderimNotu: not || "",
+      ...(gonder ? { gonderimTarihi: serverTimestamp() } : {}),
+      guncellemeTarihi: serverTimestamp()
+    });
+    return { durum: gonder ? "gonderildi" : "hazirlaniyor" };
+  });
+}
+
+/** Merkez (admin): gelen miktarları girer, sipariş kapanır. Fark özeti hesaplanır. */
+export async function fabrikaSiparisiTeslimAl(id, { gelenler, teslimAlanAd, not }) {
+  const ref = doc(db, FABRIKA_SIPARISLERI, id);
+  return runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists()) throw new Error("Sipariş bulunamadı.");
+    const s = snap.data();
+    if (s.durum === "teslim_alindi") throw new Error("Bu sipariş zaten teslim alınmış.");
+    if (s.durum === "iptal") throw new Error("İptal edilmiş sipariş teslim alınamaz.");
+    const ozet = { tamam: 0, eksik: 0, fazla: 0 };
+    const kalemler = s.kalemler.map((k, i) => {
+      const gelen = Number(gelenler[i]) || 0;
+      if (gelen === Number(k.miktar)) ozet.tamam++;
+      else if (gelen < Number(k.miktar)) ozet.eksik++;
+      else ozet.fazla++;
+      return { ...k, gelen };
+    });
+    tx.update(ref, {
+      kalemler, ozet, durum: "teslim_alindi",
+      teslimAlanAd: teslimAlanAd || "", teslimNotu: not || "",
+      teslimTarihi: serverTimestamp(), guncellemeTarihi: serverTimestamp()
+    });
+    return ozet;
+  });
+}
+
+export function fabrikaSiparisiIptal(id, iptalEdenAd) {
+  return updateDoc(doc(db, FABRIKA_SIPARISLERI, id), {
+    durum: "iptal", iptalEdenAd: iptalEdenAd || "", iptalTarihi: serverTimestamp(), guncellemeTarihi: serverTimestamp()
+  });
 }

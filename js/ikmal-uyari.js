@@ -5,7 +5,7 @@
 // Kullanım: ikmalUyarisiniBaslat()  — sayfada id="ikmalSayac" olan bir rozet bulunmalı.
 // Kota: sadece doldurulması gereken gözler dinlenir.
 // ============================================================================
-import { ikmalBekleyenleriDinle } from "./veri.js?v=20261030c";
+import { ikmalBekleyenleriDinle } from "./veri.js?v=20261112";
 import { toast, sesCal } from "./utils.js";
 
 let sesBaglami = null;

@@ -10,7 +10,7 @@ import {
   ikmalBekleyenleriDinle, gozIkmalYap, gozKaydet, gozSil, gozleriTopluKaydet,
   tumGozleriGetir, tumGozleriDinle, gozHareketleriniGetir, katalogDinle,
   rafKalemleriniBul, rafKalemiGuncelle, rafKalemiSil, rafHareketiKaydet
-} from "./veri.js?v=20261030c";
+} from "./veri.js?v=20261112";
 import {
   arayuzHazirla, toast, onayIste, kacisEt, sayiBicimle, ondalikOku, sesCal,
   reyonKarsilastir, excelDosyasiniOku, tarihBicimle

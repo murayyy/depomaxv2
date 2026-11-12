@@ -2,8 +2,11 @@
 // FABRİKA EKRANI
 // ============================================================================
 import { auth, signOut, sayfaKorumasi } from "./firebase.js";
-import { katalogDinle, subeSimarisiOlustur, stokGirisiKaydet, stokGirisleriGetir } from "./veri.js";
-import { arayuzHazirla, toast, onayIste, kacisEt, sayiBicimle, ondalikOku, excelOlarakIndir } from "./utils.js";
+import {
+  katalogDinle, subeSimarisiOlustur, stokGirisiKaydet, stokGirisleriGetir,
+  subeSiparisleriDinle, urunleriniGetir, fabrikaSiparisleriniDinle, fabrikaSiparisiHazirla
+} from "./veri.js?v=20261112";
+import { arayuzHazirla, toast, onayIste, kacisEt, sayiBicimle, ondalikOku, excelOlarakIndir, tarihBicimle, sesCal } from "./utils.js";
 
 arayuzHazirla();
 
@@ -21,6 +24,8 @@ sayfaKorumasi(["fabrika", "admin"], (kullanici) => {
   document.getElementById("kullaniciAdi").textContent = kullanici.ad || kullanici.uid;
   document.getElementById("rolEtiketi").textContent = kullanici.rol;
   katalogDinle(katalogGuncellendi);
+  subeSiparisleriDinle(kullanici.uid, renderSiparislerim);   // fabrikanın merkezden istedikleri
+  fabrikaSiparisleriniDinle(merkezSiparisleriGeldi);         // merkezin fabrikadan istedikleri
 });
 
 document.getElementById("cikisBtn").addEventListener("click", async () => {
@@ -34,6 +39,8 @@ document.querySelectorAll("[data-sekme]").forEach((btn) => {
     btn.classList.add("is-active");
     aktifSekme = btn.dataset.sekme;
     document.getElementById("siparisBloku").classList.toggle("u-hidden", aktifSekme !== "siparis");
+    document.getElementById("siparislerimBloku").classList.toggle("u-hidden", aktifSekme !== "siparislerim");
+    document.getElementById("merkezBloku").classList.toggle("u-hidden", aktifSekme !== "merkez");
     document.getElementById("girisBloku").classList.toggle("u-hidden", aktifSekme !== "giris");
     document.getElementById("gecmisBloku").classList.toggle("u-hidden", aktifSekme !== "gecmis");
     if (aktifSekme === "gecmis") gecmisYukle();
@@ -185,41 +192,240 @@ function renderOzelKalemler() {
   });
 }
 
-/* ---- Sipariş Gönder ---- */
+/* ---- Sipariş Gönder (fabrika → merkez) ----
+   Şube siparişiyle aynı fonksiyon; siparişe kaynak:"fabrika" eklenir, toplama ve
+   kontrol ekranlarında 🏭 FABRİKA etiketiyle görünür. */
+function sekmeyeGec(sekme) {
+  document.querySelector(`[data-sekme="${sekme}"]`)?.click();
+}
+
 document.getElementById("siparisGonderBtn").addEventListener("click", async () => {
   const secilen = Object.entries(miktarlar).filter(([, v]) => ondalikOku(v) > 0);
-  if (!secilen.length) { toast("Ürün seçilmedi.", "error"); return; }
+  if (!secilen.length && !ozelKalemler.length) { toast("Ürün seçilmedi.", "error"); return; }
   const onay = await onayIste({
     baslik: "Siparişi Gönder",
-    metin: `${secilen.length} çeşit ürün için sipariş gönderilecek.`,
+    metin: `${secilen.length + ozelKalemler.length} çeşit ürün için merkeze sipariş gönderilecek.`,
     onayMetni: "Gönder"
   });
   if (!onay) return;
-  const urunler = secilen.map(([id, miktar]) => {
-    const u = katalogCache.find(x => x.id === id);
-    return { id, ad: u?.ad || "", stokKodu: u?.stokKodu || "", barkod: u?.barkod || "", birim: u?.birim || "", kategori: u?.kategori || "", reyon: u?.reyon || "", miktar: ondalikOku(miktar), minMiktar: u?.minMiktar || 1 };
-  });
-  await subeSimarisiOlustur({
-    ad: mevcutKullanici.subeAdi || mevcutKullanici.ad || "Fabrika",
-    subeId: mevcutKullanici.uid,
-    rol: "fabrika",
-    urunler: [
-      ...urunler,
-      ...ozelKalemler.map(k => ({
-        id: `ozel_${Date.now()}_${Math.random().toString(36).slice(2,7)}`,
-        ad: k.ad, stokKodu: "", barkod: "", birim: k.birim,
-        miktar: k.miktar, kategori: "Özel Talep",
-        katalogDisi: true, subeNotu: k.not || ""
-      }))
-    ]
-  });
-  miktarlar = {};
-  ozelKalemler.length = 0;
-  renderOzelKalemler();
-  document.querySelectorAll(".miktar-input").forEach(i => { i.value = ""; });
-  document.getElementById("siparisGonderBtn").disabled = true;
-  toast("✅ Sipariş gönderildi!", "success");
+  const satirlar = [
+    ...secilen.map(([id, miktar]) => {
+      const u = katalogCache.find((x) => x.id === id) || {};
+      return { ...u, miktar: ondalikOku(miktar) };
+    }),
+    ...ozelKalemler.map((k) => ({
+      ad: k.ad, stokKodu: "", barkod: "", birim: k.birim,
+      miktar: k.miktar, kategori: "Özel Talep", katalogDisi: true, subeNotu: k.not || ""
+    }))
+  ];
+  const btn = document.getElementById("siparisGonderBtn");
+  btn.disabled = true;
+  try {
+    await subeSimarisiOlustur({
+      subeAdi: mevcutKullanici.subeAdi || "FABRİKA",
+      subeId: mevcutKullanici.uid,
+      olusturan: mevcutKullanici.uid,
+      satirlar,
+      ekAlanlar: { kaynak: "fabrika" }
+    });
+    miktarlar = {};
+    ozelKalemler.length = 0;
+    renderOzelKalemler();
+    document.querySelectorAll(".miktar-input").forEach((i) => { i.value = ""; });
+    toast("✅ Sipariş merkeze gönderildi.", "success");
+    sekmeyeGec("siparislerim");
+  } catch (err) {
+    console.error(err);
+    btn.disabled = false;
+    toast("Sipariş gönderilemedi: " + (err.code === "permission-denied" ? "izin yok (Firestore kuralları güncellenmeli)" : (err.message || err)), "error", 8000);
+  }
 });
+
+/* ---- Siparişlerim (fabrika → merkez) ---- */
+const SIPARIS_DURUM = {
+  beklemede: ["↩ Düzenleme bekliyor", "badge-red"],
+  toplaniyor: ["⏳ Hazırlanıyor", "badge-amber"],
+  toplandi: ["🔍 Kontrolde", "badge-blue"],
+  kontrol_ediliyor: ["🔍 Kontrolde", "badge-blue"],
+  tamamlandi: ["📦 Hazır", "badge-green"],
+  sevk_edildi: ["🚚 Yolda", "badge-blue"],
+  teslim_edildi: ["✅ Teslim alındı", "badge-green"],
+  arsivlendi: ["🗂 Arşiv", "badge-gray"]
+};
+
+function renderSiparislerim(liste) {
+  const kap = document.getElementById("siparislerimListe");
+  document.getElementById("siparislerimBos").classList.toggle("u-hidden", liste.length !== 0);
+  kap.innerHTML = liste.map((s) => {
+    const [etiket, sinif] = SIPARIS_DURUM[s.durum] || [s.durum, "badge-gray"];
+    return `<div class="card order-card">
+      <div class="order-card__main">
+        <div class="order-card__name">${kacisEt(s.ad || "Sipariş")}</div>
+        <div class="order-card__meta">
+          <span class="badge ${sinif}">${etiket}</span>
+          <span>${s.toplamUrun || 0} ürün</span>
+          ${s.eksikUrun ? `<span class="u-text-soft">${s.eksikUrun} eksik</span>` : ""}
+          <span>${tarihBicimle(s.olusturulmaTarihi)}</span>
+        </div>
+      </div>
+      <div class="order-card__actions">
+        <button class="btn btn-ghost btn-sm" data-sdetay="${s.id}">Detay</button>
+      </div>
+    </div>`;
+  }).join("");
+  kap.querySelectorAll("[data-sdetay]").forEach((b) => b.onclick = () => siparisDetayAc(liste.find((x) => x.id === b.dataset.sdetay)));
+}
+
+async function siparisDetayAc(s) {
+  if (!s) return;
+  const root = document.getElementById("modalRoot");
+  root.innerHTML = `<div class="modal-backdrop" data-role="backdrop"><div class="modal" style="max-width:600px;">
+    <h3>${kacisEt(s.ad || "Sipariş")}</h3><div id="fsDetay">⏳ Yükleniyor…</div>
+    <div class="modal__actions"><button class="btn btn-primary" data-role="kapat">Kapat</button></div></div></div>`;
+  const kapat = () => { root.innerHTML = ""; };
+  root.querySelector('[data-role="kapat"]').onclick = kapat;
+  root.querySelector('[data-role="backdrop"]').onclick = (e) => { if (e.target.dataset.role === "backdrop") kapat(); };
+  try {
+    const urunler = await urunleriniGetir(s.id);
+    document.getElementById("fsDetay").innerHTML = `<div class="table-wrap"><table class="data-table fs-tablo">
+      <thead><tr><th>Kod</th><th>Ürün</th><th class="sayi">İstenen</th><th>Durum</th></tr></thead>
+      <tbody>${urunler.map((u) => `<tr>
+        <td class="cell-code">${kacisEt(u.kod || "")}</td>
+        <td>${kacisEt(u.ad)}</td>
+        <td class="sayi">${sayiBicimle(u.miktar)} ${kacisEt(u.birim || "")}</td>
+        <td>${u.eksik ? '<span class="badge badge-red">Eksik</span>' : u.toplandi ? '<span class="badge badge-green">✓ Toplandı</span>' : "—"}</td>
+      </tr>`).join("")}</tbody></table></div>`;
+  } catch (e) {
+    document.getElementById("fsDetay").textContent = "Yüklenemedi.";
+  }
+}
+
+/* ---- Merkezden Gelen (merkez → fabrika) ---- */
+const MERKEZ_DURUM = {
+  bekliyor: ["🆕 Yeni", "badge-red"],
+  hazirlaniyor: ["⏳ Hazırlanıyor", "badge-amber"],
+  gonderildi: ["🚚 Gönderildi", "badge-blue"],
+  teslim_alindi: ["✅ Merkez teslim aldı", "badge-green"],
+  iptal: ["✕ İptal", "badge-gray"]
+};
+let merkezSiparisleri = [];
+let merkezIlkYukleme = true;
+
+function merkezSiparisleriGeldi(liste) {
+  const eskiIdler = new Set(merkezSiparisleri.map((s) => s.id));
+  const yeniler = liste.filter((s) => s.durum === "bekliyor" && !eskiIdler.has(s.id));
+  if (!merkezIlkYukleme && yeniler.length) {
+    sesCal("basari");
+    toast(`🏭 Merkezden yeni sipariş: ${yeniler.map((s) => s.no).join(", ")}`, "info", 8000);
+  }
+  merkezIlkYukleme = false;
+  merkezSiparisleri = liste;
+  const acik = liste.filter((s) => ["bekliyor", "hazirlaniyor"].includes(s.durum)).length;
+  const sayac = document.getElementById("merkezSayac");
+  sayac.textContent = acik;
+  sayac.classList.toggle("u-hidden", acik === 0);
+  renderMerkez();
+}
+
+function renderMerkez() {
+  const kap = document.getElementById("merkezListe");
+  const liste = merkezSiparisleri.filter((s) => s.durum !== "iptal" || (s.iptalTarihi?.toMillis?.() || 0) > Date.now() - 3 * 864e5);
+  document.getElementById("merkezBos").classList.toggle("u-hidden", liste.length !== 0);
+  kap.innerHTML = liste.map((s) => {
+    const [etiket, sinif] = MERKEZ_DURUM[s.durum] || [s.durum, "badge-gray"];
+    const acik = ["bekliyor", "hazirlaniyor"].includes(s.durum);
+    return `<div class="card order-card${s.durum === "bekliyor" ? " is-aktarildi" : ""}">
+      <div class="order-card__main">
+        <div class="order-card__name">${kacisEt(s.no)}</div>
+        <div class="order-card__meta">
+          <span class="badge ${sinif}">${etiket}</span>
+          <span>${(s.kalemler || []).length} ürün</span>
+          ${s.termin ? `<span>📅 Termin: ${kacisEt(new Date(s.termin + "T00:00").toLocaleDateString("tr-TR"))}</span>` : ""}
+          <span>${tarihBicimle(s.olusturmaTarihi)}</span>
+        </div>
+        ${s.not ? `<div class="u-text-soft" style="font-size:12.5px;margin-top:4px;">📝 ${kacisEt(s.not)}</div>` : ""}
+      </div>
+      <div class="order-card__actions">
+        ${acik ? `<button class="btn btn-primary btn-sm" data-hazirla="${s.id}">Hazırla / Gönder →</button>` : `<button class="btn btn-ghost btn-sm" data-mdetay="${s.id}">Detay</button>`}
+      </div>
+    </div>`;
+  }).join("");
+  kap.querySelectorAll("[data-hazirla]").forEach((b) => b.onclick = () => hazirlaModalAc(merkezSiparisleri.find((x) => x.id === b.dataset.hazirla)));
+  kap.querySelectorAll("[data-mdetay]").forEach((b) => b.onclick = () => merkezDetayAc(merkezSiparisleri.find((x) => x.id === b.dataset.mdetay)));
+}
+
+function hazirlaModalAc(s) {
+  if (!s) return;
+  const root = document.getElementById("modalRoot");
+  root.innerHTML = `<div class="modal-backdrop" data-role="backdrop"><div class="modal" style="max-width:640px;">
+    <h3>🏭 ${kacisEt(s.no)}</h3>
+    <p style="font-size:13px;">${s.termin ? `Termin: <b>${kacisEt(new Date(s.termin + "T00:00").toLocaleDateString("tr-TR"))}</b> · ` : ""}Siparişi veren: ${kacisEt(s.olusturanAd || "Merkez")}</p>
+    ${s.not ? `<p style="font-size:13px;">📝 ${kacisEt(s.not)}</p>` : ""}
+    <div class="table-wrap" style="max-height:50vh;overflow-y:auto;"><table class="data-table fs-tablo">
+      <thead><tr><th>Ürün</th><th class="sayi">İstenen</th><th class="sayi">Gönderilen</th></tr></thead>
+      <tbody>${(s.kalemler || []).map((k, i) => `<tr>
+        <td>${kacisEt(k.ad)}<div class="cell-code" style="font-size:11px;">${kacisEt(k.kod || "")}</div></td>
+        <td class="sayi">${sayiBicimle(k.miktar)} ${kacisEt(k.birim || "")}</td>
+        <td class="sayi"><input class="input fs-gonderilen" data-i="${i}" type="text" inputmode="decimal" value="${k.gonderilen ?? k.miktar}" style="width:90px;text-align:right;" /></td>
+      </tr>`).join("")}</tbody></table></div>
+    <div class="field" style="margin-top:10px;"><label>Not (isteğe bağlı)</label><input class="input" id="fsNot" value="${kacisEt(s.gonderimNotu || "")}" placeholder="Örn. 2 kalem eksik, yarın tamamlanacak" /></div>
+    <div class="modal__actions" style="flex-wrap:wrap;gap:8px;">
+      <button class="btn btn-ghost" data-role="iptal">Vazgeç</button>
+      <button class="btn btn-ghost" data-role="kaydet">💾 Kaydet (hazırlanıyor)</button>
+      <button class="btn btn-green" data-role="gonder">🚚 Gönderildi</button>
+    </div></div></div>`;
+  const kapat = () => { root.innerHTML = ""; };
+  root.querySelector('[data-role="iptal"]').onclick = kapat;
+  root.querySelector('[data-role="backdrop"]').onclick = (e) => { if (e.target.dataset.role === "backdrop") kapat(); };
+  const oku = () => [...root.querySelectorAll(".fs-gonderilen")].map((inp) => ondalikOku(inp.value) || 0);
+  const kaydet = async (gonder) => {
+    const gonderilenler = oku();
+    if (gonder) {
+      const eksik = (s.kalemler || []).filter((k, i) => gonderilenler[i] < Number(k.miktar)).length;
+      const ok = await onayIste({
+        baslik: "Gönderildi olarak işaretle",
+        metin: eksik ? `${eksik} üründe istenenden az gönderiliyor. Merkez teslim alırken bunu görecek. Devam edilsin mi?` : "Tüm ürünler istenen miktarda gönderiliyor.",
+        onayMetni: "Gönderildi"
+      });
+      if (!ok) return;
+    }
+    try {
+      await fabrikaSiparisiHazirla(s.id, {
+        gonderilenler, gonder, not: document.getElementById("fsNot").value.trim(),
+        gonderenAd: mevcutKullanici.ad || mevcutKullanici.uid
+      });
+      kapat();
+      toast(gonder ? "🚚 Gönderildi olarak işaretlendi. Merkez teslim alınca kapanır." : "Kaydedildi.", "success");
+    } catch (err) {
+      toast("Kaydedilemedi: " + (err.message || err), "error");
+    }
+  };
+  root.querySelector('[data-role="kaydet"]').onclick = () => kaydet(false);
+  root.querySelector('[data-role="gonder"]').onclick = () => kaydet(true);
+}
+
+function merkezDetayAc(s) {
+  if (!s) return;
+  const root = document.getElementById("modalRoot");
+  const teslim = s.durum === "teslim_alindi";
+  root.innerHTML = `<div class="modal-backdrop" data-role="backdrop"><div class="modal" style="max-width:640px;">
+    <h3>🏭 ${kacisEt(s.no)}</h3>
+    <div class="table-wrap" style="max-height:55vh;overflow-y:auto;"><table class="data-table fs-tablo">
+      <thead><tr><th>Ürün</th><th class="sayi">İstenen</th><th class="sayi">Gönderilen</th>${teslim ? '<th class="sayi">Merkeze gelen</th>' : ""}</tr></thead>
+      <tbody>${(s.kalemler || []).map((k) => {
+        const fark = teslim ? (Number(k.gelen) || 0) - (Number(k.gonderilen ?? k.miktar) || 0) : 0;
+        return `<tr><td>${kacisEt(k.ad)}</td>
+          <td class="sayi">${sayiBicimle(k.miktar)} ${kacisEt(k.birim || "")}</td>
+          <td class="sayi">${k.gonderilen === null || k.gonderilen === undefined ? "—" : sayiBicimle(k.gonderilen)}</td>
+          ${teslim ? `<td class="sayi">${sayiBicimle(k.gelen)}${fark ? ` <span class="badge ${fark < 0 ? "badge-red" : "badge-blue"}">${fark > 0 ? "+" : ""}${sayiBicimle(fark)}</span>` : ""}</td>` : ""}
+        </tr>`;
+      }).join("")}</tbody></table></div>
+    ${s.teslimNotu ? `<p style="font-size:13px;margin-top:8px;">Merkez notu: ${kacisEt(s.teslimNotu)}</p>` : ""}
+    <div class="modal__actions"><button class="btn btn-primary" data-role="kapat">Kapat</button></div></div></div>`;
+  const kapat = () => { root.innerHTML = ""; };
+  root.querySelector('[data-role="kapat"]').onclick = kapat;
+  root.querySelector('[data-role="backdrop"]').onclick = (e) => { if (e.target.dataset.role === "backdrop") kapat(); };
+}
 
 /* ---- Stok Girişi ---- */
 document.getElementById("girisKaydetBtn").addEventListener("click", async () => {
