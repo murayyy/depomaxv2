@@ -4,8 +4,8 @@
 import { auth, signOut, sayfaKorumasi } from "./firebase.js";
 import {
   receteleriDinle, receteOlustur, receteGuncelle, recedeSil,
-  uretimKaydet, paketlemeKaydet, uretimGecmisGetir
-} from "./veri.js";
+  uretimKaydet, paketlemeKaydet, uretimGecmisGetir, katalogDinle
+} from "./veri.js?v=20261112";
 import { arayuzHazirla, toast, onayIste, kacisEt, sayiBicimle, ondalikOku } from "./utils.js";
 
 arayuzHazirla();
@@ -73,7 +73,7 @@ const bugun = new Date().toISOString().slice(0, 10);
 document.getElementById("kokTarih").value = bugun;
 document.getElementById("pkTarih").value = bugun;
 
-sayfaKorumasi(["uretici", "admin"], (kullanici) => {
+sayfaKorumasi(["depocu", "uretici", "admin"], (kullanici) => {
   mevcutKullanici = kullanici;
   document.getElementById("kullaniciAdi").textContent = kullanici.ad || kullanici.uid;
   document.getElementById("rolEtiketi").textContent = kullanici.rol;
@@ -116,31 +116,86 @@ function receteSelectGuncelle() {
   receteIcerikGoster();
 }
 
-function receteIcerikGoster() {
+function seciliRecete() {
   const id = document.getElementById("kokRecete").value;
-  const div = document.getElementById("kokReceteIcerik");
-  if (!id) { div.classList.add("u-hidden"); return; }
-  const r = receteListesi.find((x) => x.id === id);
-  if (!r) { div.classList.add("u-hidden"); return; }
-  div.classList.remove("u-hidden");
-  div.innerHTML = `<b>📋 ${kacisEt(r.ad)}</b><br>` +
-    (r.malzemeler || []).map((m) => `· ${kacisEt(m.ad)}: ${sayiBicimle(m.miktar)} ${kacisEt(m.birim || "KG")}`).join("<br>") +
-    (r.aciklama ? `<br><span style="color:var(--color-ink-soft);font-size:12px;">📝 ${kacisEt(r.aciklama)}</span>` : "");
+  return id ? receteListesi.find((x) => x.id === id) : null;
 }
-document.getElementById("kokRecete").addEventListener("change", receteIcerikGoster);
+
+function receteIcerikGoster() {
+  const div = document.getElementById("kokReceteIcerik");
+  const r = seciliRecete();
+  if (!r) { div.classList.add("u-hidden"); cikanlariCiz(); return; }
+  div.classList.remove("u-hidden");
+  const kodsuz = (r.malzemeler || []).some((m) => !m.kod) || !r.ciktiKod;
+  div.innerHTML = `<b>📋 ${kacisEt(r.ad)}</b>${r.ciktiKod ? ` → <b>${kacisEt(r.ciktiKod)}</b> ${kacisEt(r.ciktiAdi || "")}` : ""}<br>` +
+    (r.malzemeler || []).map((m) => `· ${m.kod ? kacisEt(m.kod) + " " : ""}${kacisEt(m.ad)}: ${sayiBicimle(m.miktar)} ${kacisEt(m.birim || "KG")} / makine`).join("<br>") +
+    (r.aciklama ? `<br><span style="color:var(--color-ink-soft);font-size:12px;">📝 ${kacisEt(r.aciklama)}</span>` : "") +
+    (kodsuz ? `<br><span style="color:#B45309;font-size:12px;">⚠ Bu reçetede stok kodu eksik; Mikro'ya virman yazılamaz. Reçeteler sekmesinden kodları girin.</span>` : "");
+  cikanlariCiz();
+}
+
+// Makine sayısına göre çıkan miktarlar (elle değiştirilebilir)
+function cikanlariCiz() {
+  const kutu = document.getElementById("kokCikanlar");
+  const r = seciliRecete();
+  const makine = parseInt(document.getElementById("kokMakine").value) || 0;
+  if (!r || makine <= 0) { kutu.classList.add("u-hidden"); kutu.innerHTML = ""; return; }
+  kutu.classList.remove("u-hidden");
+  kutu.innerHTML = `<div style="font-weight:600;font-size:13px;margin-bottom:6px;">Kullanılan malzemeler (${makine} makine)</div>` +
+    (r.malzemeler || []).map((m, i) => `
+      <div style="display:grid;grid-template-columns:1fr 110px 40px;gap:6px;align-items:center;margin-bottom:6px;">
+        <div style="font-size:13px;">${m.kod ? `<span class="u-mono">${kacisEt(m.kod)}</span> ` : ""}${kacisEt(m.ad)}</div>
+        <input class="input" type="text" inputmode="decimal" data-cikan="${i}" value="${+(Number(m.miktar || 0) * makine).toFixed(3)}" style="text-align:right;" />
+        <span style="font-size:12px;color:var(--color-ink-soft);">${kacisEt(m.birim || "KG")}</span>
+      </div>`).join("");
+  kutu.querySelectorAll("[data-cikan]").forEach((inp) => inp.addEventListener("input", toplamYaz));
+  toplamYaz();
+}
+
+// Elde edilen miktar = çıkanların toplamı (depocu isterse üzerine yazar)
+let miktarElle = false;
+function toplamYaz() {
+  if (miktarElle) return;
+  const toplam = [...document.querySelectorAll("[data-cikan]")].reduce((t, inp) => t + (ondalikOku(inp.value) || 0), 0);
+  document.getElementById("kokMiktar").value = toplam ? +toplam.toFixed(3) : "";
+}
+document.getElementById("kokMiktar").addEventListener("input", () => { miktarElle = true; });
+document.getElementById("kokRecete").addEventListener("change", () => { miktarElle = false; receteIcerikGoster(); });
+document.getElementById("kokMakine").addEventListener("input", () => { miktarElle = false; cikanlariCiz(); });
 
 /* ---- Kokteyl Üretim Kaydet ---- */
 document.getElementById("kokKaydetBtn").addEventListener("click", async () => {
   const receteId = document.getElementById("kokRecete").value;
   const recete = receteListesi.find((r) => r.id === receteId);
   if (!recete) { toast("Reçete seçiniz.", "error"); return; }
+  const makine = parseInt(document.getElementById("kokMakine").value) || 0;
+  if (makine <= 0) { toast("Makine sayısını giriniz.", "error"); return; }
   const miktar = ondalikOku(document.getElementById("kokMiktar").value);
-  if (!miktar) { toast("Miktar giriniz.", "error"); return; }
+  if (!miktar) { toast("Elde edilen miktarı giriniz.", "error"); return; }
+  const cikanlar = (recete.malzemeler || []).map((m, i) => ({
+    kod: m.kod || "", ad: m.ad, birim: m.birim || "KG",
+    miktar: ondalikOku(document.querySelector(`[data-cikan="${i}"]`)?.value || "0") || 0
+  })).filter((c) => c.miktar > 0);
+  if (!cikanlar.length) { toast("Malzeme miktarlarını giriniz.", "error"); return; }
+  const mikroya = !!recete.ciktiKod && cikanlar.every((c) => c.kod);
+  if (!mikroya && !(await onayIste({
+    baslik: "Stok kodu eksik",
+    metin: "Reçetede stok kodu eksik olduğu için Mikro'ya virman YAZILMAYACAK, sadece Depomax'a kaydedilecek. Devam edilsin mi?",
+    onayMetni: "Sadece kaydet"
+  }))) return;
+  const btn = document.getElementById("kokKaydetBtn");
+  btn.disabled = true;
+  try {
   await uretimKaydet({
     receteId, receteAd: recete.ad,
     malzemeler: recete.malzemeler || [],
     urunAd: recete.ciktiAdi || recete.ad,
+    ciktiKod: recete.ciktiKod || "",
+    ciktiAd: recete.ciktiAdi || recete.ad,
+    makine,
+    cikanlar,
     miktar,
+    ...(mikroya ? { mikroVirman: { durum: "bekliyor", istekTarihi: new Date() } } : {}),
     palet: parseInt(document.getElementById("kokPalet").value) || 0,
     tarihStr: document.getElementById("kokTarih").value,
     parti: document.getElementById("kokParti").value.trim(),
@@ -148,8 +203,18 @@ document.getElementById("kokKaydetBtn").addEventListener("click", async () => {
     yapan: mevcutKullanici.ad || mevcutKullanici.uid,
     yardimcilar: [...kokYardimcilar]
   });
-  toast(`✅ ${recete.ad} — ${sayiBicimle(miktar)} KG üretim kaydedildi.`, "success");
+  } catch (err) {
+    console.error(err);
+    toast("Kaydedilemedi: " + (err.code || err.message), "error");
+    btn.disabled = false;
+    return;
+  }
+  btn.disabled = false;
+  toast(`✅ ${recete.ad} — ${sayiBicimle(miktar)} KG kaydedildi${mikroya ? ", Mikro'ya virman yazılıyor" : ""}.`, "success");
   document.getElementById("kokMiktar").value = "";
+  document.getElementById("kokMakine").value = "";
+  miktarElle = false;
+  cikanlariCiz();
   document.getElementById("kokPalet").value = "";
   document.getElementById("kokParti").value = "";
   document.getElementById("kokNot").value = "";
@@ -195,9 +260,9 @@ function renderReceteler() {
     <div class="card order-card">
       <div class="order-card__main">
         <div class="order-card__name">🧪 ${kacisEt(r.ad)}</div>
-        ${r.ciktiAdi ? `<div style="font-size:12px;color:var(--color-ink-soft);">Çıktı: ${kacisEt(r.ciktiAdi)}</div>` : ""}
+        ${r.ciktiAdi || r.ciktiKod ? `<div style="font-size:12px;color:var(--color-ink-soft);">Çıktı: ${kacisEt(r.ciktiKod || "")} ${kacisEt(r.ciktiAdi || "")}</div>` : ""}
         <div style="font-size:12.5px;margin-top:6px;">
-          ${(r.malzemeler || []).map((m) => `<span class="badge badge-gray" style="margin-right:4px;margin-bottom:4px;">${kacisEt(m.ad)} ${sayiBicimle(m.miktar)} ${kacisEt(m.birim || "KG")}</span>`).join("")}
+          ${(r.malzemeler || []).map((m) => `<span class="badge badge-gray" style="margin-right:4px;margin-bottom:4px;">${m.kod ? kacisEt(m.kod) + " · " : ""}${kacisEt(m.ad)} ${sayiBicimle(m.miktar)} ${kacisEt(m.birim || "KG")}</span>`).join("")}
         </div>
         ${r.aciklama ? `<div style="font-size:12px;color:var(--color-ink-soft);margin-top:4px;">📝 ${kacisEt(r.aciklama)}</div>` : ""}
       </div>
@@ -221,99 +286,113 @@ function renderReceteler() {
 
 document.getElementById("yeniReceteBtn").addEventListener("click", () => receteModalAc(null));
 
+let katalogListesi = null;
+function katalogYukle(cb) {
+  if (katalogListesi) { cb(); return; }
+  katalogDinle((liste) => { katalogListesi = liste || []; cb(); });
+}
+function katalogBul(kod) {
+  const k = String(kod || "").trim();
+  return (katalogListesi || []).find((x) => String(x.kod || x.id) === k);
+}
+
 function receteModalAc(receteId) {
   const mevcut = receteId ? receteListesi.find((r) => r.id === receteId) : null;
-  const malzemeler = mevcut?.malzemeler || [{ ad: "", miktar: 0, birim: "KG" }];
+  let mls = (mevcut?.malzemeler?.length ? mevcut.malzemeler : [{ kod: "", ad: "", miktar: 0, birim: "KG" }]).map((m) => ({ ...m }));
+  let ust = { ad: mevcut?.ad || "", ciktiKod: mevcut?.ciktiKod || "", ciktiAdi: mevcut?.ciktiAdi || "", aciklama: mevcut?.aciklama || "" };
   const root = document.getElementById("modalRoot");
 
-  function modalIcerik(mls) {
-    return `
+  // Ekrandaki değerleri belleğe al (satır ekleyip silerken yazılanlar kaybolmasın)
+  function oku() {
+    ust = {
+      ad: document.getElementById("rcAd").value.trim(),
+      ciktiKod: document.getElementById("rcCiktiKod").value.trim(),
+      ciktiAdi: document.getElementById("rcCikti").value.trim(),
+      aciklama: document.getElementById("rcNot").value.trim()
+    };
+    mls = mls.map((_, i) => ({
+      kod: document.getElementById(`rcMkod${i}`).value.trim(),
+      ad: document.getElementById(`rcMad${i}`).value.trim(),
+      miktar: ondalikOku(document.getElementById(`rcMmk${i}`).value || "0"),
+      birim: document.getElementById(`rcMbr${i}`).value.trim() || "KG"
+    }));
+  }
+
+  function ciz() {
+    const secenekler = (katalogListesi || []).map((u) => `<option value="${kacisEt(u.kod || u.id)}">${kacisEt(u.ad || "")}</option>`).join("");
+    root.innerHTML = `
       <div class="modal-backdrop" data-role="backdrop">
-        <div class="modal" style="max-width:500px;">
+        <div class="modal" style="max-width:560px;">
           <h3>${mevcut ? "Reçete Düzenle" : "Yeni Reçete"}</h3>
-          <div class="field"><label>Reçete Adı</label><input class="input" id="rcAd" value="${kacisEt(mevcut?.ad || "")}" placeholder="Örn. Karma Kokteyl" /></div>
-          <div class="field"><label>Çıktı Ürün Adı</label><input class="input" id="rcCikti" value="${kacisEt(mevcut?.ciktiAdi || "")}" placeholder="Örn. Kokteyl 5 KG Poşet" /></div>
-          <div style="margin-bottom:8px;font-weight:600;font-size:13px;">Malzemeler</div>
-          <div id="rcMalzemeler">
-            ${mls.map((m, i) => `
-              <div style="display:grid;grid-template-columns:1fr auto auto auto;gap:6px;margin-bottom:6px;" data-mi="${i}">
-                <input class="input" id="rcMad${i}" value="${kacisEt(m.ad)}" placeholder="Ürün adı" style="font-size:12.5px;" />
-                <input class="input" type="text" inputmode="decimal" id="rcMmk${i}" value="${m.miktar || ""}" placeholder="Miktar" style="width:70px;font-size:12.5px;" />
-                <input class="input" id="rcMbr${i}" value="${kacisEt(m.birim || "KG")}" placeholder="Birim" style="width:50px;font-size:12.5px;" />
-                <button class="btn btn-danger btn-sm" data-mkal="${i}">✕</button>
-              </div>`).join("")}
+          <datalist id="rcKatalog">${secenekler}</datalist>
+          <div class="field"><label>Reçete Adı</label><input class="input" id="rcAd" value="${kacisEt(ust.ad)}" placeholder="Örn. Karma Kokteyl" /></div>
+          <div style="display:grid;grid-template-columns:120px 1fr;gap:6px;">
+            <div class="field"><label>Çıktı Stok Kodu</label><input class="input" id="rcCiktiKod" list="rcKatalog" value="${kacisEt(ust.ciktiKod)}" placeholder="0002" /></div>
+            <div class="field"><label>Çıktı Ürün Adı</label><input class="input" id="rcCikti" value="${kacisEt(ust.ciktiAdi)}" placeholder="Örn. Karışık Kuruyemiş" /></div>
           </div>
+          <div style="margin-bottom:8px;font-weight:600;font-size:13px;">Malzemeler <span style="font-weight:400;color:var(--color-ink-soft);">(1 makine için)</span></div>
+          ${mls.map((m, i) => `
+            <div style="display:grid;grid-template-columns:90px 1fr 70px 50px auto;gap:6px;margin-bottom:6px;">
+              <input class="input" id="rcMkod${i}" data-kod="${i}" list="rcKatalog" value="${kacisEt(m.kod || "")}" placeholder="Kod" style="font-size:12.5px;" />
+              <input class="input" id="rcMad${i}" value="${kacisEt(m.ad || "")}" placeholder="Ürün adı" style="font-size:12.5px;" />
+              <input class="input" type="text" inputmode="decimal" id="rcMmk${i}" value="${m.miktar || ""}" placeholder="Miktar" style="font-size:12.5px;" />
+              <input class="input" id="rcMbr${i}" value="${kacisEt(m.birim || "KG")}" placeholder="Birim" style="font-size:12.5px;" />
+              <button class="btn btn-danger btn-sm" data-mkal="${i}">✕</button>
+            </div>`).join("")}
           <button class="btn btn-ghost btn-sm" id="rcMalzemeEkle">+ Malzeme Ekle</button>
-          <div class="field" style="margin-top:10px;"><label>Not</label><input class="input" id="rcNot" value="${kacisEt(mevcut?.aciklama || "")}" placeholder="İsteğe bağlı…" /></div>
+          <div class="field" style="margin-top:10px;"><label>Not</label><input class="input" id="rcNot" value="${kacisEt(ust.aciklama)}" placeholder="İsteğe bağlı…" /></div>
+          <div style="font-size:12px;color:var(--color-ink-soft);margin-bottom:8px;">Stok kodları Mikro'daki kodlarla aynı olmalı; virman bu kodlarla yazılır.</div>
           <div class="modal__actions">
             <button class="btn btn-ghost" data-role="iptal">Vazgeç</button>
             <button class="btn btn-primary" data-role="kaydet">${mevcut ? "Güncelle" : "Oluştur"}</button>
           </div>
         </div>
       </div>`;
-  }
-
-  let mlsCopy = malzemeler.map(m => ({ ...m }));
-  root.innerHTML = modalIcerik(mlsCopy);
-
-  const kapat = () => { root.innerHTML = ""; };
-  root.querySelector('[data-role="iptal"]').onclick = kapat;
-  root.querySelector('[data-role="backdrop"]').onclick = (e) => { if (e.target.dataset.role === "backdrop") kapat(); };
-
-  root.querySelector("#rcMalzemeEkle").onclick = () => {
-    mlsCopy.push({ ad: "", miktar: 0, birim: "KG" });
-    root.innerHTML = modalIcerik(mlsCopy);
-    rebind();
-  };
-
-  function rebind() {
-    kapat; // ref
+    const kapat = () => { root.innerHTML = ""; };
     root.querySelector('[data-role="iptal"]').onclick = kapat;
     root.querySelector('[data-role="backdrop"]').onclick = (e) => { if (e.target.dataset.role === "backdrop") kapat(); };
-    root.querySelector("#rcMalzemeEkle").onclick = () => {
-      mlsCopy.push({ ad: "", miktar: 0, birim: "KG" });
-      root.innerHTML = modalIcerik(mlsCopy);
-      rebind();
-    };
+    root.querySelector("#rcMalzemeEkle").onclick = () => { oku(); mls.push({ kod: "", ad: "", miktar: 0, birim: "KG" }); ciz(); };
     root.querySelectorAll("[data-mkal]").forEach((btn) => {
-      btn.onclick = () => {
-        mlsCopy.splice(Number(btn.dataset.mkal), 1);
-        root.innerHTML = modalIcerik(mlsCopy);
-        rebind();
-      };
+      btn.onclick = () => { oku(); mls.splice(Number(btn.dataset.mkal), 1); ciz(); };
     });
-    root.querySelector('[data-role="kaydet"]').onclick = kaydet;
+    // Kod girilince adı katalogdan doldur
+    const adDoldur = (kodInp, adInp) => kodInp.addEventListener("change", () => {
+      const u = katalogBul(kodInp.value);
+      if (u && !adInp.value.trim()) adInp.value = u.ad || "";
+    });
+    adDoldur(document.getElementById("rcCiktiKod"), document.getElementById("rcCikti"));
+    root.querySelectorAll("[data-kod]").forEach((inp) => adDoldur(inp, document.getElementById(`rcMad${inp.dataset.kod}`)));
+
+    root.querySelector('[data-role="kaydet"]').onclick = async () => {
+      oku();
+      if (!ust.ad) { toast("Reçete adı zorunlu.", "error"); return; }
+      const malzemeler = mls.filter((m) => m.ad || m.kod).map((m) => ({ ...m, ad: m.ad || katalogBul(m.kod)?.ad || m.kod }));
+      const veri = { ad: ust.ad, ciktiKod: ust.ciktiKod, ciktiAdi: ust.ciktiAdi, malzemeler, aciklama: ust.aciklama };
+      try {
+        if (mevcut) { await receteGuncelle(receteId, veri); toast("Reçete güncellendi.", "success"); }
+        else { await receteOlustur(veri); toast("Reçete oluşturuldu.", "success"); }
+        kapat();
+      } catch (err) {
+        console.error(err);
+        toast("Kaydedilemedi: " + (err.code || err.message), "error");
+      }
+    };
   }
 
-  async function kaydet() {
-    const ad = document.getElementById("rcAd").value.trim();
-    if (!ad) { toast("Reçete adı zorunlu.", "error"); return; }
-    const malzemelerGun = mlsCopy.map((_, i) => ({
-      ad: document.getElementById(`rcMad${i}`)?.value?.trim() || "",
-      miktar: ondalikOku(document.getElementById(`rcMmk${i}`)?.value || "0"),
-      birim: document.getElementById(`rcMbr${i}`)?.value?.trim() || "KG"
-    })).filter(m => m.ad);
-    const veri = {
-      ad, ciktiAdi: document.getElementById("rcCikti").value.trim(),
-      malzemeler: malzemelerGun,
-      aciklama: document.getElementById("rcNot").value.trim()
-    };
-    if (mevcut) { await receteGuncelle(receteId, veri); toast("Reçete güncellendi.", "success"); }
-    else { await receteOlustur(veri); toast("Reçete oluşturuldu.", "success"); }
-    kapat();
-  }
-
-  root.querySelectorAll("[data-mkal]").forEach((btn) => {
-    btn.onclick = () => {
-      mlsCopy.splice(Number(btn.dataset.mkal), 1);
-      root.innerHTML = modalIcerik(mlsCopy);
-      rebind();
-    };
-  });
-  root.querySelector('[data-role="kaydet"]').onclick = kaydet;
+  ciz();
+  katalogYukle(() => { if (document.getElementById("rcAd")) { oku(); ciz(); } });
 }
 
 /* ---- Geçmiş ---- */
+function mikroRozet(k) {
+  const v = k.mikroVirman;
+  if (!v) return "";
+  if (v.durum === "tamam") return ` <span class="badge badge-green">Mikro ${kacisEt(v.evrak || "")}</span>`;
+  if (v.durum === "hata") return ` <span class="badge badge-red" title="${kacisEt(v.mesaj || "")}">⚠ Mikro: ${kacisEt(v.mesaj || "hata")}</span>`;
+  if (v.durum === "geri_alindi") return ` <span class="badge badge-gray">Mikro: geri alındı</span>`;
+  return ` <span class="badge badge-amber">⏳ Mikro'ya yazılıyor</span>`;
+}
+
 async function gecmisYukle() {
   const tbody = document.getElementById("gecmisTablosu");
   const kartlar = document.getElementById("gecmisKartlar");
@@ -331,13 +410,14 @@ async function gecmisYukle() {
       const tipRozet = k.tip === "uretim"
         ? '<span class="badge badge-blue">🧪 Üretim</span>'
         : '<span class="badge badge-amber">📦 Paketleme</span>';
+      const mikro = mikroRozet(k);
       const urunAd = k.tip === "uretim" ? (k.receteAd || k.urunAd) : k.urunAd;
       const miktar = k.tip === "uretim"
         ? `${sayiBicimle(k.miktar)} KG`
         : `${k.acılanCuval || 0} çuval → ${k.cikaPoset || 0} poşet${k.miktar ? " (" + sayiBicimle(k.miktar) + " KG)" : ""}`;
       return `<tr>
         <td style="font-size:12px;">${tarih}</td>
-        <td>${tipRozet}</td>
+        <td>${tipRozet}${mikro}</td>
         <td>${kacisEt(urunAd || "—")}</td>
         <td>${miktar}</td>
         <td>${k.palet || "—"}</td>
@@ -351,6 +431,7 @@ async function gecmisYukle() {
       const tipRozet = k.tip === "uretim"
         ? '<span class="badge badge-blue">🧪 Üretim</span>'
         : '<span class="badge badge-amber">📦 Paketleme</span>';
+      const mikro = mikroRozet(k);
       const urunAd = k.tip === "uretim" ? (k.receteAd || k.urunAd) : k.urunAd;
       const miktar = k.tip === "uretim"
         ? `${sayiBicimle(k.miktar)} KG${k.palet ? " · " + k.palet + " palet" : ""}`
@@ -362,7 +443,7 @@ async function gecmisYukle() {
               <div class="row-card__name">${kacisEt(urunAd || "—")}</div>
               <div class="row-card__code">${miktar}</div>
             </div>
-            ${tipRozet}
+            <div>${tipRozet}${mikro}</div>
           </div>
           <div class="u-text-soft" style="font-size:12px;margin-top:4px;">
             👤 ${kacisEt(k.yapan || "—")}${k.yardimcilar?.length ? " + " + k.yardimcilar.map(y => kacisEt(y)).join(", ") : ""} · 🕐 ${tarih}
