@@ -21,6 +21,7 @@
     <nav class="topbar__nav">
       <a class="topbar__link" href="index.html">⬅ Ana Sayfa</a>
       <a class="topbar__link" href="raf.html">🗄 Raflar</a>
+      <a class="topbar__link" href="ikmal.html">🔔 İkmal</a>
     </nav>
     <div class="topbar__user">
       <span class="role-chip" id="rolEtiketi">…</span>
@@ -59,9 +60,14 @@
           </select>
         </div>
         <div id="kokReceteIcerik" class="u-hidden" style="background:var(--color-surface-2);padding:12px;border-radius:8px;margin-bottom:12px;font-size:13px;"></div>
+        <div class="field">
+          <label>Kaç Makine?</label>
+          <input class="input" type="number" id="kokMakine" placeholder="0" min="1" step="1" inputmode="numeric" />
+        </div>
+        <div id="kokCikanlar" class="u-hidden" style="margin-bottom:12px;"></div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
           <div class="field">
-            <label>Üretilen Miktar (KG)</label>
+            <label>Elde Edilen Miktar (KG)</label>
             <input class="input" type="text" inputmode="decimal" id="kokMiktar" placeholder="0" />
           </div>
           <div class="field">
@@ -185,6 +191,6 @@
     });
   }
 </script>
-<script type="module" src="js/uretim.js"></script>
+<script type="module" src="js/uretim.js?v=20261113"></script>
 </body>
 </html>
