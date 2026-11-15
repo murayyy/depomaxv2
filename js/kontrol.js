@@ -123,7 +123,7 @@ function sekmeYukle(sekme) {
   const durumlar = sekme === "aktif" ? ["toplandi", "kontrol_ediliyor"]
     : sekme === "sevkbekleyen" ? ["tamamlandi"]
     : sekme === "arsiv" ? ["arsivlendi"]
-    : ["sevk_edildi"];
+    : ["sevk_edildi", "teslim_edildi"];  // şube teslim alınca da listede kalsın
   siparisAbonelikIptal = siparisleriDinle(durumlar, (liste) => {
     sonSiparisListesi = liste;
     filtreliSiparisleriGoster();
@@ -175,6 +175,7 @@ function renderSiparisListesi(liste) {
       : ({
           tamamlandi: '<span class="badge badge-amber">Sevk Bekliyor</span>',
           sevk_edildi: '<span class="badge badge-green">Sevk Edildi</span>',
+          teslim_edildi: '<span class="badge badge-green">🎉 Teslim Edildi</span>',
           arsivlendi: '<span class="badge badge-gray">🗂 Arşiv</span>'
         }[s.durum] || '<span class="badge badge-blue">Kontrol Bekliyor</span>');
     const mo = s.mikroOnay && s.mikroOnay.durum;
@@ -183,7 +184,7 @@ function renderSiparisListesi(liste) {
       : mo === "kismi" ? ` <span class="badge badge-amber" title="Mikro'dan kontrol edin">⚠ Mikro: ${(s.mikroOnay.bekleyen || []).length} satır yolda</span>`
       : mo === "hata" ? ` <span class="badge badge-red" title="${kacisEt(s.mikroOnay.mesaj || "")}">⚠ Mikro onay hatası</span>`
       : ' <span class="badge badge-gray">⏳ Mikro onayı bekleniyor</span>';
-    const butonMetni = s.durum === "sevk_edildi" ? "Görüntüle →" : s.durum === "tamamlandi" ? "Sevke Hazırla →" : "Kontrol Et →";
+    const butonMetni = (s.durum === "sevk_edildi" || s.durum === "teslim_edildi") ? "Görüntüle →" : s.durum === "tamamlandi" ? "Sevke Hazırla →" : "Kontrol Et →";
     return `
       <div class="card order-card${s.sistemeAktarildi ? " is-aktarildi" : ""}" data-id="${s.id}">
         <div class="order-card__main">
@@ -280,10 +281,10 @@ function siparisAc(siparis) {
     `${siparis.sistemeAktarildi ? ` <span class="badge badge-red">Sisteme Aktarıldı${siparis.mikroAktarim && siparis.mikroAktarim.evrak ? " · " + kacisEt(siparis.mikroAktarim.evrak) : ""}</span>` : ""}` +
     `${MIKRO_OTOMATIK_AKTARIM && !siparis.sistemeAktarildi && siparis.mikroAktarim && siparis.mikroAktarim.durum === "hata" ? ` <span class="badge badge-red">⚠ ${kacisEt(siparis.mikroAktarim.mesaj || "Mikro aktarım hatası")}</span>` : ""}`);
 
-  const saltOkunur = siparis.durum === "tamamlandi" || siparis.durum === "sevk_edildi";
+  const saltOkunur = ["tamamlandi", "sevk_edildi", "teslim_edildi"].includes(siparis.durum);
   document.getElementById("tamamlaBtn").classList.toggle("u-hidden", siparis.durum !== "toplandi" && siparis.durum !== "kontrol_ediliyor");
   document.getElementById("sevkeCevirBtn").classList.toggle("u-hidden", siparis.durum !== "tamamlandi");
-  document.getElementById("sistemeAktarBtn").classList.toggle("u-hidden", siparis.durum !== "sevk_edildi");
+  document.getElementById("sistemeAktarBtn").classList.toggle("u-hidden", siparis.durum !== "sevk_edildi" && siparis.durum !== "teslim_edildi");
   document.getElementById("barkodTaraBtn").classList.toggle("u-hidden", saltOkunur);
   document.getElementById("urunEkleBtn").classList.toggle("u-hidden", saltOkunur);
 
@@ -294,11 +295,11 @@ function siparisAc(siparis) {
     // İlk yüklemede ürün kodlarına göre stok çek
     if (stokMap.size === 0 && liste.length) {
       const kodlar = [...new Set(liste.map(u => u.kod).filter(Boolean))];
-      stokKodlariGetir(kodlar).then(map => { stokMap = map; renderUrunler(siparis.durum === "tamamlandi" || siparis.durum === "sevk_edildi"); }).catch(() => {});
+      stokKodlariGetir(kodlar).then(map => { stokMap = map; renderUrunler(["tamamlandi", "sevk_edildi", "teslim_edildi"].includes(siparis.durum)); }).catch(() => {});
     }
     const kontrolEdilen = liste.filter((u) => u.kontrol || u.eksik).length;
     const toplamKg = kgToplami(liste);
-    if (siparis.durum !== "tamamlandi" && siparis.durum !== "sevk_edildi" && (kontrolEdilen !== siparis.kontrolEdilenUrun || toplamKg !== siparis.toplamKg)) {
+    if (!["tamamlandi", "sevk_edildi", "teslim_edildi"].includes(siparis.durum) && (kontrolEdilen !== siparis.kontrolEdilenUrun || toplamKg !== siparis.toplamKg)) {
       siparis.kontrolEdilenUrun = kontrolEdilen;
       siparis.toplamKg = toplamKg;
       clearTimeout(sayacYazimZamanlayici);
@@ -324,7 +325,7 @@ function geriDon() {
 /* ---------------- Ürün listesi render ---------------- */
 document.getElementById("aramaKutusu").addEventListener("input", debounce((e) => {
   aramaMetni = e.target.value.trim().toLowerCase();
-  renderUrunler(aktifSiparis && aktifSiparis.durum === "tamamlandi");
+  renderUrunler(!!aktifSiparis && ["tamamlandi", "sevk_edildi", "teslim_edildi"].includes(aktifSiparis.durum));
 }, 200));
 
 function siraliListe() {
@@ -359,6 +360,7 @@ function renderUrunler(saltOkunur) {
   const kartGovde = document.getElementById("urunKartGovde");
   if (liste.length === 0) { tbody.innerHTML = ""; kartGovde.innerHTML = ""; return; }
 
+  const kaydirma = kaydirmaKaydet(["urunTabloGovde", "urunKartGovde"]);
   const tbodyOdak = odakDurumunuKaydet("urunTabloGovde");
   const kartOdak = odakDurumunuKaydet("urunKartGovde");
 
@@ -369,7 +371,48 @@ function renderUrunler(saltOkunur) {
 
   odakDurumunuGeriYukle("urunTabloGovde", tbodyOdak);
   odakDurumunuGeriYukle("urunKartGovde", kartOdak);
+  kaydirmaGeriYukle(kaydirma);
 }
+
+/* ---- Liste yenilenirken kaydırma yerinde kalsın ----
+   Liste her değişiklikte baştan çizildiği için sayfa yukarı kayabiliyordu.
+   Ekranda görünen (ya da tıklanan) satırın yeri hatırlanır, çizimden sonra aynı yere getirilir. */
+function gorunenKapsayici(ids) {
+  return ids.map((id) => document.getElementById(id)).find((el) => el && el.offsetParent !== null) || null;
+}
+function kaydirmaKaydet(ids) {
+  const kap = gorunenKapsayici(ids);
+  if (!kap) return null;
+  const odak = document.activeElement && document.activeElement.closest ? document.activeElement.closest("[data-uid]") : null;
+  let capa = odak && kap.contains(odak) ? odak : null;
+  if (!capa) capa = [...kap.querySelectorAll("[data-uid]")].find((el) => el.getBoundingClientRect().bottom > 0) || null;
+  const sarmal = kap.closest(".table-wrap");
+  return {
+    kapId: kap.id, uid: capa ? capa.dataset.uid : null, ust: capa ? capa.getBoundingClientRect().top : 0,
+    y: window.scrollY, sarmalUst: sarmal ? sarmal.scrollTop : 0, sarmalSol: sarmal ? sarmal.scrollLeft : 0
+  };
+}
+function kaydirmaGeriYukle(d) {
+  if (!d) return;
+  const kap = document.getElementById(d.kapId);
+  if (!kap) return;
+  const sarmal = kap.closest(".table-wrap");
+  if (sarmal) { sarmal.scrollTop = d.sarmalUst; sarmal.scrollLeft = d.sarmalSol; }
+  window.scrollTo(0, d.y);
+  const capa = d.uid ? kap.querySelector(`[data-uid="${CSS.escape(d.uid)}"]`) : null;
+  if (capa) {
+    const fark = capa.getBoundingClientRect().top - d.ust;
+    if (Math.abs(fark) > 1) window.scrollBy(0, fark);
+  }
+}
+
+/* İşaretli bir kutu kaldırılacaksa sor; vazgeçilirse kutu eski haline döner. */
+async function kaldirmaOnayi(kutu, metin) {
+  const onay = await onayIste({ baslik: "Emin misiniz?", metin, onayMetni: "Evet, kaldır", tehlikeli: true });
+  if (!onay) kutu.checked = !kutu.checked;
+  return onay;
+}
+
 
 function toplamaDurumRozeti(u) {
   if (u.eksik) return '<span class="badge badge-red">Eksik</span>';
@@ -468,7 +511,8 @@ function baglaSatirOlaylari(kapsayici, saltOkunur) {
     }
     const toplandiCb = satir.querySelector('[data-rol="toplandi"]');
     if (toplandiCb) {
-      toplandiCb.addEventListener("change", () => {
+      toplandiCb.addEventListener("change", async () => {
+        if (!toplandiCb.checked && !(await kaldirmaOnayi(toplandiCb, "Bu ürünün \"Toplandı\" işareti kaldırılacak."))) return;
         const urun = urunlerCache.find((u) => u.id === uid);
         const eskiEksikti = urun && urun.eksik;
         const patch = toplandiCb.checked ? { toplandi: true, eksik: false } : { toplandi: false };
@@ -491,7 +535,10 @@ function baglaSatirOlaylari(kapsayici, saltOkunur) {
     }
     const eksikCb = satir.querySelector('[data-rol="eksik"]');
     if (eksikCb) {
-      eksikCb.addEventListener("change", () => {
+      eksikCb.addEventListener("change", async () => {
+        const once = urunlerCache.find((u) => u.id === uid);
+        if (!eksikCb.checked && !(await kaldirmaOnayi(eksikCb, "Bu ürünün \"Eksik\" işareti kaldırılacak."))) return;
+        if (eksikCb.checked && once?.toplandi && !(await kaldirmaOnayi(eksikCb, "Bu ürün \"Toplandı\" işaretli; eksiğe çevrilirse toplandı işareti kalkacak."))) return;
         const urun = urunlerCache.find((u) => u.id === uid);
         const eskiToplandiydi = urun && urun.toplandi;
         const patch = eksikCb.checked ? { eksik: true, toplandi: false } : { eksik: false };
@@ -514,6 +561,7 @@ function baglaSatirOlaylari(kapsayici, saltOkunur) {
     const kontrolCb = satir.querySelector('[data-rol="kontrol"]');
     if (kontrolCb) {
       kontrolCb.addEventListener("change", async () => {
+        if (!kontrolCb.checked && !(await kaldirmaOnayi(kontrolCb, "Bu ürünün \"Kontrol Edildi\" işareti kaldırılacak."))) return;
         const patch = { kontrol: kontrolCb.checked };
         if (kontrolCb.checked) patch.kontrolEdenKullanici = mevcutKullanici.ad || mevcutKullanici.uid;
         await urunGuncelle(aktifSiparis.id, uid, patch);
