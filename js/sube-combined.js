@@ -517,6 +517,21 @@ async function teslimAlModalAc(siparisId) {
           <button class="btn btn-ghost btn-sm" id="ekstraEkleBtn">+ Listede Olmayan Ürün</button>
         </div>
         <div id="teslimUrunler" style="max-height:380px;overflow-y:auto;">⏳</div>
+        <div id="ekstraForm" class="u-hidden" style="margin-top:10px;padding:10px;border:1px solid var(--color-border);border-radius:8px;background:var(--color-surface-2);">
+          <div style="font-weight:700;font-size:12.5px;margin-bottom:8px;">📦 Listede olmayan ürün</div>
+          <datalist id="exKodList">${katalogCache.map(u => `<option value="${kacisEt(u.stokKodu || "")}">${kacisEt(u.ad || "")}</option>`).join("")}</datalist>
+          <datalist id="exAdList">${katalogCache.map(u => `<option value="${kacisEt(u.ad || "")}">`).join("")}</datalist>
+          <div style="display:grid;grid-template-columns:110px 1fr;gap:6px;">
+            <input class="input" id="exKod" list="exKodList" placeholder="Stok kodu" autocomplete="off" />
+            <input class="input" id="exAd" list="exAdList" placeholder="Ürün adı" autocomplete="off" />
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr auto auto;gap:6px;margin-top:6px;">
+            <input class="input" id="exMiktar" type="text" inputmode="decimal" placeholder="Miktar" />
+            <input class="input" id="exBirim" placeholder="Birim" value="KG" />
+            <button class="btn btn-ghost btn-sm" id="exVazgec">Vazgeç</button>
+            <button class="btn btn-primary btn-sm" id="exEkle">Ekle</button>
+          </div>
+        </div>
         <div id="ekstraUrunler"></div>
         <div id="teslimOzet" style="margin-top:10px;font-size:13px;font-weight:600;"></div>
         <div class="modal__actions">
@@ -540,7 +555,7 @@ async function teslimAlModalAc(siparisId) {
 
   function ozetiGuncelle() {
     const toplam = gonderilen.length + ekstraUrunler.length;
-    const secili = root.querySelectorAll('input[data-tip="geldi"]:checked').length;
+    const secili = root.querySelectorAll('input[data-tip="geldi"]:checked').length + ekstraUrunler.length;
     document.getElementById("teslimOzet").textContent =
       `✅ ${secili} / ${toplam} ürün işaretlendi`;
   }
@@ -566,20 +581,27 @@ async function teslimAlModalAc(siparisId) {
       cb.addEventListener("change", ozetiGuncelle);
     });
 
-    // Ekstra ürünler
-    document.getElementById("ekstraUrunler").innerHTML = ekstraUrunler.length
+    renderEkstra();
+    ozetiGuncelle();
+  }
+
+  // Listede olmayan gelenler ayrı çizilir: ana listedeki işaretler ve miktarlar silinmesin
+  function renderEkstra() {
+    const kutu = document.getElementById("ekstraUrunler");
+    kutu.innerHTML = ekstraUrunler.length
       ? `<div style="margin-top:10px;font-weight:700;font-size:12px;color:var(--color-ink-soft);margin-bottom:6px;">📦 LİSTEDE OLMAYAN GELENLER</div>` +
         ekstraUrunler.map((e, i) => `
           <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--color-border);">
             <div style="flex:1;">
               <div style="font-weight:600;font-size:13px;">${kacisEt(e.ad)}</div>
-              <div style="font-size:11.5px;color:var(--color-ink-soft);">${sayiBicimle(e.miktar)} ${kacisEt(e.birim)}</div>
+              <div style="font-size:11.5px;color:var(--color-ink-soft);">${kacisEt(e.kod || "kodsuz")} · ${sayiBicimle(e.miktar)} ${kacisEt(e.birim)}</div>
             </div>
-            <button class="btn btn-danger btn-sm" onclick="this.closest('div').remove();ekstraUrunler.splice(${i},1);ozetiGuncelle();">✕</button>
+            <button class="btn btn-danger btn-sm" data-ekstra-sil="${i}">✕</button>
           </div>`).join("")
       : "";
-
-    ozetiGuncelle();
+    kutu.querySelectorAll("[data-ekstra-sil]").forEach((b) => {
+      b.onclick = () => { ekstraUrunler.splice(Number(b.dataset.ekstraSil), 1); renderEkstra(); ozetiGuncelle(); };
+    });
   }
 
   renderListe();
@@ -593,18 +615,34 @@ async function teslimAlModalAc(siparisId) {
     ozetiGuncelle();
   };
 
-  // Listede olmayan ürün ekle
+  // Listede olmayan ürün ekle (katalogdan kod/ad seçilebilir)
+  const exForm = document.getElementById("ekstraForm");
+  const exKod = document.getElementById("exKod"), exAd = document.getElementById("exAd");
+  const exMiktar = document.getElementById("exMiktar"), exBirim = document.getElementById("exBirim");
+  const exTemizle = () => { exKod.value = ""; exAd.value = ""; exMiktar.value = ""; exBirim.value = "KG"; };
+  exKod.addEventListener("change", () => {
+    const u = katalogCache.find((x) => x.stokKodu === exKod.value.trim());
+    if (u) { exAd.value = u.ad || ""; if (u.birim) exBirim.value = u.birim; }
+  });
+  exAd.addEventListener("change", () => {
+    const u = katalogCache.find((x) => x.ad === exAd.value.trim());
+    if (u) { exKod.value = u.stokKodu || ""; if (u.birim) exBirim.value = u.birim; }
+  });
   document.getElementById("ekstraEkleBtn").onclick = () => {
-    const adInput = prompt("Ürün adı:");
-    if (!adInput?.trim()) return;
-    const miktarInput = prompt("Miktar:");
-    const birimInput = prompt("Birim (KG, Adet...):");
-    ekstraUrunler.push({
-      ad: adInput.trim(),
-      miktar: ondalikOku(miktarInput || "1") || 1,
-      birim: birimInput?.trim() || "Adet"
-    });
-    renderListe();
+    exForm.classList.remove("u-hidden");
+    exKod.focus();
+  };
+  document.getElementById("exVazgec").onclick = () => { exTemizle(); exForm.classList.add("u-hidden"); };
+  document.getElementById("exEkle").onclick = () => {
+    const ad = exAd.value.trim();
+    const miktar = ondalikOku(exMiktar.value);
+    if (!ad) { toast("Ürün adını girin.", "error"); return; }
+    if (!miktar || miktar <= 0) { toast("Gelen miktarı girin.", "error"); return; }
+    ekstraUrunler.push({ kod: exKod.value.trim(), ad, miktar, birim: exBirim.value.trim() || "KG" });
+    exTemizle();
+    exForm.classList.add("u-hidden");
+    renderEkstra();
+    ozetiGuncelle();
   };
 
   root.querySelector('[data-role="onayla"]').onclick = async () => {
@@ -619,7 +657,7 @@ async function teslimAlModalAc(siparisId) {
           ? "tamam" : "eksik"
       })),
       ...ekstraUrunler.map(e => ({
-        urunId: "", ad: e.ad, kod: "", birim: e.birim,
+        urunId: "", ad: e.ad, kod: e.kod || "", birim: e.birim,
         siparisMiktari: 0, gelenMiktar: e.miktar, durum: "fazla"
       }))
     ];
