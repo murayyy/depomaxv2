@@ -5,7 +5,7 @@ import { auth, signOut, sayfaKorumasi } from "./firebase.js";
 import {
   katalogDinle, subeSimarisiOlustur, stokGirisiKaydet, stokGirisleriGetir,
   subeSiparisleriDinle, urunleriniGetir, fabrikaSiparisleriniDinle, fabrikaSiparisiHazirla
-} from "./veri.js?v=20261112";
+} from "./veri.js?v=20261116";
 import { arayuzHazirla, toast, onayIste, kacisEt, sayiBicimle, ondalikOku, excelOlarakIndir, tarihBicimle, sesCal } from "./utils.js";
 
 arayuzHazirla();
@@ -357,55 +357,128 @@ function renderMerkez() {
 function hazirlaModalAc(s) {
   if (!s) return;
   const root = document.getElementById("modalRoot");
-  root.innerHTML = `<div class="modal-backdrop" data-role="backdrop"><div class="modal" style="max-width:640px;">
+  const tarihYaz = (t) => new Date(t + "T00:00").toLocaleDateString("tr-TR");
+  // Ekrandaki satırlar: mevcut kalemler + bu pencerede eklenenler
+  let satirlar = (s.kalemler || []).map((k, i) => ({ ...k, eskiIndeks: i, gonderilen: k.gonderilen ?? k.miktar }));
+  const silinecekler = new Set();
+
+  function okuEkran() {
+    root.querySelectorAll(".fs-gonderilen").forEach((inp) => {
+      const sat = satirlar[Number(inp.dataset.i)];
+      if (sat) sat.gonderilen = ondalikOku(inp.value) || 0;
+    });
+  }
+
+  function ciz() {
+    const gorunen = satirlar.map((k, i) => ({ k, i })).filter(({ k }) => !(k.eskiIndeks !== undefined && silinecekler.has(k.eskiIndeks)));
+    root.innerHTML = `<div class="modal-backdrop" data-role="backdrop"><div class="modal" style="max-width:680px;">
     <h3>🏭 ${kacisEt(s.no)}</h3>
-    <p style="font-size:13px;">${s.termin ? `Termin: <b>${kacisEt(new Date(s.termin + "T00:00").toLocaleDateString("tr-TR"))}</b> · ` : ""}Siparişi veren: ${kacisEt(s.olusturanAd || "Merkez")}</p>
+    <p style="font-size:13px;">${s.termin ? `Termin: <b>${kacisEt(tarihYaz(s.termin))}</b> · ` : ""}Siparişi veren: ${kacisEt(s.olusturanAd || "Merkez")}</p>
     ${s.not ? `<p style="font-size:13px;">📝 ${kacisEt(s.not)}</p>` : ""}
-    <div class="table-wrap" style="max-height:50vh;overflow-y:auto;"><table class="data-table fs-tablo">
-      <thead><tr><th>Ürün</th><th class="sayi">İstenen</th><th class="sayi">Gönderilen</th></tr></thead>
-      <tbody>${(s.kalemler || []).map((k, i) => `<tr>
-        <td>${kacisEt(k.ad)}<div class="cell-code" style="font-size:11px;">${kacisEt(k.kod || "")}</div></td>
-        <td class="sayi">${sayiBicimle(k.miktar)} ${kacisEt(k.birim || "")}</td>
-        <td class="sayi"><input class="input fs-gonderilen" data-i="${i}" type="text" inputmode="decimal" value="${k.gonderilen ?? k.miktar}" style="width:90px;text-align:right;" /></td>
+    <div class="table-wrap" style="max-height:46vh;overflow-y:auto;"><table class="data-table fs-tablo">
+      <thead><tr><th>Ürün</th><th class="sayi">İstenen</th><th class="sayi">Gönderilen</th><th></th></tr></thead>
+      <tbody>${gorunen.map(({ k, i }) => `<tr>
+        <td>${kacisEt(k.ad)}${k.fabrikaEkledi ? ' <span class="badge badge-amber" style="font-size:10px;">Fabrika ekledi</span>' : ""}<div class="cell-code" style="font-size:11px;">${kacisEt(k.kod || "")}</div></td>
+        <td class="sayi">${k.fabrikaEkledi ? "—" : `${sayiBicimle(k.miktar)} ${kacisEt(k.birim || "")}`}</td>
+        <td class="sayi"><input class="input fs-gonderilen" data-i="${i}" type="text" inputmode="decimal" value="${k.gonderilen}" style="width:90px;text-align:right;" /> <span style="font-size:11px;color:var(--color-ink-soft);">${k.fabrikaEkledi ? kacisEt(k.birim || "") : ""}</span></td>
+        <td>${k.fabrikaEkledi ? `<button class="btn btn-ghost btn-sm" data-kaldir="${i}" title="Kaldır">✕</button>` : ""}</td>
       </tr>`).join("")}</tbody></table></div>
-    <div class="field" style="margin-top:10px;"><label>Not (isteğe bağlı)</label><input class="input" id="fsNot" value="${kacisEt(s.gonderimNotu || "")}" placeholder="Örn. 2 kalem eksik, yarın tamamlanacak" /></div>
+    <div id="fsEkleForm" class="u-hidden" style="margin-top:10px;padding:10px;border:1px solid var(--color-border);border-radius:8px;background:var(--color-surface-2);">
+      <div style="font-weight:700;font-size:12.5px;margin-bottom:6px;">➕ Siparişte olmayan ürün</div>
+      <datalist id="fsKodList">${katalogCache.map((u) => `<option value="${kacisEt(u.stokKodu || u.kod || "")}">${kacisEt(u.ad || "")}</option>`).join("")}</datalist>
+      <datalist id="fsAdList">${katalogCache.map((u) => `<option value="${kacisEt(u.ad || "")}">`).join("")}</datalist>
+      <div style="display:grid;grid-template-columns:110px 1fr;gap:6px;">
+        <input class="input" id="fsEkKod" list="fsKodList" placeholder="Stok kodu" autocomplete="off" />
+        <input class="input" id="fsEkAd" list="fsAdList" placeholder="Ürün adı" autocomplete="off" />
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr auto auto;gap:6px;margin-top:6px;">
+        <input class="input" id="fsEkMiktar" type="text" inputmode="decimal" placeholder="Gönderilen miktar" />
+        <input class="input" id="fsEkBirim" placeholder="Birim" value="KG" />
+        <button class="btn btn-ghost btn-sm" id="fsEkVazgec">Vazgeç</button>
+        <button class="btn btn-primary btn-sm" id="fsEkEkle">Ekle</button>
+      </div>
+    </div>
+    <div style="margin-top:8px;"><button class="btn btn-ghost btn-sm" id="fsEkleAc">+ Ürün Ekle</button></div>
+    <div class="field" style="margin-top:10px;"><label>Not (isteğe bağlı)</label><input class="input" id="fsNot" value="${kacisEt(notDegeri)}" placeholder="Örn. 2 kalem eksik, yarın tamamlanacak" /></div>
     <div class="modal__actions" style="flex-wrap:wrap;gap:8px;">
       <button class="btn btn-ghost" data-role="iptal">Vazgeç</button>
       <button class="btn btn-ghost" data-role="yazdir">🖨 Sevk Listesi</button>
       <button class="btn btn-ghost" data-role="kaydet">💾 Kaydet (hazırlanıyor)</button>
       <button class="btn btn-green" data-role="gonder">🚚 Gönderildi</button>
     </div></div></div>`;
+    baglan();
+  }
+
+  let notDegeri = s.gonderimNotu || "";
   const kapat = () => { root.innerHTML = ""; };
-  root.querySelector('[data-role="iptal"]').onclick = kapat;
-  root.querySelector('[data-role="backdrop"]').onclick = (e) => { if (e.target.dataset.role === "backdrop") kapat(); };
-  const oku = () => [...root.querySelectorAll(".fs-gonderilen")].map((inp) => ondalikOku(inp.value) || 0);
-  const kaydet = async (gonder) => {
-    const gonderilenler = oku();
+
+  function baglan() {
+    root.querySelector('[data-role="iptal"]').onclick = kapat;
+    root.querySelector('[data-role="backdrop"]').onclick = (e) => { if (e.target.dataset.role === "backdrop") kapat(); };
+    root.querySelector("#fsNot").addEventListener("input", (e) => { notDegeri = e.target.value; });
+    root.querySelectorAll("[data-kaldir]").forEach((b) => b.onclick = () => {
+      okuEkran();
+      const i = Number(b.dataset.kaldir);
+      const k = satirlar[i];
+      if (k.eskiIndeks !== undefined) silinecekler.add(k.eskiIndeks); else satirlar.splice(i, 1);
+      ciz();
+    });
+    const form = root.querySelector("#fsEkleForm");
+    const kod = root.querySelector("#fsEkKod"), ad = root.querySelector("#fsEkAd"), birim = root.querySelector("#fsEkBirim");
+    const bulKod = (v) => katalogCache.find((u) => (u.stokKodu || u.kod || "") === v.trim());
+    const bulAd = (v) => katalogCache.find((u) => (u.ad || "") === v.trim());
+    kod.addEventListener("change", () => { const u = bulKod(kod.value); if (u) { ad.value = u.ad || ""; if (u.birim) birim.value = u.birim; } });
+    ad.addEventListener("change", () => { const u = bulAd(ad.value); if (u) { kod.value = u.stokKodu || u.kod || ""; if (u.birim) birim.value = u.birim; } });
+    root.querySelector("#fsEkleAc").onclick = () => { form.classList.remove("u-hidden"); kod.focus(); };
+    root.querySelector("#fsEkVazgec").onclick = () => form.classList.add("u-hidden");
+    root.querySelector("#fsEkEkle").onclick = () => {
+      const adV = ad.value.trim();
+      const miktar = ondalikOku(root.querySelector("#fsEkMiktar").value);
+      if (!adV) { toast("Ürün adını girin.", "error"); return; }
+      if (!miktar || miktar <= 0) { toast("Gönderilen miktarı girin.", "error"); return; }
+      okuEkran();
+      satirlar.push({ kod: kod.value.trim(), ad: adV, birim: birim.value.trim() || "KG", miktar: 0, gonderilen: miktar, fabrikaEkledi: true });
+      ciz();
+    };
+    root.querySelector('[data-role="kaydet"]').onclick = () => kaydet(false);
+    root.querySelector('[data-role="gonder"]').onclick = () => kaydet(true);
+    root.querySelector('[data-role="yazdir"]').onclick = () => {
+      okuEkran();
+      const liste = satirlar.filter((k) => !(k.eskiIndeks !== undefined && silinecekler.has(k.eskiIndeks)));
+      sevkListesiYazdir({ ...s, kalemler: liste }, liste.map((k) => k.gonderilen), notDegeri.trim());
+    };
+  }
+
+  async function kaydet(gonder) {
+    okuEkran();
+    const mevcut = satirlar.filter((k) => k.eskiIndeks !== undefined);
+    const gonderilenler = (s.kalemler || []).map((_, i) => mevcut.find((k) => k.eskiIndeks === i)?.gonderilen ?? null);
+    const ekKalemler = satirlar.filter((k) => k.eskiIndeks === undefined);
     if (gonder) {
-      const eksik = (s.kalemler || []).filter((k, i) => gonderilenler[i] < Number(k.miktar)).length;
+      const eksik = mevcut.filter((k) => !k.fabrikaEkledi && !silinecekler.has(k.eskiIndeks) && Number(k.gonderilen) < Number(k.miktar)).length;
+      const ek = ekKalemler.length + mevcut.filter((k) => k.fabrikaEkledi && !silinecekler.has(k.eskiIndeks)).length;
       const ok = await onayIste({
         baslik: "Gönderildi olarak işaretle",
-        metin: eksik ? `${eksik} üründe istenenden az gönderiliyor. Merkez teslim alırken bunu görecek. Devam edilsin mi?` : "Tüm ürünler istenen miktarda gönderiliyor.",
+        metin: [eksik ? `${eksik} üründe istenenden az gönderiliyor.` : "İstenen ürünler tam gönderiliyor.",
+                ek ? `${ek} ürün siparişte yoktu, fabrika ekledi.` : "", "Merkez teslim alırken bunları görecek."].filter(Boolean).join(" "),
         onayMetni: "Gönderildi"
       });
       if (!ok) return;
     }
     try {
       await fabrikaSiparisiHazirla(s.id, {
-        gonderilenler, gonder, not: document.getElementById("fsNot").value.trim(),
-        gonderenAd: mevcutKullanici.ad || mevcutKullanici.uid
+        gonderilenler, gonder, not: notDegeri.trim(),
+        gonderenAd: mevcutKullanici.ad || mevcutKullanici.uid,
+        ekKalemler, silinecekler: [...silinecekler]
       });
       kapat();
       toast(gonder ? "🚚 Gönderildi olarak işaretlendi. Merkez teslim alınca kapanır." : "Kaydedildi.", "success");
     } catch (err) {
       toast("Kaydedilemedi: " + (err.message || err), "error");
     }
-  };
-  root.querySelector('[data-role="kaydet"]').onclick = () => kaydet(false);
-  root.querySelector('[data-role="gonder"]').onclick = () => kaydet(true);
-  // Ekrandaki (henüz kaydedilmemiş olabilecek) gönderilen miktarlarla yazdırır
-  root.querySelector('[data-role="yazdir"]').onclick = () =>
-    sevkListesiYazdir(s, oku(), document.getElementById("fsNot").value.trim());
+  }
+
+  ciz();
 }
 
 /* ---- Sevk listesi (yazdırılabilir) ---- */
@@ -486,8 +559,8 @@ function sevkListesiYazdir(s, gonderilenler, not) {
     <thead><tr><th class="sira">#</th><th>Stok Kodu</th><th>Ürün</th><th class="s">İstenen</th><th class="s">Gönderilen</th><th>Birim</th><th class="kutu">Kontrol</th></tr></thead>
     <tbody>${kalemler.map((k, i) => {
       const az = Number(k.gonderilen) < Number(k.miktar);
-      return `<tr><td class="sira s">${i + 1}</td><td class="k">${e(k.kod || "")}</td><td>${e(k.ad || "")}</td>
-        <td class="s">${e(sayiBicimle(k.miktar))}</td>
+      return `<tr><td class="sira s">${i + 1}</td><td class="k">${e(k.kod || "")}</td><td>${e(k.ad || "")}${k.fabrikaEkledi ? ' <small style="color:#B8892B;font-weight:700;">(ek)</small>' : ""}</td>
+        <td class="s">${k.fabrikaEkledi ? "—" : e(sayiBicimle(k.miktar))}</td>
         <td class="s gonderilen${az ? " eksik" : ""}">${e(sayiBicimle(k.gonderilen))}</td>
         <td>${e(k.birim || "")}</td><td class="kutu"><span></span></td></tr>`;
     }).join("")}</tbody>

@@ -1184,8 +1184,8 @@ function fabrikaTeslimModalAc(s) {
     <div class="table-wrap" style="max-height:50vh;overflow-y:auto;"><table class="data-table fs-tablo">
       <thead><tr><th>Ürün</th><th class="sayi">İstenen</th><th class="sayi">Gönderilen</th><th class="sayi">Gelen</th><th>Durum</th></tr></thead>
       <tbody>${(s.kalemler || []).map((k, i) => `<tr>
-        <td>${kacisEt(k.ad)}<div class="cell-code" style="font-size:11px;">${kacisEt(k.kod || "")}</div></td>
-        <td class="sayi">${sayiBicimle(k.miktar)} ${kacisEt(k.birim || "")}</td>
+        <td>${kacisEt(k.ad)}${k.fabrikaEkledi ? ' <span class="badge badge-amber" style="font-size:10px;">Fabrika ekledi</span>' : ""}<div class="cell-code" style="font-size:11px;">${kacisEt(k.kod || "")}</div></td>
+        <td class="sayi">${k.fabrikaEkledi ? "—" : `${sayiBicimle(k.miktar)} ${kacisEt(k.birim || "")}`}</td>
         <td class="sayi">${k.gonderilen === null || k.gonderilen === undefined ? "—" : sayiBicimle(k.gonderilen)}</td>
         <td class="sayi"><input class="input fs-gelen" data-i="${i}" type="text" inputmode="decimal" value="${k.gonderilen ?? k.miktar}" style="width:90px;text-align:right;" /></td>
         <td data-durum="${i}"></td>
@@ -1245,8 +1245,8 @@ function fabrikaDetayModalAc(s) {
       <thead><tr><th>Ürün</th><th class="sayi">İstenen</th><th class="sayi">Gönderilen</th>${teslim ? '<th class="sayi">Gelen</th><th class="sayi">Fark</th>' : ""}</tr></thead>
       <tbody>${(s.kalemler || []).map((k) => {
         const fark = teslim ? (Number(k.gelen) || 0) - (Number(k.miktar) || 0) : 0;
-        return `<tr><td>${kacisEt(k.ad)}<div class="cell-code" style="font-size:11px;">${kacisEt(k.kod || "")}</div></td>
-          <td class="sayi">${sayiBicimle(k.miktar)} ${kacisEt(k.birim || "")}</td>
+        return `<tr><td>${kacisEt(k.ad)}${k.fabrikaEkledi ? ' <span class="badge badge-amber" style="font-size:10px;">Fabrika ekledi</span>' : ""}<div class="cell-code" style="font-size:11px;">${kacisEt(k.kod || "")}</div></td>
+          <td class="sayi">${k.fabrikaEkledi ? "—" : `${sayiBicimle(k.miktar)} ${kacisEt(k.birim || "")}`}</td>
           <td class="sayi">${k.gonderilen === null || k.gonderilen === undefined ? "—" : sayiBicimle(k.gonderilen)}</td>
           ${teslim ? `<td class="sayi">${sayiBicimle(k.gelen)}</td><td class="sayi">${fark ? `<span class="badge ${fark < 0 ? "badge-red" : "badge-blue"}">${fark > 0 ? "+" : ""}${sayiBicimle(fark)}</span>` : "—"}</td>` : ""}
         </tr>`;

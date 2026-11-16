@@ -945,7 +945,7 @@ export function fabrikaSiparisleriniDinle(callback) {
 }
 
 /** Fabrika: hazırlanan/gönderilen miktarları kaydeder. gonder=true ise "gonderildi" olur. */
-export async function fabrikaSiparisiHazirla(id, { gonderilenler, gonderenAd, not, gonder }) {
+export async function fabrikaSiparisiHazirla(id, { gonderilenler, gonderenAd, not, gonder, ekKalemler = [], silinecekler = [] }) {
   const ref = doc(db, FABRIKA_SIPARISLERI, id);
   return runTransaction(db, async (tx) => {
     const snap = await tx.get(ref);
@@ -953,9 +953,16 @@ export async function fabrikaSiparisiHazirla(id, { gonderilenler, gonderenAd, no
     const s = snap.data();
     if (["teslim_alindi", "iptal"].includes(s.durum)) throw new Error("Bu sipariş kapanmış, değiştirilemez.");
     if (s.durum === "gonderildi" && !gonder) throw new Error("Sipariş zaten gönderildi.");
+    const sil = new Set(silinecekler);
     const kalemler = s.kalemler.map((k, i) => ({
       ...k, gonderilen: gonderilenler[i] === undefined || gonderilenler[i] === null ? k.gonderilen : Number(gonderilenler[i]) || 0
-    }));
+    }))
+      // Sadece fabrikanın sonradan eklediği kalemler silinebilir; merkezin istedikleri kalır.
+      .filter((k, i) => !(sil.has(i) && k.fabrikaEkledi))
+      .concat((ekKalemler || []).filter((k) => k && k.ad).map((k) => ({
+        kod: k.kod || "", ad: k.ad, birim: k.birim || "", miktar: 0,
+        gonderilen: Number(k.gonderilen) || 0, fabrikaEkledi: true
+      })));
     tx.update(ref, {
       kalemler,
       durum: gonder ? "gonderildi" : "hazirlaniyor",
