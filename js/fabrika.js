@@ -371,6 +371,7 @@ function hazirlaModalAc(s) {
     <div class="field" style="margin-top:10px;"><label>Not (isteğe bağlı)</label><input class="input" id="fsNot" value="${kacisEt(s.gonderimNotu || "")}" placeholder="Örn. 2 kalem eksik, yarın tamamlanacak" /></div>
     <div class="modal__actions" style="flex-wrap:wrap;gap:8px;">
       <button class="btn btn-ghost" data-role="iptal">Vazgeç</button>
+      <button class="btn btn-ghost" data-role="yazdir">🖨 Sevk Listesi</button>
       <button class="btn btn-ghost" data-role="kaydet">💾 Kaydet (hazırlanıyor)</button>
       <button class="btn btn-green" data-role="gonder">🚚 Gönderildi</button>
     </div></div></div>`;
@@ -402,6 +403,85 @@ function hazirlaModalAc(s) {
   };
   root.querySelector('[data-role="kaydet"]').onclick = () => kaydet(false);
   root.querySelector('[data-role="gonder"]').onclick = () => kaydet(true);
+  // Ekrandaki (henüz kaydedilmemiş olabilecek) gönderilen miktarlarla yazdırır
+  root.querySelector('[data-role="yazdir"]').onclick = () =>
+    sevkListesiYazdir(s, oku(), document.getElementById("fsNot").value.trim());
+}
+
+/* ---- Sevk listesi (yazdırılabilir) ---- */
+function sevkListesiYazdir(s, gonderilenler, not) {
+  const kalemler = (s.kalemler || []).map((k, i) => ({
+    ...k, gonderilen: gonderilenler ? gonderilenler[i] : (k.gonderilen ?? k.miktar)
+  }));
+  const gidenler = kalemler.filter((k) => Number(k.gonderilen) > 0);
+  const eksikler = kalemler.filter((k) => Number(k.gonderilen) < Number(k.miktar));
+  const birimToplam = {};
+  gidenler.forEach((k) => {
+    const b = (k.birim || "").toUpperCase() || "—";
+    birimToplam[b] = (birimToplam[b] || 0) + (Number(k.gonderilen) || 0);
+  });
+  const e = kacisEt;
+  const bugun = new Date().toLocaleString("tr-TR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  const html = `<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Sevk Listesi ${e(s.no || "")}</title>
+  <style>
+    @page { size: A4; margin: 14mm 12mm; }
+    * { box-sizing: border-box; }
+    body { font-family: "IBM Plex Sans", Arial, sans-serif; color: #111; font-size: 12px; margin: 0; }
+    .ust { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #111; padding-bottom: 8px; margin-bottom: 10px; }
+    h1 { font-size: 20px; margin: 0 0 4px; letter-spacing: .5px; }
+    .bilgi { font-size: 12px; line-height: 1.6; }
+    .bilgi b { display: inline-block; min-width: 88px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border: 1px solid #999; padding: 5px 6px; vertical-align: top; }
+    th { background: #eee; text-align: left; font-size: 11px; text-transform: uppercase; }
+    td.s, th.s { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    td.k { font-family: "IBM Plex Mono", monospace; font-size: 11px; white-space: nowrap; }
+    td.c { width: 34px; }
+    tr { page-break-inside: avoid; }
+    .eksik { color: #B91C1C; font-weight: 600; }
+    .toplam { margin-top: 8px; font-weight: 600; }
+    .not { margin-top: 8px; padding: 6px 8px; border: 1px dashed #999; }
+    .imza { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 34px; }
+    .imza div { border-top: 1px solid #111; padding-top: 4px; text-align: center; font-size: 11px; }
+    .alt { margin-top: 14px; font-size: 10px; color: #666; text-align: right; }
+  </style></head><body>
+  <div class="ust">
+    <div><h1>SEVK LİSTESİ</h1><div class="bilgi">Fabrika → Merkez</div></div>
+    <div class="bilgi">
+      <div><b>Sipariş no</b> ${e(s.no || "")}</div>
+      <div><b>Sipariş tarihi</b> ${e(tarihBicimle(s.olusturmaTarihi))}</div>
+      ${s.termin ? `<div><b>Termin</b> ${e(new Date(s.termin + "T00:00").toLocaleDateString("tr-TR"))}</div>` : ""}
+      <div><b>Hazırlayan</b> ${e(mevcutKullanici?.ad || "")}</div>
+      <div><b>Yazdırma</b> ${e(bugun)}</div>
+    </div>
+  </div>
+  <table>
+    <thead><tr><th style="width:28px;">#</th><th>Kod</th><th>Ürün</th><th class="s">İstenen</th><th class="s">Gönderilen</th><th>Birim</th><th class="c">✓</th></tr></thead>
+    <tbody>${kalemler.map((k, i) => {
+      const az = Number(k.gonderilen) < Number(k.miktar);
+      return `<tr><td class="s">${i + 1}</td><td class="k">${e(k.kod || "")}</td><td>${e(k.ad || "")}</td>
+        <td class="s">${e(sayiBicimle(k.miktar))}</td>
+        <td class="s${az ? " eksik" : ""}">${e(sayiBicimle(k.gonderilen))}</td>
+        <td>${e(k.birim || "")}</td><td class="c"></td></tr>`;
+    }).join("")}</tbody>
+  </table>
+  <div class="toplam">${gidenler.length} kalem gönderiliyor · Toplam: ${Object.entries(birimToplam).map(([b, m]) => `${e(sayiBicimle(Math.round(m * 1000) / 1000))} ${e(b)}`).join(" + ")}
+    ${eksikler.length ? ` · <span class="eksik">${eksikler.length} kalem istenenden az</span>` : ""}</div>
+  ${s.not ? `<div class="not"><b>Sipariş notu:</b> ${e(s.not)}</div>` : ""}
+  ${not ? `<div class="not"><b>Gönderim notu:</b> ${e(not)}</div>` : ""}
+  <div class="imza"><div>Teslim eden (Fabrika)</div><div>Araç / Şoför</div><div>Teslim alan (Merkez)</div></div>
+  <div class="alt">Depomax</div>
+  </body></html>`;
+  const cerceve = document.createElement("iframe");
+  cerceve.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;";
+  document.body.appendChild(cerceve);
+  const d = cerceve.contentWindow.document;
+  d.open(); d.write(html); d.close();
+  setTimeout(() => {
+    cerceve.contentWindow.focus();
+    cerceve.contentWindow.print();
+    setTimeout(() => cerceve.remove(), 60000);
+  }, 300);
 }
 
 function merkezDetayAc(s) {
@@ -421,9 +501,10 @@ function merkezDetayAc(s) {
         </tr>`;
       }).join("")}</tbody></table></div>
     ${s.teslimNotu ? `<p style="font-size:13px;margin-top:8px;">Merkez notu: ${kacisEt(s.teslimNotu)}</p>` : ""}
-    <div class="modal__actions"><button class="btn btn-primary" data-role="kapat">Kapat</button></div></div></div>`;
+    <div class="modal__actions"><button class="btn btn-ghost" data-role="yazdir">🖨 Sevk Listesi</button><button class="btn btn-primary" data-role="kapat">Kapat</button></div></div></div>`;
   const kapat = () => { root.innerHTML = ""; };
   root.querySelector('[data-role="kapat"]').onclick = kapat;
+  root.querySelector('[data-role="yazdir"]').onclick = () => sevkListesiYazdir(s, null, s.gonderimNotu || "");
   root.querySelector('[data-role="backdrop"]').onclick = (e) => { if (e.target.dataset.role === "backdrop") kapat(); };
 }
 

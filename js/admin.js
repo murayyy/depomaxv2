@@ -20,6 +20,16 @@ arayuzHazirla();
   }
 })();
 
+// Sadece izin verilen şubelerin göreceği reyonlar (sube-combined.js ile aynı liste)
+const KISITLI_REYONLAR = ["ADA"];
+function reyonIzinKutulari(k) {
+  return KISITLI_REYONLAR.map((r) => `
+    <label style="display:flex;align-items:center;gap:6px;margin-top:6px;cursor:pointer;font-size:12.5px;">
+      <input type="checkbox" data-reyon-izin="${r}" ${(k.reyonIzinleri || []).includes(r) ? "checked" : ""} style="width:14px;height:14px;" />
+      ${r} reyonunu görsün
+    </label>`).join("");
+}
+
 const ROL_ETIKETI = { toplayici: "Toplayıcı", kontrolor: "Kontrolör", admin: "Admin", sube: "Şube", surucu: "Sürücü", depocu: "Depocu", paletci: "Paletçi", uretici: "Üretici", fabrika: "Fabrika" };
 const HATA_MESAJLARI = {
   "auth/email-already-in-use": "Bu e-posta adresiyle zaten bir hesap var.",
@@ -123,7 +133,8 @@ function satirHtml(k) {
           <label style="display:flex;align-items:center;gap:6px;margin-top:6px;cursor:pointer;font-size:12.5px;">
             <input type="checkbox" data-rol="franchisee" ${k.franchisee ? "checked" : ""} style="width:14px;height:14px;" />
             Franchise kullanıcısı
-          </label>` : ""}
+          </label>
+          ${reyonIzinKutulari(k)}` : ""}
       </td>
       <td>${tarihBicimle(k.olusturulmaTarihi)}</td>
       <td>${k.uid === mevcutKullanici.uid ? "" : `<button class="btn btn-danger btn-sm" data-rol="sil">Sil</button>`}</td>
@@ -149,6 +160,7 @@ function kartHtml(k) {
       <div class="field">
         <label class="row-card__label">Şube Adı</label>
         <input class="input" data-rol="subeAdi" value="${kacisEt(k.subeAdi || "")}" placeholder="Şube adı…" style="font-size:12.5px;" />
+        ${reyonIzinKutulari(k)}
       </div>` : ""}
       <div class="row-card__actions">
         ${k.uid === mevcutKullanici.uid ? "" : `<button class="btn btn-danger btn-sm" data-rol="sil">Sil</button>`}
@@ -192,6 +204,19 @@ function baglaOlaylar(kapsayici) {
         });
       }
     }
+    // Kısıtlı reyon izinleri (ADA vb.)
+    satir.querySelectorAll("[data-reyon-izin]").forEach((cb) => {
+      cb.addEventListener("change", async () => {
+        const k = kullaniciListesi.find((x) => x.uid === uid) || {};
+        const set = new Set(k.reyonIzinleri || []);
+        cb.checked ? set.add(cb.dataset.reyonIzin) : set.delete(cb.dataset.reyonIzin);
+        k.reyonIzinleri = [...set];
+        try {
+          await kullaniciRolGuncelle(uid, "sube", { reyonIzinleri: k.reyonIzinleri });
+          toast(`${cb.dataset.reyonIzin} reyonu ${cb.checked ? "açıldı" : "kapatıldı"}.`, "success");
+        } catch (err) { cb.checked = !cb.checked; toast("Kaydedilemedi: " + (err.code || err.message), "error"); }
+      });
+    });
     const silBtn = satir.querySelector('[data-rol="sil"]');
     if (silBtn) {
       silBtn.addEventListener("click", async () => {

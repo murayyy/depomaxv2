@@ -37,6 +37,27 @@ async function sayimBaglantisiKur(uid) {
 let mevcutKullanici = null;
 let franchiseeKullanici = false;
 let katalogCache = [];
+
+/* Kısıtlı reyonlar: bu reyonların ürünlerini sadece yönetimde izin verilen şubeler görür.
+   (Yönetim > Kullanıcılar > şube satırında "ADA reyonunu görsün" kutusu.)
+   Ürünün reyonu ya da kategorisi "ADA" ise (veya "ADA-..", "ADA ..." ile başlıyorsa) kısıtlıdır. */
+const KISITLI_REYONLAR = ["ADA"];
+function reyonNormal(v) { return String(v || "").trim().toLocaleUpperCase("tr"); }
+function kisitliReyonu(u) {
+  for (const r of KISITLI_REYONLAR) {
+    for (const v of [u.reyon, u.kategori]) {
+      const n = reyonNormal(v);
+      if (n === r || n.startsWith(r + "-") || n.startsWith(r + " ")) return r;
+    }
+  }
+  return null;
+}
+function urunGorunurMu(u, kullanici) {
+  const r = kisitliReyonu(u);
+  if (!r) return true;
+  if (kullanici?.rol !== "sube") return true;  // admin, fabrika vb. hepsini görür
+  return (kullanici?.reyonIzinleri || []).map(reyonNormal).includes(r);
+}
 let ozelKalemler = [];
 const miktarSakla = new Map();
 const notSakla = new Map();
@@ -103,7 +124,7 @@ sayfaKorumasi(["sube", "fabrika"], (kullanici) => {
 
   katalogDinle((liste) => {
     const eskiBoyut = katalogCache.length;
-    katalogCache = liste.filter(u => u.aktif !== false);
+    katalogCache = liste.filter(u => u.aktif !== false && urunGorunurMu(u, mevcutKullanici));
     const taslakVardi = taslakYukle();
     // Eğer kullanıcı miktar girdiyse ve katalog zaten yüklüyse yeniden render etme
     if (eskiBoyut > 0 && miktarSakla.size > 0) {
