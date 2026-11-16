@@ -9,6 +9,17 @@ import { arayuzHazirla, toast, onayIste, kacisEt, tarihBicimle, ondalikOku, sayi
 
 arayuzHazirla();
 
+// Günlük sayım sayfasına bağlantı
+(() => {
+  const nav = document.getElementById("topNav");
+  if (nav && !nav.querySelector('a[href="sayim.html"]')) {
+    const yonetim = nav.querySelector('a[href="admin.html"]');
+    const a = document.createElement("a");
+    a.className = "topbar__link"; a.href = "sayim.html"; a.textContent = "Sayım";
+    nav.insertBefore(a, yonetim || null);
+  }
+})();
+
 const ROL_ETIKETI = { toplayici: "Toplayıcı", kontrolor: "Kontrolör", admin: "Admin", sube: "Şube", surucu: "Sürücü", depocu: "Depocu", paletci: "Paletçi", uretici: "Üretici", fabrika: "Fabrika" };
 const HATA_MESAJLARI = {
   "auth/email-already-in-use": "Bu e-posta adresiyle zaten bir hesap var.",

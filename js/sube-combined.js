@@ -14,6 +14,23 @@ import {
 
 arayuzHazirla();
 
+/* Günlük sayım bağlantısı (sayim.html) — bekleyen sayım varsa sayıyla gösterilir */
+async function sayimBaglantisiKur(uid) {
+  const nav = document.querySelector(".topbar__nav");
+  if (!nav || document.getElementById("sayimLink")) return;
+  nav.insertAdjacentHTML("beforeend", '<a class="topbar__link" id="sayimLink" href="sayim.html">📋 Sayım <span id="sayimSayac" class="badge badge-red u-hidden" style="font-size:11px;"></span></a>');
+  try {
+    const { db } = await import("./firebase.js");
+    const { collection, query, where, onSnapshot } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+    onSnapshot(query(collection(db, "sayimlar"), where("subeId", "==", uid), where("acik", "==", true)), (snap) => {
+      const el = document.getElementById("sayimSayac");
+      if (!el) return;
+      el.textContent = snap.size;
+      el.classList.toggle("u-hidden", snap.size === 0);
+    }, () => {});
+  } catch (e) { console.error("Sayım sayacı:", e); }
+}
+
 /* ============================================================
    ORTAK DURUM
    ============================================================ */
@@ -76,6 +93,7 @@ sayfaKorumasi(["sube", "fabrika"], (kullanici) => {
   mevcutKullanici = kullanici;
   franchiseeKullanici = !!kullanici.franchisee;
   document.getElementById("kullaniciAdi").textContent = kullanici.ad || kullanici.uid;
+  if (kullanici.rol === "sube") sayimBaglantisiKur(kullanici.uid);
   document.getElementById("rolEtiketi").textContent = kullanici.rol;
 
   if (franchiseeKullanici) {
