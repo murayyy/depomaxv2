@@ -422,66 +422,106 @@ function sevkListesiYazdir(s, gonderilenler, not) {
   });
   const e = kacisEt;
   const bugun = new Date().toLocaleString("tr-TR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  const logo = (ad) => new URL(`img/${ad}`, location.href).href;
+  const toplamYazi = Object.entries(birimToplam).map(([b, m]) => `${e(sayiBicimle(Math.round(m * 1000) / 1000))} ${e(b)}`).join(" + ") || "—";
   const html = `<!DOCTYPE html><html lang="tr"><head><meta charset="UTF-8"><title>Sevk Listesi ${e(s.no || "")}</title>
   <style>
-    @page { size: A4; margin: 14mm 12mm; }
-    * { box-sizing: border-box; }
-    body { font-family: "IBM Plex Sans", Arial, sans-serif; color: #111; font-size: 12px; margin: 0; }
-    .ust { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #111; padding-bottom: 8px; margin-bottom: 10px; }
-    h1 { font-size: 20px; margin: 0 0 4px; letter-spacing: .5px; }
-    .bilgi { font-size: 12px; line-height: 1.6; }
-    .bilgi b { display: inline-block; min-width: 88px; }
-    table { width: 100%; border-collapse: collapse; }
-    th, td { border: 1px solid #999; padding: 5px 6px; vertical-align: top; }
-    th { background: #eee; text-align: left; font-size: 11px; text-transform: uppercase; }
-    td.s, th.s { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
-    td.k { font-family: "IBM Plex Mono", monospace; font-size: 11px; white-space: nowrap; }
-    td.c { width: 34px; }
+    @page { size: A4; margin: 12mm 12mm 16mm;
+      @bottom-left { content: "Tuğlular Kuruyemiş Gıda San. Ltd. Şti."; font: 9px Arial, sans-serif; color: #6b7280; }
+      @bottom-right { content: "Sayfa " counter(page) " / " counter(pages); font: 9px Arial, sans-serif; color: #6b7280; } }
+    * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    :root { --lacivert: #12306B; --altin: #B8892B; --murekkep: #111827; --gri: #6b7280; --cizgi: #d1d5db; --zemin: #f3f5f9; }
+    body { font-family: "Segoe UI", Arial, sans-serif; color: var(--murekkep); font-size: 11.5px; margin: 0; }
+    .ust { display: grid; grid-template-columns: 170px 1fr 120px; align-items: center; gap: 14px; padding-bottom: 10px; }
+    .ust img { display: block; max-width: 100%; height: auto; }
+    .ust .marka { justify-self: end; width: 110px; }
+    .baslik { text-align: center; }
+    .baslik h1 { margin: 0; font-size: 24px; letter-spacing: 3px; color: var(--lacivert); font-weight: 800; }
+    .baslik .alt { margin-top: 3px; font-size: 11px; letter-spacing: 1.5px; color: var(--gri); text-transform: uppercase; }
+    .serit { height: 4px; background: linear-gradient(90deg, var(--lacivert) 0 70%, var(--altin) 70% 100%); border-radius: 2px; margin-bottom: 12px; }
+    .bilgi { display: grid; grid-template-columns: repeat(5, 1fr); border: 1px solid var(--cizgi); border-radius: 6px; overflow: hidden; margin-bottom: 14px; }
+    .bilgi div { padding: 7px 10px; border-right: 1px solid var(--cizgi); }
+    .bilgi div:last-child { border-right: 0; }
+    .bilgi small { display: block; font-size: 9px; text-transform: uppercase; letter-spacing: .8px; color: var(--gri); margin-bottom: 2px; }
+    .bilgi b { font-size: 12.5px; }
+    .bilgi .no b { color: var(--lacivert); font-size: 14px; }
+    table { width: 100%; border-collapse: separate; border-spacing: 0; border: 1px solid var(--cizgi); border-radius: 6px; overflow: hidden; }
+    thead th { background: var(--lacivert); color: #fff; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .7px; padding: 7px 8px; text-align: left; }
+    tbody td { padding: 6px 8px; border-top: 1px solid var(--cizgi); vertical-align: middle; }
+    tbody tr:nth-child(even) td { background: var(--zemin); }
+    thead { display: table-header-group; }
     tr { page-break-inside: avoid; }
-    .eksik { color: #B91C1C; font-weight: 600; }
-    .toplam { margin-top: 8px; font-weight: 600; }
-    .not { margin-top: 8px; padding: 6px 8px; border: 1px dashed #999; }
-    .imza { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 34px; }
-    .imza div { border-top: 1px solid #111; padding-top: 4px; text-align: center; font-size: 11px; }
-    .alt { margin-top: 14px; font-size: 10px; color: #666; text-align: right; }
+    .s { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .k { font-family: Consolas, "Courier New", monospace; font-size: 11px; color: #374151; white-space: nowrap; }
+    .sira { color: var(--gri); width: 26px; }
+    .kutu { width: 34px; text-align: center; }
+    .kutu span { display: inline-block; width: 14px; height: 14px; border: 1.5px solid #6b7280; border-radius: 3px; }
+    .gonderilen { font-weight: 700; }
+    .eksik { color: #B91C1C; }
+    .ozet { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 10px; padding: 9px 12px; border-left: 4px solid var(--altin); background: #fbf7ee; border-radius: 4px; font-size: 12px; }
+    .ozet b { color: var(--lacivert); }
+    .uyari { color: #B91C1C; font-weight: 700; }
+    .notlar { display: grid; gap: 6px; margin-top: 10px; }
+    .not { padding: 7px 10px; border: 1px solid var(--cizgi); border-radius: 4px; }
+    .not small { color: var(--gri); text-transform: uppercase; font-size: 9px; letter-spacing: .8px; display: block; margin-bottom: 2px; }
+    .imza { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 28px; page-break-inside: avoid; }
+    .imza div { border: 1px solid var(--cizgi); border-radius: 6px; padding: 8px 10px; height: 92px; position: relative; }
+    .imza h4 { margin: 0 0 4px; font-size: 10px; text-transform: uppercase; letter-spacing: .8px; color: var(--lacivert); }
+    .imza p { position: absolute; left: 10px; right: 10px; bottom: 8px; margin: 0; font-size: 9.5px; color: var(--gri); border-top: 1px dotted #9ca3af; padding-top: 3px; }
   </style></head><body>
   <div class="ust">
-    <div><h1>SEVK LİSTESİ</h1><div class="bilgi">Fabrika → Merkez</div></div>
-    <div class="bilgi">
-      <div><b>Sipariş no</b> ${e(s.no || "")}</div>
-      <div><b>Sipariş tarihi</b> ${e(tarihBicimle(s.olusturmaTarihi))}</div>
-      ${s.termin ? `<div><b>Termin</b> ${e(new Date(s.termin + "T00:00").toLocaleDateString("tr-TR"))}</div>` : ""}
-      <div><b>Hazırlayan</b> ${e(mevcutKullanici?.ad || "")}</div>
-      <div><b>Yazdırma</b> ${e(bugun)}</div>
-    </div>
+    <img src="${logo("logo-tuglular.png")}" alt="Tuğlular" />
+    <div class="baslik"><h1>SEVK LİSTESİ</h1><div class="alt">Fabrika → Merkez Depo</div></div>
+    <img class="marka" src="${logo("logo-tuglubey.png")}" alt="Tuğlubey" />
+  </div>
+  <div class="serit"></div>
+  <div class="bilgi">
+    <div class="no"><small>Sipariş No</small><b>${e(s.no || "—")}</b></div>
+    <div><small>Sipariş Tarihi</small><b>${e(tarihBicimle(s.olusturmaTarihi) || "—")}</b></div>
+    <div><small>Termin</small><b>${s.termin ? e(new Date(s.termin + "T00:00").toLocaleDateString("tr-TR")) : "—"}</b></div>
+    <div><small>Hazırlayan</small><b>${e(mevcutKullanici?.ad || "—")}</b></div>
+    <div><small>Yazdırma</small><b>${e(bugun)}</b></div>
   </div>
   <table>
-    <thead><tr><th style="width:28px;">#</th><th>Kod</th><th>Ürün</th><th class="s">İstenen</th><th class="s">Gönderilen</th><th>Birim</th><th class="c">✓</th></tr></thead>
+    <thead><tr><th class="sira">#</th><th>Stok Kodu</th><th>Ürün</th><th class="s">İstenen</th><th class="s">Gönderilen</th><th>Birim</th><th class="kutu">Kontrol</th></tr></thead>
     <tbody>${kalemler.map((k, i) => {
       const az = Number(k.gonderilen) < Number(k.miktar);
-      return `<tr><td class="s">${i + 1}</td><td class="k">${e(k.kod || "")}</td><td>${e(k.ad || "")}</td>
+      return `<tr><td class="sira s">${i + 1}</td><td class="k">${e(k.kod || "")}</td><td>${e(k.ad || "")}</td>
         <td class="s">${e(sayiBicimle(k.miktar))}</td>
-        <td class="s${az ? " eksik" : ""}">${e(sayiBicimle(k.gonderilen))}</td>
-        <td>${e(k.birim || "")}</td><td class="c"></td></tr>`;
+        <td class="s gonderilen${az ? " eksik" : ""}">${e(sayiBicimle(k.gonderilen))}</td>
+        <td>${e(k.birim || "")}</td><td class="kutu"><span></span></td></tr>`;
     }).join("")}</tbody>
   </table>
-  <div class="toplam">${gidenler.length} kalem gönderiliyor · Toplam: ${Object.entries(birimToplam).map(([b, m]) => `${e(sayiBicimle(Math.round(m * 1000) / 1000))} ${e(b)}`).join(" + ")}
-    ${eksikler.length ? ` · <span class="eksik">${eksikler.length} kalem istenenden az</span>` : ""}</div>
-  ${s.not ? `<div class="not"><b>Sipariş notu:</b> ${e(s.not)}</div>` : ""}
-  ${not ? `<div class="not"><b>Gönderim notu:</b> ${e(not)}</div>` : ""}
-  <div class="imza"><div>Teslim eden (Fabrika)</div><div>Araç / Şoför</div><div>Teslim alan (Merkez)</div></div>
-  <div class="alt">Depomax</div>
+  <div class="ozet">
+    <span><b>${gidenler.length}</b> kalem gönderiliyor</span>
+    <span>Toplam: <b>${toplamYazi}</b></span>
+    ${eksikler.length ? `<span class="uyari">${eksikler.length} kalem istenenden az</span>` : `<span>Tüm kalemler tam</span>`}
+  </div>
+  ${(s.not || not) ? `<div class="notlar">
+    ${s.not ? `<div class="not"><small>Sipariş notu</small>${e(s.not)}</div>` : ""}
+    ${not ? `<div class="not"><small>Gönderim notu</small>${e(not)}</div>` : ""}
+  </div>` : ""}
+  <div class="imza">
+    <div><h4>Teslim Eden — Fabrika</h4><p>Ad Soyad / İmza</p></div>
+    <div><h4>Araç / Şoför</h4><p>Plaka · Ad Soyad / İmza</p></div>
+    <div><h4>Teslim Alan — Merkez</h4><p>Ad Soyad / İmza / Tarih</p></div>
+  </div>
   </body></html>`;
   const cerceve = document.createElement("iframe");
   cerceve.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;";
   document.body.appendChild(cerceve);
   const d = cerceve.contentWindow.document;
   d.open(); d.write(html); d.close();
-  setTimeout(() => {
+  // Logolar yüklenince (en fazla 3 sn) yazdır
+  const resimler = [...d.images];
+  Promise.race([
+    Promise.all(resimler.map((r) => r.complete ? 0 : new Promise((ok) => { r.onload = r.onerror = ok; }))),
+    new Promise((ok) => setTimeout(ok, 3000))
+  ]).then(() => {
     cerceve.contentWindow.focus();
     cerceve.contentWindow.print();
     setTimeout(() => cerceve.remove(), 60000);
-  }, 300);
+  });
 }
 
 function merkezDetayAc(s) {
