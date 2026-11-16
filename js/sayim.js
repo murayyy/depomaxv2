@@ -117,7 +117,7 @@ async function listeOlusturModal() {
     <div class="modal-backdrop" data-role="backdrop"><div class="modal" style="max-width:480px;">
       <h3>✨ Akıllı Sayım Listesi — ${tarihGoster(gun)}</h3>
       <p style="font-size:13px;color:var(--color-ink-soft);">Sistem her şube için şunları önerir: Mikro'da eksi stoğa düşenler, son 7 günde teslimatta fark çıkanlar ve sırası gelen ürünler (çok satanlar haftada bir, orta satanlar 2 haftada bir, az satanlar ayda bir). Listeyi göndermeden önce düzenleyebilirsiniz.</p>
-      <div class="field"><label>Şube başına en fazla ürün</label><input class="input" id="oneriAdet" type="number" min="5" max="200" value="30" /></div>
+      <div class="field"><label>Şube başına en fazla ürün</label><input class="input" id="oneriAdet" type="number" min="1" max="200" value="10" /></div>
       <div style="display:flex;gap:8px;margin-bottom:6px;"><button class="btn btn-ghost btn-sm" id="hepsiSec">Tümünü seç</button><button class="btn btn-ghost btn-sm" id="hicbiri">Temizle</button></div>
       <div style="max-height:320px;overflow:auto;border:1px solid var(--color-border);border-radius:8px;padding:6px 10px;">
         ${subeler.map((s) => {
@@ -135,7 +135,7 @@ async function listeOlusturModal() {
   modalRoot.querySelector("#hepsiSec").onclick = () => modalRoot.querySelectorAll("[data-sube]:not(:disabled)").forEach((c) => { c.checked = true; });
   modalRoot.querySelector("#hicbiri").onclick = () => modalRoot.querySelectorAll("[data-sube]").forEach((c) => { c.checked = false; });
   modalRoot.querySelector('[data-role="olustur"]').onclick = async () => {
-    const adet = Math.max(5, Math.min(200, parseInt(modalRoot.querySelector("#oneriAdet").value) || 30));
+    const adet = Math.max(1, Math.min(200, parseInt(modalRoot.querySelector("#oneriAdet").value) || 10));
     const secilen = [...modalRoot.querySelectorAll("[data-sube]:checked")].map((c) => subeler.find((s) => s.uid === c.dataset.sube));
     if (!secilen.length) { toast("Şube seçin.", "error"); return; }
     try {
@@ -184,8 +184,8 @@ function sayimCiz(s, fark) {
   let govde = "";
 
   if (["oneri_bekleniyor", "oneri_hazirlaniyor"].includes(s.durum)) {
-    govde = `<p class="u-text-soft">Sunucu Mikro'dan bu şubenin hareketlerine bakıp liste öneriyor. Birkaç saniye sürer. (Sunucu kapalıysa açılınca hazırlanır.)</p>
-      <div class="modal__actions"><button class="btn btn-danger" data-is="sil">Sil</button></div>`;
+    govde = `<p class="u-text-soft">Listeyi Mikro'ya bağlı sunucu (API) hazırlar; birkaç saniye sürer. Uzun süre bu ekranda kalıyorsa API çalışmıyor ya da yeni dosyalarla yeniden başlatılmamış demektir — API penceresinde "[Sayım]" satırlarına bakın.</p>
+      <div class="modal__actions"><button class="btn btn-danger" data-is="sil">Sil</button><button class="btn btn-ghost" data-is="elle">Öneriyi bekleme, elle hazırla</button></div>`;
   } else if (s.durum === "hazirlaniyor") {
     if (!duzenKalemler || duzenKalemler.id !== s.id) duzenKalemler = { id: s.id, liste: kalemler.map((k) => ({ ...k })) };
     const l = duzenKalemler.liste;
@@ -296,6 +296,7 @@ function sayimOlaylari(s, fark) {
       duzenKalemler = null;
     };
   }
+  is("elle") && (is("elle").onclick = () => guncelle({ durum: "hazirlaniyor", sunucuMesaj: "" }, "Listeyi elle hazırlayabilirsiniz."));
   is("gericek") && (is("gericek").onclick = async () => {
     if (!(await onayIste({ baslik: "Geri çek", metin: "Liste şubeden geri alınacak; şubenin girdiği miktarlar silinmez.", onayMetni: "Geri çek" }))) return;
     guncelle({ durum: "hazirlaniyor", acik: false }, "Geri çekildi.");
