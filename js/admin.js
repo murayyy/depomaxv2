@@ -327,6 +327,46 @@ document.getElementById("yeniKullaniciBtn2").addEventListener("click", yeniKulla
 /* ============================================================================
    KATALOG YÖNETİMİ
    ============================================================================ */
+// Ürün bazında mağaza görünürlüğü: katalog.gorenSubeler = [şube uid, ...]  (boş = tüm mağazalar)
+const katalogSecili = new Set();
+function subeKullanicilari() {
+  return kullaniciListesi.filter((k) => k.rol === "sube")
+    .sort((a, b) => (a.subeAdi || a.ad || "").localeCompare(b.subeAdi || b.ad || "", "tr"));
+}
+function gorunurlukRozeti(u) {
+  const l = Array.isArray(u.gorenSubeler) ? u.gorenSubeler : [];
+  if (!l.length) return "";
+  const adlar = l.map((uid) => { const k = kullaniciListesi.find((x) => x.uid === uid); return k ? (k.subeAdi || k.ad) : "?"; });
+  return ` <span class="badge badge-amber" title="${kacisEt(adlar.join(", "))}">🔒 ${l.length} mağaza</span>`;
+}
+function gorunurlukSecimHtml(secili) {
+  const sec = new Set(secili || []);
+  const subeler = subeKullanicilari();
+  return `
+    <div class="field">
+      <label>Hangi mağazalar görsün?</label>
+      <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:13px;margin-bottom:6px;">
+        <label style="display:flex;gap:6px;align-items:center;"><input type="radio" name="gorunurluk" value="hepsi" ${sec.size ? "" : "checked"} /> Tüm mağazalar</label>
+        <label style="display:flex;gap:6px;align-items:center;"><input type="radio" name="gorunurluk" value="secili" ${sec.size ? "checked" : ""} /> Sadece seçtiğim mağazalar</label>
+      </div>
+      <div id="gorunurlukListe" class="${sec.size ? "" : "u-hidden"}" style="max-height:200px;overflow:auto;border:1px solid var(--color-border);border-radius:8px;padding:6px 10px;">
+        ${subeler.map((k) => `<label style="display:flex;gap:8px;align-items:center;padding:4px 0;font-size:13px;">
+          <input type="checkbox" data-gorur="${k.uid}" ${sec.has(k.uid) ? "checked" : ""} /> ${kacisEt(k.subeAdi || k.ad || k.uid)}
+          ${k.franchisee ? '<span class="badge badge-gray" style="font-size:10px;">Franchise</span>' : ""}</label>`).join("") || "<div class='u-text-soft'>Şube kullanıcısı yok.</div>"}
+      </div>
+    </div>`;
+}
+function gorunurlukBagla(root) {
+  root.querySelectorAll('input[name="gorunurluk"]').forEach((r) => r.addEventListener("change", () => {
+    root.querySelector("#gorunurlukListe").classList.toggle("u-hidden", r.value !== "secili" || !r.checked);
+  }));
+}
+function gorunurlukOku(root) {
+  const mod = root.querySelector('input[name="gorunurluk"]:checked')?.value || "hepsi";
+  if (mod === "hepsi") return [];
+  return [...root.querySelectorAll("[data-gorur]:checked")].map((c) => c.dataset.gorur);
+}
+
 function renderKatalog() {
   const tbody = document.getElementById("katalogTabloGovde");
   const kartGovde = document.getElementById("katalogKartGovde");
@@ -363,8 +403,14 @@ function renderKatalog() {
   }
   bos.classList.add("u-hidden");
 
+  const thead = tbody.closest("table")?.querySelector("thead tr");
+  if (thead && !thead.querySelector("#katalogHepsiSec")) {
+    thead.insertAdjacentHTML("afterbegin", '<th style="width:28px;"><input type="checkbox" id="katalogHepsiSec" title="Listedekilerin hepsini seç" /></th>');
+  }
+  gorunurlukAracCubugu();
   tbody.innerHTML = liste.map((u) => `
     <tr data-uid="${u.id}">
+      <td><input type="checkbox" data-ksec="${u.id}" ${katalogSecili.has(u.id) ? "checked" : ""} /></td>
       <td class="cell-code">${u.sira || "—"}</td>
       <td class="cell-code">${kacisEt(u.stokKodu || "—")}</td>
       <td class="cell-code">${kacisEt(u.barkod || "—")}</td>
@@ -374,7 +420,7 @@ function renderKatalog() {
       <td>${u.minMiktar ? sayiBicimle(u.minMiktar) : "—"}</td>
       <td>${u.birimAgirlik ? sayiBicimle(u.birimAgirlik) + " KG" : "—"}</td>
       <td>${kacisEt(u.reyon || "")}</td>
-      <td><span class="badge ${u.aktif === false ? "badge-gray" : "badge-green"}">${u.aktif === false ? "Pasif" : "Aktif"}</span></td>
+      <td><span class="badge ${u.aktif === false ? "badge-gray" : "badge-green"}">${u.aktif === false ? "Pasif" : "Aktif"}</span>${gorunurlukRozeti(u)}</td>
       <td style="display:flex;gap:6px;">
         <button class="btn btn-ghost btn-sm" data-duzenle="${u.id}">Düzenle</button>
         <button class="btn btn-danger btn-sm" data-sil="${u.id}">Sil</button>
@@ -388,14 +434,28 @@ function renderKatalog() {
           <div class="row-card__name">${kacisEt(u.ad)}</div>
           <div class="row-card__code">${kacisEt(u.birim || "")} · Min: ${u.minMiktar ? sayiBicimle(u.minMiktar) : "—"}</div>
         </div>
-        <span class="badge ${u.aktif === false ? "badge-gray" : "badge-green"}">${u.aktif === false ? "Pasif" : "Aktif"}</span>
+        <span class="badge ${u.aktif === false ? "badge-gray" : "badge-green"}">${u.aktif === false ? "Pasif" : "Aktif"}</span>${gorunurlukRozeti(u)}
       </div>
       <div class="row-card__actions">
+        <label style="display:flex;gap:6px;align-items:center;font-size:12.5px;margin-right:auto;"><input type="checkbox" data-ksec="${u.id}" ${katalogSecili.has(u.id) ? "checked" : ""} /> Seç</label>
         <button class="btn btn-ghost btn-sm" data-duzenle="${u.id}">Düzenle</button>
         <button class="btn btn-danger btn-sm" data-sil="${u.id}">Sil</button>
       </div>
     </div>`).join("");
 
+  document.querySelectorAll("[data-ksec]").forEach((cb) => cb.addEventListener("change", () => {
+    cb.checked ? katalogSecili.add(cb.dataset.ksec) : katalogSecili.delete(cb.dataset.ksec);
+    document.querySelectorAll(`[data-ksec="${cb.dataset.ksec}"]`).forEach((x) => { x.checked = cb.checked; });
+    gorunurlukAracCubugu();
+  }));
+  const hepsi = document.getElementById("katalogHepsiSec");
+  if (hepsi) {
+    hepsi.checked = liste.length > 0 && liste.every((u) => katalogSecili.has(u.id));
+    hepsi.onchange = () => {
+      liste.forEach((u) => hepsi.checked ? katalogSecili.add(u.id) : katalogSecili.delete(u.id));
+      renderKatalog();
+    };
+  }
   document.querySelectorAll("[data-duzenle]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const u = katalogListesi.find((x) => x.id === btn.dataset.duzenle);
@@ -411,6 +471,56 @@ function renderKatalog() {
       toast("Ürün silindi.", "success");
     });
   });
+}
+
+function gorunurlukAracCubugu() {
+  const yer = document.getElementById("katalogExcelIndir");
+  if (!yer) return;
+  let btn = document.getElementById("gorunurlukTopluBtn");
+  if (!btn) {
+    btn = document.createElement("button");
+    btn.id = "gorunurlukTopluBtn";
+    btn.className = "btn btn-ghost";
+    btn.addEventListener("click", gorunurlukTopluModal);
+    yer.insertAdjacentElement("afterend", btn);
+  }
+  btn.textContent = katalogSecili.size ? `🔒 Mağaza Görünürlüğü (${katalogSecili.size} ürün)` : "🔒 Mağaza Görünürlüğü";
+}
+
+function gorunurlukTopluModal() {
+  if (!katalogSecili.size) { toast("Önce listeden ürünleri seçin (başlıktaki kutu listedekilerin hepsini seçer).", "info"); return; }
+  const urunler = katalogListesi.filter((u) => katalogSecili.has(u.id));
+  // Hepsinde aynı seçim varsa onu göster
+  const ilk = JSON.stringify([...(urunler[0]?.gorenSubeler || [])].sort());
+  const ortak = urunler.every((u) => JSON.stringify([...(u.gorenSubeler || [])].sort()) === ilk) ? (urunler[0]?.gorenSubeler || []) : [];
+  const root = document.getElementById("modalRoot");
+  root.innerHTML = `
+    <div class="modal-backdrop" data-role="backdrop"><div class="modal" style="max-width:520px;">
+      <h3>🔒 Mağaza Görünürlüğü</h3>
+      <p style="font-size:13px;">${urunler.length} ürün seçili: <span class="u-text-soft">${kacisEt(urunler.slice(0, 6).map((u) => u.ad).join(", "))}${urunler.length > 6 ? "…" : ""}</span></p>
+      ${gorunurlukSecimHtml(ortak)}
+      <p class="u-text-soft" style="font-size:12px;">Seçilmeyen mağazalar bu ürünleri sipariş ekranında görmez. "Tüm mağazalar" kısıtlamayı kaldırır.</p>
+      <div class="modal__actions">
+        <button class="btn btn-ghost" data-role="iptal">Vazgeç</button>
+        <button class="btn btn-primary" data-role="onay">Kaydet</button>
+      </div>
+    </div></div>`;
+  const kapat = () => { root.innerHTML = ""; };
+  root.querySelector('[data-role="iptal"]').onclick = kapat;
+  root.querySelector('[data-role="backdrop"]').onclick = (e) => { if (e.target.dataset.role === "backdrop") kapat(); };
+  gorunurlukBagla(root);
+  root.querySelector('[data-role="onay"]').onclick = async () => {
+    const liste = gorunurlukOku(root);
+    if (root.querySelector('input[name="gorunurluk"]:checked')?.value === "secili" && !liste.length) { toast("En az bir mağaza seçin.", "error"); return; }
+    try {
+      await Promise.all(urunler.map((u) => katalogUrunGuncelle(u.id, { gorenSubeler: liste })));
+      urunler.forEach((u) => { u.gorenSubeler = liste; });
+      toast(liste.length ? `${urunler.length} ürün artık sadece ${liste.length} mağazada görünür.` : `${urunler.length} ürün tüm mağazalarda görünür.`, "success");
+      katalogSecili.clear();
+      kapat();
+      renderKatalog();
+    } catch (err) { toast("Kaydedilemedi: " + (err.message || err), "error"); }
+  };
 }
 
 function katalogModalAc(mevcut) {
@@ -438,6 +548,7 @@ function katalogModalAc(mevcut) {
             <option value="false" ${mevcut?.aktif === false ? "selected" : ""}>Pasif (şubelerde gizli)</option>
           </select>
         </div>
+        ${gorunurlukSecimHtml(mevcut?.gorenSubeler)}
         <div class="modal__actions">
           <button class="btn btn-ghost" data-role="iptal">Vazgeç</button>
           <button class="btn btn-primary" data-role="onay">${mevcut ? "Kaydet" : "Ekle"}</button>
@@ -447,6 +558,7 @@ function katalogModalAc(mevcut) {
   const kapat = () => { root.innerHTML = ""; };
   root.querySelector('[data-role="iptal"]').onclick = kapat;
   root.querySelector('[data-role="backdrop"]').onclick = (e) => { if (e.target.dataset.role === "backdrop") kapat(); };
+  gorunurlukBagla(root);
   root.querySelector('[data-role="onay"]').onclick = async () => {
     const ad = document.getElementById("kuAd").value.trim();
     if (!ad) { toast("Ürün adı zorunlu.", "error"); return; }
@@ -461,11 +573,17 @@ function katalogModalAc(mevcut) {
       reyon: document.getElementById("kuReyon").value.trim(),
       sira: parseInt(document.getElementById("kuSira").value, 10) || 0,
       aciklama: document.getElementById("kuAciklama").value.trim(),
-      aktif: document.getElementById("kuAktif").value === "true"
+      aktif: document.getElementById("kuAktif").value === "true",
+      gorenSubeler: gorunurlukOku(root)
     };
+    if (root.querySelector('input[name="gorunurluk"]:checked')?.value === "secili" && !veri.gorenSubeler.length) {
+      toast("En az bir mağaza seçin ya da \"Tüm mağazalar\" deyin.", "error"); return;
+    }
     try {
       if (mevcut) {
         await katalogUrunGuncelle(mevcut.id, veri);
+        Object.assign(mevcut, veri);
+        renderKatalog();
         toast("Güncellendi.", "success");
       } else {
         await katalogUrunEkle(veri);

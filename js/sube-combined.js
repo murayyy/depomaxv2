@@ -53,6 +53,9 @@ function kisitliReyonu(u) {
   return null;
 }
 function urunGorunurMu(u, kullanici) {
+  if (kullanici?.rol !== "sube") return true;  // admin, fabrika vb. hepsini görür
+  // Ürüne özel mağaza listesi (Yönetim > Katalog > 🔒 Mağaza Görünürlüğü) varsa o geçerli
+  if (Array.isArray(u.gorenSubeler) && u.gorenSubeler.length) return u.gorenSubeler.includes(kullanici.uid);
   const r = kisitliReyonu(u);
   if (!r) return true;
   if (kullanici?.rol !== "sube") return true;  // admin, fabrika vb. hepsini görür
