@@ -6,7 +6,7 @@
 // verisiyle karşılaştırır. Stok gelmiş ürünler üstte ve yeşil rozetle çıkar.
 // ============================================================================
 import { auth, signOut, sayfaKorumasi } from "./firebase.js";
-import { tumSiparisleriGetir, urunleriniGetir, urunGuncelle, urunEkle, urunSil, rafKalemHaritasiGetir, katalogDinle, stokDusur } from "./veri.js?v=20261112";
+import { tumSiparisleriGetir, urunleriniGetir, urunGuncelle, urunEkle, urunSil, rafKalemHaritasiGetir, katalogDinle, stokDusur } from "./veri.js?v=20261118";
 import { stoklariDinle, stokBildirimGoruldu } from "./stok.js";
 import { arayuzHazirla, toast, onayIste, girdiIste, kacisEt, sayiBicimle, ondalikOku, yukleniyorGoster, yukleniyorKapat } from "./utils.js";
 
@@ -407,7 +407,7 @@ function detayModalAc(grup) {
             toplayanKullanici: mevcutKullanici.ad || mevcutKullanici.uid
           });
           // Toplama ekranındaki gibi: gözaltı ve toplama gözü toplanan miktar kadar düşer
-          if (kayit?.kod && yeniMiktar > 0) stokDusur(kayit.kod, yeniMiktar);
+          if (kayit?.kod && yeniMiktar > 0) stokDusur(kayit.kod, yeniMiktar, kayit);
           yukleniyorKapat();
           toast("Ürün toplandı olarak işaretlendi.", "success");
           miktarRoot.innerHTML = "";

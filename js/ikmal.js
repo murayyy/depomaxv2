@@ -7,10 +7,10 @@
 // ============================================================================
 import { auth, signOut, sayfaKorumasi } from "./firebase.js";
 import {
-  ikmalBekleyenleriDinle, gozIkmalYap, gozKaydet, gozSil, gozleriTopluKaydet,
+  ikmalBekleyenleriDinle, gozIkmalYap, gozKaydet, gozSil, gozleriTopluKaydet, gozId,
   tumGozleriGetir, tumGozleriDinle, gozHareketleriniGetir, katalogDinle,
   rafKalemleriniBul, rafKalemiGuncelle, rafKalemiSil, rafHareketiKaydet
-} from "./veri.js?v=20261112";
+} from "./veri.js?v=20261118";
 import {
   arayuzHazirla, toast, onayIste, kacisEt, sayiBicimle, ondalikOku, sesCal,
   reyonKarsilastir, excelDosyasiniOku, tarihBicimle
@@ -488,7 +488,8 @@ function gozModalAc(mevcut) {
     const seviyeStr = document.getElementById("gzSeviye").value.trim();
     if (!kod) { toast("Stok kodu zorunlu.", "error"); return; }
     if (miktarStr === "" || seviyeStr === "") { toast("Gözdeki miktar ve uyarı seviyesi zorunlu.", "error"); return; }
-    if (!mevcut && tumGozler.some((g) => g.id === kod)) { toast("Bu ürün için zaten göz tanımlı, listeden düzenleyin.", "error"); return; }
+    const yeniId = gozId(kod, document.getElementById("gzReyon").value.trim());
+    if (!mevcut && tumGozler.some((g) => g.id === yeniId)) { toast("Bu ürün için bu reyonda zaten göz tanımlı, listeden düzenleyin.", "error"); return; }
     const veri = {
       ad: document.getElementById("gzAd").value.trim(),
       reyon: document.getElementById("gzReyon").value.trim(),
@@ -497,7 +498,7 @@ function gozModalAc(mevcut) {
       uyariSeviyesi: ondalikOku(seviyeStr) || 0
     };
     try {
-      await gozKaydet(kod, veri, kullaniciAdi(), "sayim");
+      await gozKaydet(kod, veri, kullaniciAdi(), "sayim", mevcut ? mevcut.id : null);
       kapat();
       toast(mevcut ? "Güncellendi." : "Toplama gözü tanımlandı.", "success");
       tumGozleriYukle();

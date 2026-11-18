@@ -6,7 +6,7 @@ import {
   katalogDinle, subeSimarisiOlustur,
   subeSiparisleriDinle, urunleriniGetir, urunEkle,
   teslimatKaydet, teslimatYenidenOnayla, siparisGuncelle
-} from "./veri.js?v=20261112";
+} from "./veri.js?v=20261118";
 import {
   arayuzHazirla, toast, onayIste, ondalikOku,
   sayiBicimle, kacisEt, excelDosyasiniOku, tarihBicimle
@@ -52,6 +52,16 @@ function kisitliReyonu(u) {
   }
   return null;
 }
+// Katalogdaki grup adı: kısıtlı reyon ürünleri (ADA) kendi grubunda, diğerleri kategorisinde
+function katAdi(u) {
+  const r = kisitliReyonu(u);
+  return r ? `🏝 ${r} REYONU` : ((u.kategori || "").trim() || "Diğer");
+}
+function reyonRozeti(u) {
+  const r = kisitliReyonu(u);
+  return r ? ` <span class="badge badge-amber" style="font-size:10.5px;vertical-align:middle;">🏝 ${r}</span>` : "";
+}
+
 function urunGorunurMu(u, kullanici) {
   if (kullanici?.rol !== "sube") return true;  // admin, fabrika vb. hepsini görür
   // Ürüne özel mağaza listesi (Yönetim > Katalog > 🔒 Mağaza Görünürlüğü) varsa o geçerli
@@ -163,7 +173,8 @@ function katalogGuncellendi() {
   document.getElementById("bosKatalog").classList.add("u-hidden");
   document.getElementById("katalogAlani").classList.remove("u-hidden");
 
-  const kategoriler = [...new Set(katalogCache.map(u => (u.kategori || "").trim()).filter(Boolean))].sort();
+  const kategoriler = [...new Set(katalogCache.map(u => katAdi(u)).filter(k => k && k !== "Diğer"))]
+    .sort((a, b) => (b.startsWith("🏝") - a.startsWith("🏝")) || a.localeCompare(b, "tr"));
   const sel = document.getElementById("kategoriFiltre");
   const mevcut = sel.value;
   sel.innerHTML = '<option value="">Tüm Kategoriler</option>' +
@@ -229,29 +240,31 @@ function renderKatalog() {
   const gruplama = siralama === "sira";
   const gruplar = new Map();
   sirali.forEach(u => {
-    const k = gruplama ? ((u.kategori || "").trim() || "Diğer") : "Tüm Ürünler";
+    const k = gruplama ? katAdi(u) : "Tüm Ürünler";
     if (!gruplar.has(k)) gruplar.set(k, []);
     gruplar.get(k).push(u);
   });
 
   let tabloHtml = "", kartHtml = "";
-  gruplar.forEach((urunler, kategori) => {
+  // Kısıtlı reyon grupları (🏝 ADA REYONU) en üstte
+  const grupSirasi = [...gruplar.keys()].sort((a, b) => b.startsWith("🏝") - a.startsWith("🏝"));
+  grupSirasi.map(k => [k, gruplar.get(k)]).forEach(([kategori, urunler]) => {
     tabloHtml += `<tr class="kat-baslik" data-kategori="${kacisEt(kategori)}"><td colspan="6" style="background:var(--color-surface-2);font-weight:700;font-size:12.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--color-ink-soft);padding:8px 12px;">${kacisEt(kategori)}</td></tr>`;
     kartHtml += `<div class="kat-baslik-kart" data-kategori="${kacisEt(kategori)}" style="background:var(--color-surface-2);font-weight:700;font-size:12px;text-transform:uppercase;color:var(--color-ink-soft);padding:8px 12px;border-radius:var(--radius-sm);margin:14px 0 6px;">${kacisEt(kategori)}</div>`;
     urunler.forEach(u => {
-      const araAnahtar = [(u.ad || ""), (u.stokKodu || ""), (u.barkod || ""), (u.kategori || "")].join(" ").toLowerCase();
-      tabloHtml += `<tr data-uid="${u.id}" data-ara="${araAnahtar}" data-kat="${kacisEt((u.kategori || "").trim() || "Diğer")}">
+      const araAnahtar = [(u.ad || ""), (u.stokKodu || ""), (u.barkod || ""), (u.kategori || ""), (kisitliReyonu(u) || "")].join(" ").toLocaleLowerCase("tr");
+      tabloHtml += `<tr data-uid="${u.id}" data-ara="${araAnahtar}" data-kat="${kacisEt(katAdi(u))}">
         <td class="cell-code" style="font-size:12px;">${kacisEt(u.stokKodu || "—")}</td>
-        <td><div style="font-weight:600;">${kacisEt(u.ad)}</div></td>
+        <td><div style="font-weight:600;">${kacisEt(u.ad)}${reyonRozeti(u)}</div></td>
         <td>${kacisEt(u.birim || "")}</td>
         <td>${u.minMiktar ? sayiBicimle(u.minMiktar) : "—"}</td>
         <td><input type="text" inputmode="decimal" class="cell-qty-input miktar-input" data-id="${u.id}" placeholder="0" style="width:80px;" /></td>
         <td><input type="text" class="input aciklama-input" data-id="${u.id}" placeholder="Not…" style="min-width:120px;font-size:12.5px;" /></td>
       </tr>`;
-      kartHtml += `<div class="row-card" data-uid="${u.id}" data-ara="${araAnahtar}" data-kat="${kacisEt((u.kategori || "").trim() || "Diğer")}">
+      kartHtml += `<div class="row-card" data-uid="${u.id}" data-ara="${araAnahtar}" data-kat="${kacisEt(katAdi(u))}">
         <div class="row-card__top">
           <div>
-            <div class="row-card__name">${kacisEt(u.ad)}</div>
+            <div class="row-card__name">${kacisEt(u.ad)}${reyonRozeti(u)}</div>
             <div class="row-card__code">${kacisEt(u.stokKodu || "")} · ${kacisEt(u.birim || "")}</div>
           </div>
         </div>
@@ -267,8 +280,8 @@ function renderKatalog() {
   // Arama haritasını doldur
   katalogCache.forEach(u => {
     urunAraHaritasi.set(u.id, {
-      ara: [(u.ad || ""), (u.stokKodu || ""), (u.barkod || ""), (u.kategori || "")].join(" ").toLowerCase(),
-      kat: (u.kategori || "").trim() || "Diğer"
+      ara: [(u.ad || ""), (u.stokKodu || ""), (u.barkod || ""), (u.kategori || ""), (kisitliReyonu(u) || "")].join(" ").toLocaleLowerCase("tr"),
+      kat: katAdi(u)
     });
   });
 
@@ -381,7 +394,8 @@ document.getElementById("siparisGonderBtn")?.addEventListener("click", async () 
   btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>';
   try {
     const satirlar = katalogCache.filter(u => miktarSakla.has(u.id)).map(u => ({
-      ...u, miktar: ondalikOku(miktarSakla.get(u.id)), subeNotu: notSakla.get(u.id) || ""
+      ...u, miktar: ondalikOku(miktarSakla.get(u.id)), subeNotu: notSakla.get(u.id) || "",
+      ozelReyon: kisitliReyonu(u) || ""   // toplama/kontrolde "🏝 ADA" olarak ayrı görünsün
     }));
     const tumSatirlar = [...satirlar, ...ozelKalemler.map(k => ({
       id: `ozel_${Date.now()}_${Math.random().toString(36).slice(2,7)}`,
@@ -421,7 +435,9 @@ document.getElementById("excelYukleInput")?.addEventListener("change", async (e)
       const ad = String(satir["Ürün Adı"] || satir["urun adi"] || satir["Ad"] || satir["ad"] || "").trim();
       const miktar = ondalikOku(String(satir["Miktar"] || satir["miktar"] || "0"));
       if (!miktar) return;
-      const urun = katalogCache.find(u => (kod && (u.stokKodu === kod)) || (ad && u.ad === ad));
+      const reyonX = reyonNormal(satir["Reyon"] || satir["reyon"] || "");
+      const adaylar = katalogCache.filter(u => (kod && (u.stokKodu === kod)) || (ad && u.ad === ad));
+      const urun = adaylar.find(u => (kisitliReyonu(u) || "") === (KISITLI_REYONLAR.includes(reyonX) ? reyonX : "")) || adaylar[0];
       if (urun) { miktarSakla.set(urun.id, String(miktar)); eslesen++; }
     });
     e.target.value = "";

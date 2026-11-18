@@ -6,7 +6,7 @@ import {
   siparisleriDinle, siparisOlustur, siparisGuncelle, tumSiparisleriCanliDinle,
   urunleriDinle, urunleriTopluEkle, urunEkle, urunGuncelle, urunSil,
   stokDusur, stokGeriEkle, katalogDinle, siparisiSil, siparisiGeriGonder
-} from "./veri.js?v=20261112";
+} from "./veri.js?v=20261118";
 import { stoklariDinle, stokRozetiHtml } from "./stok.js?v=20261030c";
 import {
   arayuzHazirla, toast, onayIste, yukleniyorGoster, yukleniyorKapat,
@@ -467,11 +467,22 @@ function stokRiskBanneriniGoster() {
     </div>`;
 }
 
+/* Kısıtlı reyon (ADA) ürünü: aynı ürün normal reyonda da olabildiği için belirgin işaretlenir */
+function adaMi(u) {
+  if (u.ozelReyon) return u.ozelReyon;
+  const r = String(u.reyon || "").trim().toLocaleUpperCase("tr");
+  return (r === "ADA" || r.startsWith("ADA-") || r.startsWith("ADA ")) ? "ADA" : "";
+}
+function adaRozeti(u) {
+  const r = adaMi(u);
+  return r ? ` <span class="badge" style="background:#F59E0B;color:#fff;font-weight:700;font-size:11px;vertical-align:middle;">🏝 ${kacisEt(r)}</span>` : "";
+}
+
 function satirHtml(u, saltOkunur) {
   return `
     <tr class="${durumSinifi(u)}" data-uid="${u.id}">
       <td class="cell-code">${kacisEt(u.kod)}</td>
-      <td>${kacisEt(u.ad)}</td>
+      <td>${kacisEt(u.ad)}${adaRozeti(u)}</td>
       <td><input type="text" inputmode="decimal" class="cell-qty-input" data-rol="miktar" value="${u.miktar || 0}" ${saltOkunur ? "disabled" : ""} /></td>
       <td>${kacisEt(u.birim || "—")}</td>
       <td>${depoStokHucresi(u.kod)}</td>
@@ -490,7 +501,7 @@ function kartHtml(u, saltOkunur) {
     <div class="row-card ${durumSinifi(u)}" data-uid="${u.id}">
       <div class="row-card__top">
         <div>
-          <div class="row-card__name">${kacisEt(u.ad)}</div>
+          <div class="row-card__name">${kacisEt(u.ad)}${adaRozeti(u)}</div>
           <div class="row-card__code">${kacisEt(u.kod)} · ${kacisEt(u.barkod || "barkod yok")}</div>
         </div>
         <span class="reyon-tag">${kacisEt(u.reyon || "—")}</span>
@@ -530,10 +541,10 @@ function baglaSatirOlaylari(kapsayici, saltOkunur) {
         const patch = toplandiCb.checked ? { toplandi: true, eksik: false } : { toplandi: false };
         if (toplandiCb.checked) {
           patch.toplayanKullanici = mevcutKullanici.ad || mevcutKullanici.uid;
-          if (urun?.kod && !urun.toplandi) stokDusur(urun.kod, urun.miktar);
+          if (urun?.kod && !urun.toplandi) stokDusur(urun.kod, urun.miktar, urun);
           if (urun) { urun.toplandi = true; urun.eksik = false; }  // önbellek hemen güncellenir
         } else {
-          if (urun?.kod && urun.toplandi) stokGeriEkle(urun.kod, urun.miktar);
+          if (urun?.kod && urun.toplandi) stokGeriEkle(urun.kod, urun.miktar, urun);
           if (urun) urun.toplandi = false;
         }
         urunGuncelle(aktifSiparis.id, uid, patch);
@@ -550,7 +561,7 @@ function baglaSatirOlaylari(kapsayici, saltOkunur) {
         if (eksikCb.checked) {
           patch.toplayanKullanici = mevcutKullanici.ad || mevcutKullanici.uid;
           // Toplandı işaretliyken eksiğe çevrildiyse düşülen stok/göz geri eklenir
-          if (urun?.kod && urun.toplandi) stokGeriEkle(urun.kod, urun.miktar);
+          if (urun?.kod && urun.toplandi) stokGeriEkle(urun.kod, urun.miktar, urun);
           if (urun) { urun.toplandi = false; urun.eksik = true; }
         } else if (urun) {
           urun.eksik = false;
@@ -573,8 +584,8 @@ function baglaSatirOlaylari(kapsayici, saltOkunur) {
 function toplananMiktarFarkiniUygula(urun, yeniMiktar) {
   if (!urun || !urun.toplandi || !urun.kod) return;
   const fark = (Number(yeniMiktar) || 0) - (Number(urun.miktar) || 0);
-  if (fark > 0) stokDusur(urun.kod, fark);
-  else if (fark < 0) stokGeriEkle(urun.kod, -fark);
+  if (fark > 0) stokDusur(urun.kod, fark, urun);
+  else if (fark < 0) stokGeriEkle(urun.kod, -fark, urun);
   urun.miktar = Number(yeniMiktar) || 0;
 }
 
@@ -736,7 +747,7 @@ function taramaSonucModalAc(urun) {
     // Stoktan düş: zaten toplanmışsa sadece miktar farkı, değilse tamamı
     if (guncel.kod) {
       if (guncel.toplandi) toplananMiktarFarkiniUygula(guncel, miktar);
-      else stokDusur(guncel.kod, miktar);
+      else stokDusur(guncel.kod, miktar, guncel);
     }
     guncel.toplandi = true; guncel.eksik = false; guncel.miktar = miktar;
     await urunGuncelle(aktifSiparis.id, urun.id, { toplandi: true, eksik: false, miktar, toplayanKullanici: mevcutKullanici.ad || mevcutKullanici.uid });
@@ -746,7 +757,7 @@ function taramaSonucModalAc(urun) {
   root.querySelector('[data-role="eksik"]').onclick = async () => {
     const miktar = ondalikOku(document.getElementById("tsMiktar").value);
     const guncel = urunlerCache.find((u) => u.id === urun.id) || urun;
-    if (guncel.kod && guncel.toplandi) stokGeriEkle(guncel.kod, guncel.miktar);
+    if (guncel.kod && guncel.toplandi) stokGeriEkle(guncel.kod, guncel.miktar, guncel);
     guncel.toplandi = false; guncel.eksik = true;
     await urunGuncelle(aktifSiparis.id, urun.id, { eksik: true, toplandi: false, miktar, toplayanKullanici: mevcutKullanici.ad || mevcutKullanici.uid });
     toast(`${urun.ad} eksik olarak işaretlendi.`, "info");

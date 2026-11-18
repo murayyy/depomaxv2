@@ -2,7 +2,7 @@
 // KONTROL EKRANI MANTIĞI
 // ============================================================================
 import { auth, signOut, sayfaKorumasi } from "./firebase.js";
-import { siparisleriDinle, siparisGuncelle, urunleriDinle, urunGuncelle, urunEkle, tumSiparisleriCanliDinle, siparisArsivle, suruculeriGetir, stokDusur, stokGeriEkle, stokGozaltiSifirla, katalogDinle, siparisAlanAta, alanlariDinle, siparisiSil, siparisiGeriGonder, stokKodlariGetir } from "./veri.js?v=20261112";
+import { siparisleriDinle, siparisGuncelle, urunleriDinle, urunGuncelle, urunEkle, tumSiparisleriCanliDinle, siparisArsivle, suruculeriGetir, stokDusur, stokGeriEkle, stokGozaltiSifirla, katalogDinle, siparisAlanAta, alanlariDinle, siparisiSil, siparisiGeriGonder, stokKodlariGetir } from "./veri.js?v=20261118";
 import { stoklariDinle, stokRozetiHtml } from "./stok.js?v=20261030c";
 import { serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import {
@@ -436,11 +436,22 @@ function depoStokHucresi(kod) {
     </div>`;
 }
 
+/* Kısıtlı reyon (ADA) ürünü: aynı ürün normal reyonda da olabildiği için belirgin işaretlenir */
+function adaMi(u) {
+  if (u.ozelReyon) return u.ozelReyon;
+  const r = String(u.reyon || "").trim().toLocaleUpperCase("tr");
+  return (r === "ADA" || r.startsWith("ADA-") || r.startsWith("ADA ")) ? "ADA" : "";
+}
+function adaRozeti(u) {
+  const r = adaMi(u);
+  return r ? ` <span class="badge" style="background:#F59E0B;color:#fff;font-weight:700;font-size:11px;vertical-align:middle;">🏝 ${kacisEt(r)}</span>` : "";
+}
+
 function satirHtml(u, saltOkunur) {
   return `
     <tr class="${durumSinifi(u)}" data-uid="${u.id}">
       <td class="cell-code">${kacisEt(u.kod)}</td>
-      <td>${kacisEt(u.ad)}${u.katalogDisi ? ' <span class="badge badge-amber" style="font-size:10px;">Özel Talep</span>' : ""}</td>
+      <td>${kacisEt(u.ad)}${adaRozeti(u)}${u.katalogDisi ? ' <span class="badge badge-amber" style="font-size:10px;">Özel Talep</span>' : ""}</td>
       <td><input type="text" inputmode="decimal" class="cell-qty-input" data-rol="miktar" value="${etkinMiktar(u)}" ${saltOkunur ? "disabled" : ""} />${istenenRozeti(u)}</td>
       <td>${kacisEt(u.birim || "—")}</td>
       <td>${depoStokHucresi(u.kod)}</td>
@@ -461,7 +472,7 @@ function kartHtml(u, saltOkunur) {
     <div class="row-card ${durumSinifi(u)}" data-uid="${u.id}">
       <div class="row-card__top">
         <div>
-          <div class="row-card__name">${kacisEt(u.ad)}</div>
+          <div class="row-card__name">${kacisEt(u.ad)}${adaRozeti(u)}</div>
           <div class="row-card__code">${kacisEt(u.kod)} · ${kacisEt(u.barkod || "barkod yok")}</div>
         </div>
         <span class="reyon-tag">${kacisEt(u.reyon || "—")}</span>
@@ -523,11 +534,11 @@ function baglaSatirOlaylari(kapsayici, saltOkunur) {
             patch.duzeltenkKullanici = mevcutKullanici.ad || mevcutKullanici.uid;
           }
           // Daha önce toplanmamışsa düş (eksikten ya da işaretsizden toplandıya)
-          if (urun?.kod && !urun.toplandi) stokDusur(urun.kod, etkinMiktar(urun));
+          if (urun?.kod && !urun.toplandi) stokDusur(urun.kod, etkinMiktar(urun), urun);
           if (urun) { urun.toplandi = true; urun.eksik = false; }
         } else {
           patch.duzeltildi = false;
-          if (urun?.kod && urun.toplandi) stokGeriEkle(urun.kod, etkinMiktar(urun));
+          if (urun?.kod && urun.toplandi) stokGeriEkle(urun.kod, etkinMiktar(urun), urun);
           if (urun) urun.toplandi = false;
         }
         urunGuncelle(aktifSiparis.id, uid, patch);
@@ -549,7 +560,7 @@ function baglaSatirOlaylari(kapsayici, saltOkunur) {
             patch.kontrolorEksikTespiti = true;
             patch.kontrolorEksikTespitiKullanici = mevcutKullanici.ad || mevcutKullanici.uid;
             // Ürün alınmamış: düşülen stok/göz geri eklenir
-            if (urun.kod) stokGeriEkle(urun.kod, etkinMiktar(urun));
+            if (urun.kod) stokGeriEkle(urun.kod, etkinMiktar(urun), urun);
           }
           if (urun) { urun.toplandi = false; urun.eksik = true; }
         } else {
@@ -596,8 +607,8 @@ function istenenRozeti(u) {
 function toplananMiktarFarkiniUygula(urun, yeniMiktar) {
   if (!urun || !urun.toplandi || !urun.kod) return;
   const fark = (Number(yeniMiktar) || 0) - etkinMiktar(urun);
-  if (fark > 0) stokDusur(urun.kod, fark);
-  else if (fark < 0) stokGeriEkle(urun.kod, -fark);
+  if (fark > 0) stokDusur(urun.kod, fark, urun);
+  else if (fark < 0) stokGeriEkle(urun.kod, -fark, urun);
   if (urun.gercekMiktar !== undefined && urun.gercekMiktar !== null) urun.gercekMiktar = Number(yeniMiktar) || 0;
   else urun.miktar = Number(yeniMiktar) || 0;
 }

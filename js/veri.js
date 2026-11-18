@@ -238,6 +238,7 @@ export async function subeSimarisiOlustur({ subeAdi, subeId, olusturan, satirlar
       miktar: ondalikOku(s.miktar),
       birim: s.birim || "",
       reyon: s.reyon || "",
+      ...(s.ozelReyon ? { ozelReyon: s.ozelReyon } : {}),
       aciklama: s.subeNotu || s.aciklama || "",
       barkod: s.barkod || "",
       toplandi: false, eksik: false, kontrol: false, kontrolNotu: "",
@@ -523,9 +524,9 @@ export async function paletlemeYardimciEkle(siparisId, yardimci) {
 // Köprü bu alanı yazmadığı için kalıcı kalır.
 // Ekranda gösterilen: miktar - gozaltiMiktar
 // ============================================================================
-export async function stokDusur(stokKodu, miktar) {
+export async function stokDusur(stokKodu, miktar, satir = null) {
   if (!stokKodu || !miktar) return;
-  gozMiktarDegistir(stokKodu, -Number(miktar)); // toplama gözünden düş (takip ediliyorsa)
+  gozMiktarDegistir(stokKodu, -Number(miktar), satir); // toplama gözünden düş (takip ediliyorsa; ADA ayrı göz)
   try {
     const ref = doc(db, "stoklar", stokKodu);
     await updateDoc(ref, { gozaltiMiktar: increment(Number(miktar)) });
@@ -537,9 +538,9 @@ export async function stokDusur(stokKodu, miktar) {
   }
 }
 
-export async function stokGeriEkle(stokKodu, miktar) {
+export async function stokGeriEkle(stokKodu, miktar, satir = null) {
   if (!stokKodu || !miktar) return;
-  gozMiktarDegistir(stokKodu, Number(miktar)); // toplama gözüne geri koy (takip ediliyorsa)
+  gozMiktarDegistir(stokKodu, Number(miktar), satir); // toplama gözüne geri koy (takip ediliyorsa; ADA ayrı göz)
   try {
     await updateDoc(doc(db, "stoklar", stokKodu), {
       gozaltiMiktar: increment(-Number(miktar))
@@ -732,13 +733,30 @@ export async function stokKodlariGetir(kodlar) {
 const TOPLAMA_GOZLERI = "toplamaGozleri";
 const GOZ_HAREKETLERI = "gozHareketleri";
 
+/* Kısıtlı reyonların (ADA) gözü ayrıdır: aynı stok kodu normal reyonda da olsa
+   ADA'daki göz "KOD@ADA" kimliğiyle ayrı tutulur, toplanınca sadece o göz düşer.
+   Normal reyon gözleri eskisi gibi stok koduyla tutulur. */
+export const KISITLI_GOZ_REYONLARI = ["ADA"];
+function _kisitliReyon(reyon) {
+  const n = String(reyon || "").trim().toLocaleUpperCase("tr");
+  return KISITLI_GOZ_REYONLARI.find((r) => n === r || n.startsWith(r + "-") || n.startsWith(r + " ")) || "";
+}
+/** Göz belgesinin kimliği. reyonVeyaSatir: reyon metni ya da sipariş satırı ({ozelReyon, reyon}). */
+export function gozId(stokKodu, reyonVeyaSatir) {
+  const kod = String(stokKodu || "").trim();
+  const r = typeof reyonVeyaSatir === "object" && reyonVeyaSatir
+    ? (reyonVeyaSatir.ozelReyon || _kisitliReyon(reyonVeyaSatir.reyon))
+    : _kisitliReyon(reyonVeyaSatir);
+  return r ? `${kod}@${r}` : kod;
+}
+
 const _yuvarla = (n) => Math.round((Number(n) || 0) * 1000) / 1000;
 const _gozIkmalGerekli = (miktar, seviye) => (Number(seviye) || 0) > 0 && _yuvarla(miktar) <= Number(seviye);
 
 /** Gözdeki miktarı fark kadar değiştirir. Takip edilmeyen ürün için null döner. */
-export async function gozMiktarDegistir(stokKodu, fark) {
+export async function gozMiktarDegistir(stokKodu, fark, satir = null) {
   if (!stokKodu || !Number(fark)) return null;
-  const ref = doc(db, TOPLAMA_GOZLERI, String(stokKodu).trim());
+  const ref = doc(db, TOPLAMA_GOZLERI, gozId(stokKodu, satir));
   try {
     return await runTransaction(db, async (tx) => {
       const snap = await tx.get(ref);
@@ -789,11 +807,11 @@ export async function gozIkmalYap(stokKodu, eklenen, yapan, not = "", kaynak = {
 }
 
 /** Göz tanımla / düzenle. veri: { ad, reyon, birim, miktar, uyariSeviyesi } */
-export async function gozKaydet(stokKodu, veri, yapan, tip = "tanim") {
+export async function gozKaydet(stokKodu, veri, yapan, tip = "tanim", mevcutId = null) {
   const kod = String(stokKodu || "").trim();
   if (!kod) throw new Error("Stok kodu zorunlu.");
   if (kod.includes("/")) throw new Error("Stok kodunda '/' olamaz.");
-  const ref = doc(db, TOPLAMA_GOZLERI, kod);
+  const ref = doc(db, TOPLAMA_GOZLERI, mevcutId || gozId(kod, veri.reyon));
   const eski = await getDoc(ref);
   const onceki = eski.exists() ? _yuvarla(eski.data().miktar) : 0;
   const miktar = _yuvarla(veri.miktar);
@@ -826,7 +844,7 @@ export async function gozleriTopluKaydet(satirlar, yapan) {
       const miktar = _yuvarla(s.miktar);
       const uyariSeviyesi = _yuvarla(s.uyariSeviyesi);
       const ikmalGerekli = _gozIkmalGerekli(miktar, uyariSeviyesi);
-      batch.set(doc(db, TOPLAMA_GOZLERI, kod), {
+      batch.set(doc(db, TOPLAMA_GOZLERI, gozId(kod, s.reyon)), {
         kod, ad: s.ad || "", reyon: s.reyon || "", birim: s.birim || "",
         miktar, uyariSeviyesi, ikmalGerekli,
         ikmalBaslangic: ikmalGerekli ? serverTimestamp() : null,
