@@ -638,6 +638,13 @@ async function teslimAlModalAc(siparisId) {
     root.querySelectorAll('input[data-tip="geldi"]').forEach(cb => {
       cb.addEventListener("change", ozetiGuncelle);
     });
+    root.querySelectorAll(".teslim-miktar").forEach(inp => {
+      inp.addEventListener("input", () => {
+        const cb = root.querySelector(`input[data-uid="${inp.dataset.uid}"][data-tip="geldi"]`);
+        const v = inp.value.trim();
+        if (cb && v !== "") { cb.checked = (ondalikOku(v) || 0) > 0; ozetiGuncelle(); }
+      });
+    });
 
     renderEkstra();
     ozetiGuncelle();
@@ -704,16 +711,23 @@ async function teslimAlModalAc(siparisId) {
   };
 
   root.querySelector('[data-role="onayla"]').onclick = async () => {
+    // Gelen miktar: kutu işaretliyse yazılan miktar (0 yazıldıysa 0!), boş bırakıldıysa gönderilen miktar.
+    const gelenOku = (u) => {
+      if (!root.querySelector(`input[data-uid="${u.id}"][data-tip="geldi"]`)?.checked) return 0;
+      const v = (root.querySelector(`.teslim-miktar[data-uid="${u.id}"]`)?.value || "").trim();
+      return v === "" ? Number(u.gercekMiktar ?? u.miktar) : (ondalikOku(v) || 0);
+    };
     const teslimatKalemleri = [
-      ...gonderilen.map(u => ({
-        urunId: u.id, ad: u.ad, kod: u.kod || "",
-        birim: u.birim || "",
-        siparisMiktari: u.gercekMiktar ?? u.miktar,
-        gelenMiktar: root.querySelector(`input[data-uid="${u.id}"][data-tip="geldi"]`)?.checked
-          ? (ondalikOku(root.querySelector(`.teslim-miktar[data-uid="${u.id}"]`)?.value) || (u.gercekMiktar ?? u.miktar)) : 0,
-        durum: root.querySelector(`input[data-uid="${u.id}"][data-tip="geldi"]`)?.checked
-          ? "tamam" : "eksik"
-      })),
+      ...gonderilen.map(u => {
+        const siparisMiktari = Number(u.gercekMiktar ?? u.miktar) || 0;
+        const gelenMiktar = gelenOku(u);
+        return {
+          urunId: u.id, ad: u.ad, kod: u.kod || "",
+          birim: u.birim || "",
+          siparisMiktari, gelenMiktar,
+          durum: gelenMiktar + 0.0005 < siparisMiktari ? "eksik" : "tamam"   // az ya da 0 geldiyse eksik
+        };
+      }),
       ...ekstraUrunler.map(e => ({
         urunId: "", ad: e.ad, kod: e.kod || "", birim: e.birim,
         siparisMiktari: 0, gelenMiktar: e.miktar, durum: "fazla"
