@@ -18,6 +18,16 @@ import {
 
 arayuzHazirla();
 
+// Mikro ↔ depo stok karşılaştırma sayfasına bağlantı
+(() => {
+  const nav = document.getElementById("topNav") || document.querySelector(".topbar__nav");
+  if (nav && !nav.querySelector('a[href="stok-karsilastir.html"]')) {
+    const a = document.createElement("a");
+    a.className = "topbar__link"; a.href = "stok-karsilastir.html"; a.textContent = "⚖ Karşılaştır";
+    nav.appendChild(a);
+  }
+})();
+
 let mevcutKullanici = null;
 let katalogCache = [];
 let bekleyenler = [];
