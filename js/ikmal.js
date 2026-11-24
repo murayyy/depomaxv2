@@ -36,6 +36,11 @@ arayuzHazirla();
     a.className = "topbar__link"; a.href = "stok-karsilastir.html"; a.textContent = "⚖ Karşılaştır";
     nav.appendChild(a);
   }
+  if (nav && !nav.querySelector('a[href="isi.html"]')) {
+    const b = document.createElement("a");
+    b.className = "topbar__link"; b.href = "isi.html"; b.textContent = "🔥 Isı Haritası";
+    nav.appendChild(b);
+  }
 })();
 
 let mevcutKullanici = null;
