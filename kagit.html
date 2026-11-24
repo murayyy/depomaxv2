@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8" />
+<link rel="manifest" href="/manifest.json" />
+<meta name="theme-color" content="#0F52BA" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Kağıt Toplama — Depomax</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  .kg-satir { display: grid; grid-template-columns: 110px 1fr 100px 60px 36px; gap: 6px; align-items: center; margin-bottom: 6px; }
+  .kg-satir input { font-size: 13px; }
+  .kg-satir .miktar { text-align: right; }
+  @media (max-width: 560px) { .kg-satir { grid-template-columns: 90px 1fr 80px 36px; } .kg-satir .birim { display: none; } }
+  td.sayi { text-align: right; font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+<div class="app-shell">
+  <header class="topbar">
+    <div class="topbar__brand"><span class="topbar__mark">D</span> Depomax</div>
+    <nav class="topbar__nav">
+      <a class="topbar__link" href="index.html">⬅ Ana Sayfa</a>
+      <a class="topbar__link" href="ikmal.html">🔔 İkmal</a>
+      <a class="topbar__link is-active" href="kagit.html">📝 Kağıt Toplama</a>
+    </nav>
+    <div class="topbar__user">
+      <span class="role-chip" id="rolEtiketi">…</span>
+      <span id="kullaniciAdi">…</span>
+      <button class="btn btn-ghost btn-sm" id="cikisBtn">Çıkış</button>
+    </div>
+  </header>
+
+  <main class="page">
+    <div class="page__header">
+      <div>
+        <div class="page__title">Kağıt Toplama Girişi</div>
+        <div class="page__subtitle">Kağıtla toplanan ürünleri girin: toplama gözlerinden düşer, Mikro'ya aktarılmaz.</div>
+      </div>
+    </div>
+
+    <div class="card" style="max-width:720px;">
+      <div style="display:grid;grid-template-columns:1fr 160px;gap:8px;">
+        <div class="field"><label>Kime / açıklama</label><input class="input" id="kgAciklama" placeholder="Örn. Ahmet Bey — perakende" /></div>
+        <div class="field"><label>Tarih</label><input class="input" type="date" id="kgTarih" /></div>
+      </div>
+      <datalist id="kgKatalog"></datalist>
+      <div style="font-weight:600;font-size:13px;margin:4px 0 8px;">Ürünler</div>
+      <div id="kgSatirlar"></div>
+      <div class="u-flex" style="gap:8px;flex-wrap:wrap;margin-top:6px;">
+        <button class="btn btn-ghost btn-sm" id="kgSatirEkle">+ Satır</button>
+        <button class="btn btn-ghost btn-sm" id="kgExcelBtn">📄 Excel'den Yükle</button>
+        <input type="file" id="kgExcel" accept=".xlsx,.xls,.csv" class="u-hidden" />
+        <span class="u-text-soft" style="font-size:12px;align-self:center;">Excel sütunları: Stok Kodu, Miktar (Ürün Adı, Reyon isteğe bağlı)</span>
+      </div>
+      <div class="u-flex" style="justify-content:space-between;align-items:center;margin-top:14px;gap:8px;flex-wrap:wrap;">
+        <span id="kgOzet" style="font-weight:600;"></span>
+        <button class="btn btn-primary" id="kgKaydet">✅ Kaydet — Gözlerden Düş</button>
+      </div>
+    </div>
+
+    <h3 style="margin:22px 0 10px;">Son kağıt toplamalar</h3>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead><tr><th>Tarih</th><th>Açıklama</th><th>Ürünler</th><th>Giren</th><th></th></tr></thead>
+        <tbody id="kgGecmis"></tbody>
+      </table>
+    </div>
+  </main>
+</div>
+<div id="modalRoot"></div>
+<script type="module" src="js/kagit.js?v=20261124"></script>
+</body>
+</html>
