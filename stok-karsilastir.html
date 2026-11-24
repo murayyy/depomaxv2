@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8" />
+<link rel="manifest" href="/manifest.json" />
+<meta name="theme-color" content="#0F52BA" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Stok Karşılaştırma — Depomax</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  td.sayi, th.sayi { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .fark-arti { color: #059669; font-weight: 700; }
+  .fark-eksi { color: #DC2626; font-weight: 700; }
+  .ozet-kutular { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 14px; }
+  .ozet-kutu { border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: 10px 12px; background: var(--color-surface-1); }
+  .ozet-kutu small { display: block; font-size: 11px; color: var(--color-ink-soft); text-transform: uppercase; letter-spacing: .5px; }
+  .ozet-kutu b { font-size: 20px; font-variant-numeric: tabular-nums; }
+  .aciklama { font-size: 12.5px; color: var(--color-ink-soft); margin-bottom: 12px; line-height: 1.5; }
+  .satir-detay { font-size: 11.5px; color: var(--color-ink-soft); }
+</style>
+</head>
+<body>
+<div class="app-shell">
+  <header class="topbar">
+    <div class="topbar__brand"><span class="topbar__mark">D</span> Depomax</div>
+    <nav class="topbar__nav">
+      <a class="topbar__link" href="index.html">⬅ Ana Sayfa</a>
+      <a class="topbar__link" href="raf.html">🗄 Raflar</a>
+      <a class="topbar__link" href="ikmal.html">🔔 İkmal</a>
+      <a class="topbar__link is-active" href="stok-karsilastir.html">⚖ Karşılaştır</a>
+    </nav>
+    <div class="topbar__user">
+      <span class="role-chip" id="rolEtiketi">…</span>
+      <span id="kullaniciAdi">…</span>
+      <button class="btn btn-ghost btn-sm" id="cikisBtn">Çıkış</button>
+    </div>
+  </header>
+
+  <main class="page">
+    <div class="page__header">
+      <div>
+        <div class="page__title">Mikro ↔ Depo Stok Karşılaştırma</div>
+        <div class="page__subtitle" id="durumYazi">Yükleniyor…</div>
+      </div>
+      <div class="u-flex" style="gap:8px;flex-wrap:wrap;">
+        <button class="btn btn-ghost" id="yenileBtn">↻ Yeniden Hesapla</button>
+        <button class="btn btn-ghost" id="excelBtn">⬇ Excel</button>
+      </div>
+    </div>
+
+    <div class="aciklama">
+      <b>Depoda olması gereken</b> = Mikro'daki depo stoğu − toplanmış ama Mikro'ya henüz aktarılmamış siparişler.
+      <b>Depoda sayılan</b> = toplama gözleri (ADA dahil) + raflardaki miktar.
+      Fark eksi ise depoda Mikro'dan <b>az</b>, artı ise <b>fazla</b> ürün var. Mikro ve gözler canlı güncellenir; raflar ve bekleyen siparişler "Yeniden Hesapla" ile okunur.
+    </div>
+
+    <div class="ozet-kutular" id="ozetKutular"></div>
+
+    <div class="toolbar" style="margin-bottom:12px;gap:8px;flex-wrap:wrap;">
+      <input class="input" id="ara" placeholder="🔍 Kod ya da ürün adı" style="max-width:240px;" autocomplete="off" />
+      <select class="select" id="filtre" style="width:auto;">
+        <option value="farkli">Sadece farklı olanlar</option>
+        <option value="eksi">Depoda eksik olanlar</option>
+        <option value="arti">Depoda fazla olanlar</option>
+        <option value="takip">Takip edilen hepsi</option>
+        <option value="takipdisi">Gözü/rafı tanımsız (takip dışı)</option>
+      </select>
+      <label style="display:flex;gap:6px;align-items:center;font-size:13px;">Tolerans
+        <input class="input" id="tolerans" type="text" inputmode="decimal" value="0,5" style="width:70px;text-align:right;" />
+      </label>
+    </div>
+
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead><tr>
+          <th>Kod</th><th>Ürün</th><th class="sayi">Mikro</th><th class="sayi">Aktarılmamış</th><th class="sayi">Olması gereken</th>
+          <th class="sayi">Göz</th><th class="sayi">Raf</th><th class="sayi">Depoda sayılan</th><th class="sayi">Fark</th>
+        </tr></thead>
+        <tbody id="tablo"></tbody>
+      </table>
+    </div>
+    <div class="empty-state u-hidden" id="bos">
+      <div class="empty-state__icon">✅</div>
+      <div class="empty-state__title">Fark yok</div>
+    </div>
+  </main>
+</div>
+<div id="modalRoot"></div>
+<script type="module" src="js/stok-karsilastir.js?v=20261124"></script>
+</body>
+</html>
