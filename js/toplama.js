@@ -17,6 +17,16 @@ import {
 
 arayuzHazirla();
 
+// Kağıt toplama girişi sayfasına bağlantı
+(() => {
+  const nav = document.querySelector(".topbar__nav");
+  if (nav && !nav.querySelector('a[href="kagit.html"]')) {
+    const a = document.createElement("a");
+    a.className = "topbar__link"; a.href = "kagit.html"; a.textContent = "📝 Kağıt Toplama";
+    nav.appendChild(a);
+  }
+})();
+
 let mevcutKullanici = null;
 let katalogCache = [];
 let aktifSekme = "aktif";
@@ -538,7 +548,8 @@ function baglaSatirOlaylari(kapsayici, saltOkunur) {
       toplandiCb.addEventListener("change", async () => {
         if (!toplandiCb.checked && !(await kaldirmaOnayi(toplandiCb, "Bu ürünün \"Toplandı\" işareti kaldırılacak."))) return;
         const urun = urunlerCache.find((u) => u.id === uid);
-        const patch = toplandiCb.checked ? { toplandi: true, eksik: false } : { toplandi: false };
+        // toplanmaZamani: 3D ısı haritası / rota tekrarı için (hangi ürün ne zaman, kim tarafından toplandı)
+        const patch = toplandiCb.checked ? { toplandi: true, eksik: false, toplanmaZamani: new Date() } : { toplandi: false };
         if (toplandiCb.checked) {
           patch.toplayanKullanici = mevcutKullanici.ad || mevcutKullanici.uid;
           if (urun?.kod && !urun.toplandi) stokDusur(urun.kod, urun.miktar, urun);
@@ -750,7 +761,7 @@ function taramaSonucModalAc(urun) {
       else stokDusur(guncel.kod, miktar, guncel);
     }
     guncel.toplandi = true; guncel.eksik = false; guncel.miktar = miktar;
-    await urunGuncelle(aktifSiparis.id, urun.id, { toplandi: true, eksik: false, miktar, toplayanKullanici: mevcutKullanici.ad || mevcutKullanici.uid });
+    await urunGuncelle(aktifSiparis.id, urun.id, { toplandi: true, eksik: false, miktar, toplayanKullanici: mevcutKullanici.ad || mevcutKullanici.uid, toplanmaZamani: new Date() });
     toast(`${urun.ad} toplandı. Stok güncellendi.`, "success");
     devamEt();
   };

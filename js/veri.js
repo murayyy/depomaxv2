@@ -472,6 +472,100 @@ export function uretimKaydet(veri) {
   return addDoc(collection(db, URETIM), { ...veri, tarih: serverTimestamp() });
 }
 
+/* ---- ÜRETİM RAFI ----
+   Karışım yapılacak çuvallar depodan "ÜRETİM" rafına taşınır. Üretim kaydedilince malzemeler bu raftan
+   (en eski giren önce) düşülür, çıkan karışım aynı rafa eklenir. Raf yoksa kendiliğinden açılır. */
+export const URETIM_RAFI_ADI = "ÜRETİM";
+
+async function uretimRafiniBul() {
+  const snap = await getDocs(collection(db, RAFLAR));
+  const norm = (v) => String(v || "").trim().toLocaleUpperCase("tr").replace("Ü", "U");
+  const raf = snap.docs.find((d) => norm(d.data().ad) === norm(URETIM_RAFI_ADI));
+  if (raf) return { id: raf.id, ad: raf.data().ad };
+  const ref = await addDoc(collection(db, RAFLAR), {
+    ad: URETIM_RAFI_ADI, kat: 1, bolme: 1, kapasite: 0,
+    aciklama: "Karışım için ayrılan çuvallar. Üretim kaydedilince malzemeler buradan düşer, karışım buraya girer.",
+    olusturulmaTarihi: serverTimestamp()
+  });
+  return { id: ref.id, ad: URETIM_RAFI_ADI };
+}
+
+/**
+ * Üretimi ÜRETİM rafına işler.
+ *  cikanlar: [{kod, ad, miktar, birim}]  -> raftan düşülür
+ *  giren:    {kod, ad, miktar, birim}    -> rafa eklenir (aynı koddan kalem varsa üstüne)
+ * Dönüş: { rafAd, yetmeyen: [{kod, ad, eksik}] }
+ */
+export async function uretimRafinaIsle({ cikanlar, giren, yapan, not }) {
+  const raf = await uretimRafiniBul();
+  const kalemSnap = await getDocs(collection(db, RAFLAR, raf.id, "kalemler"));
+  const kalemler = kalemSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  const batch = writeBatch(db);
+  const yetmeyen = [];
+  const hareket = (tip, k, miktar) => batch.set(doc(collection(db, RAF_HAREKETLERI)), {
+    rafId: raf.id, rafAd: raf.ad, tip, stokKodu: k.kod || "", ad: k.ad || "",
+    miktar: Number(miktar) || 0, palet: 0, birim: k.birim || "KG", yapan: yapan || "", not: not || "Üretim",
+    tarih: serverTimestamp()
+  });
+  for (const c of cikanlar || []) {
+    let kalan = Number(c.miktar) || 0;
+    if (!c.kod || kalan <= 0) continue;
+    const ayni = kalemler.filter((k) => String(k.stokKodu || "").trim() === c.kod)
+      .sort((a, b) => (a.eklenmeTarihi?.toMillis?.() || 0) - (b.eklenmeTarihi?.toMillis?.() || 0));
+    for (const k of ayni) {
+      if (kalan <= 0) break;
+      const var_ = Number(k.miktar) || 0;
+      const dus = Math.min(var_, kalan);
+      kalan = Math.round((kalan - dus) * 1000) / 1000;
+      const yeni = Math.round((var_ - dus) * 1000) / 1000;
+      if (yeni <= 0) batch.delete(doc(db, RAFLAR, raf.id, "kalemler", k.id));
+      else batch.update(doc(db, RAFLAR, raf.id, "kalemler", k.id), { miktar: yeni });
+    }
+    if ((Number(c.miktar) || 0) - kalan > 0) hareket("cikis", c, (Number(c.miktar) || 0) - kalan);
+    if (kalan > 0) yetmeyen.push({ kod: c.kod, ad: c.ad || "", eksik: kalan });
+  }
+  if (giren && giren.kod && Number(giren.miktar) > 0) {
+    const mevcut = kalemler.find((k) => String(k.stokKodu || "").trim() === giren.kod);
+    if (mevcut) batch.update(doc(db, RAFLAR, raf.id, "kalemler", mevcut.id), { miktar: increment(Number(giren.miktar)) });
+    else batch.set(doc(collection(db, RAFLAR, raf.id, "kalemler")), {
+      stokKodu: giren.kod, ad: giren.ad || "", miktar: Number(giren.miktar), palet: 0, birim: giren.birim || "KG",
+      not: "Üretimden", kat: 1, bolme: 1, girisTarihi: new Date().toISOString().slice(0, 10), skt: "", cari: "",
+      eklenmeTarihi: serverTimestamp()
+    });
+    hareket("giris", giren, giren.miktar);
+  }
+  await batch.commit();
+  return { rafAd: raf.ad, yetmeyen };
+}
+
+/* ---- KAĞIT TOPLAMA ----
+   Sistemin dışında kağıtla toplanan ürünler sonradan girilir: toplama gözünden düşer,
+   Mikro'ya aktarılmaz (Mikro'da elle kesiliyor). İptal edilirse göze geri eklenir. */
+const KAGIT = "kagitToplamalar";
+
+export async function kagitToplamaKaydet({ aciklama, tarihStr, kalemler, yapan }) {
+  const temiz = (kalemler || []).filter((k) => k.kod && Number(k.miktar) > 0)
+    .map((k) => ({ kod: String(k.kod).trim(), ad: k.ad || "", miktar: Number(k.miktar), birim: k.birim || "", ozelReyon: k.ozelReyon || "" }));
+  if (!temiz.length) throw new Error("Ürün yok.");
+  const ref = await addDoc(collection(db, KAGIT), {
+    aciklama: aciklama || "", tarihStr: tarihStr || "", kalemler: temiz, yapan: yapan || "",
+    durum: "aktif", olusturmaTarihi: serverTimestamp()
+  });
+  await Promise.all(temiz.map((k) => gozMiktarDegistir(k.kod, -k.miktar, k.ozelReyon ? { ozelReyon: k.ozelReyon } : null)));
+  return ref.id;
+}
+
+export async function kagitToplamaIptal(id, kayit, yapan) {
+  await updateDoc(doc(db, KAGIT, id), { durum: "iptal", iptalEden: yapan || "", iptalTarihi: serverTimestamp() });
+  await Promise.all((kayit.kalemler || []).map((k) =>
+    gozMiktarDegistir(k.kod, Number(k.miktar), k.ozelReyon ? { ozelReyon: k.ozelReyon } : null)));
+}
+
+export async function kagitToplamalariGetir(adet = 50) {
+  const snap = await getDocs(query(collection(db, KAGIT), orderBy("olusturmaTarihi", "desc"), fsLimit(adet)));
+  return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
+
 export function paketlemeKaydet(veri) {
   return addDoc(collection(db, PAKETLEME), { ...veri, tarih: serverTimestamp() });
 }

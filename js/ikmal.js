@@ -18,6 +18,16 @@ import {
 
 arayuzHazirla();
 
+// Kağıt toplama girişi sayfasına bağlantı
+(() => {
+  const nav = document.querySelector(".topbar__nav");
+  if (nav && !nav.querySelector('a[href="kagit.html"]')) {
+    const a = document.createElement("a");
+    a.className = "topbar__link"; a.href = "kagit.html"; a.textContent = "📝 Kağıt Toplama";
+    nav.appendChild(a);
+  }
+})();
+
 // Mikro ↔ depo stok karşılaştırma sayfasına bağlantı
 (() => {
   const nav = document.getElementById("topNav") || document.querySelector(".topbar__nav");

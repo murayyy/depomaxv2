@@ -4,8 +4,8 @@
 import { auth, signOut, sayfaKorumasi } from "./firebase.js";
 import {
   receteleriDinle, receteOlustur, receteGuncelle, recedeSil,
-  uretimKaydet, paketlemeKaydet, uretimGecmisGetir, katalogDinle
-} from "./veri.js?v=20261112";
+  uretimKaydet, paketlemeKaydet, uretimGecmisGetir, katalogDinle, uretimRafinaIsle
+} from "./veri.js?v=20261124";
 import { arayuzHazirla, toast, onayIste, kacisEt, sayiBicimle, ondalikOku } from "./utils.js";
 
 arayuzHazirla();
@@ -211,6 +211,21 @@ document.getElementById("kokKaydetBtn").addEventListener("click", async () => {
   }
   btn.disabled = false;
   toast(`✅ ${recete.ad} — ${sayiBicimle(miktar)} KG kaydedildi${mikroya ? ", Mikro'ya virman yazılıyor" : ""}.`, "success");
+  // ÜRETİM rafı: malzemeler buradan düşer, karışım buraya girer
+  if (cikanlar.every((c) => c.kod) && recete.ciktiKod) {
+    try {
+      const r = await uretimRafinaIsle({
+        cikanlar, giren: { kod: recete.ciktiKod, ad: recete.ciktiAdi || recete.ad, miktar, birim: "KG" },
+        yapan: mevcutKullanici.ad || mevcutKullanici.uid, not: `Üretim: ${recete.ad}`
+      });
+      if (r.yetmeyen.length) {
+        toast(`⚠ ${r.rafAd} rafında yetmeyen: ${r.yetmeyen.map((y) => `${y.kod} ${sayiBicimle(y.eksik)}`).join(", ")}. Çuvalları rafa taşıyıp raf kaydını düzeltin.`, "error", 10000);
+      }
+    } catch (err) {
+      console.error(err);
+      toast("ÜRETİM rafı güncellenemedi: " + (err.code || err.message), "error");
+    }
+  }
   document.getElementById("kokMiktar").value = "";
   document.getElementById("kokMakine").value = "";
   miktarElle = false;
