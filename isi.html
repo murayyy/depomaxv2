@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8" />
+<link rel="manifest" href="/manifest.json" />
+<meta name="theme-color" content="#0F52BA" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Depo Isı Haritası — Depomax</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+  .isi-duzen { display: grid; grid-template-columns: 1fr 300px; gap: 14px; }
+  @media (max-width: 900px) { .isi-duzen { grid-template-columns: 1fr; } }
+  .sahne-kutu { position: relative; height: 62vh; min-height: 380px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); overflow: hidden; background: #0f172a; }
+  #sahne { position: absolute; inset: 0; cursor: grab; touch-action: none; }
+  #sahne:active { cursor: grabbing; }
+  #etiketler { position: absolute; inset: 0; pointer-events: none; }
+  .et { position: absolute; transform: translate(-50%, -100%); color: #e2e8f0; font: 600 11px "IBM Plex Sans", sans-serif; text-shadow: 0 1px 2px #000; white-space: nowrap; }
+  .et.koridor { font-size: 14px; color: #fbbf24; }
+  .et.kisi { background: #2563eb; color: #fff; padding: 2px 6px; border-radius: 99px; text-shadow: none; }
+  #ipucu { position: absolute; pointer-events: none; background: rgba(15,23,42,.92); color: #f8fafc; border: 1px solid #334155; border-radius: 6px; padding: 8px 10px; font-size: 12px; max-width: 260px; display: none; }
+  .lejant { position: absolute; left: 10px; bottom: 10px; display: flex; align-items: center; gap: 6px; color: #cbd5e1; font-size: 11px; }
+  .lejant i { display: block; width: 120px; height: 8px; border-radius: 4px; background: linear-gradient(90deg, #1d4ed8, #22c55e, #eab308, #ef4444); }
+  .yan { display: flex; flex-direction: column; gap: 10px; }
+  .yan .card { padding: 12px; }
+  .yan h3 { margin: 0 0 8px; font-size: 14px; }
+  .liste-sat { display: flex; justify-content: space-between; gap: 8px; font-size: 12.5px; padding: 4px 0; border-bottom: 1px solid var(--color-border); }
+  .liste-sat b { font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+<div class="app-shell">
+  <header class="topbar">
+    <div class="topbar__brand"><span class="topbar__mark">D</span> Depomax</div>
+    <nav class="topbar__nav">
+      <a class="topbar__link" href="index.html">⬅ Ana Sayfa</a>
+      <a class="topbar__link" href="ikmal.html">🔔 İkmal</a>
+      <a class="topbar__link" href="stok-karsilastir.html">⚖ Karşılaştır</a>
+      <a class="topbar__link is-active" href="isi.html">🔥 Isı Haritası</a>
+    </nav>
+    <div class="topbar__user">
+      <span class="role-chip" id="rolEtiketi">…</span>
+      <span id="kullaniciAdi">…</span>
+      <button class="btn btn-ghost btn-sm" id="cikisBtn">Çıkış</button>
+    </div>
+  </header>
+
+  <main class="page">
+    <div class="page__header">
+      <div>
+        <div class="page__title">Depo Isı Haritası (3D)</div>
+        <div class="page__subtitle" id="altBaslik">Hangi reyondan ne sıklıkla toplanıyor, toplayıcı nasıl dolaşıyor.</div>
+      </div>
+      <div class="u-flex" style="gap:8px;flex-wrap:wrap;align-items:center;">
+        <select class="select" id="gun" style="width:auto;">
+          <option value="1">Bugün</option>
+          <option value="7" selected>Son 7 gün</option>
+          <option value="30">Son 30 gün</option>
+        </select>
+        <select class="select" id="kisi" style="width:auto;"><option value="">Tüm toplayıcılar</option></select>
+        <select class="select" id="olcu" style="width:auto;">
+          <option value="adet">Yükseklik: toplama sayısı</option>
+          <option value="miktar">Yükseklik: toplanan miktar</option>
+        </select>
+        <button class="btn btn-primary" id="yukleBtn">↻ Yükle</button>
+      </div>
+    </div>
+
+    <div class="isi-duzen">
+      <div class="sahne-kutu">
+        <div id="sahne"></div>
+        <div id="etiketler"></div>
+        <div id="ipucu"></div>
+        <div class="lejant">az <i></i> çok · sürükle: döndür · tekerlek/iki parmak: yakınlaş</div>
+      </div>
+      <div class="yan">
+        <div class="card">
+          <h3>🔥 En çok gidilen reyonlar</h3>
+          <div id="enCok" class="u-text-soft" style="font-size:12.5px;">Yükleniyor…</div>
+        </div>
+        <div class="card">
+          <h3>🧭 Rota tekrarı</h3>
+          <select class="select" id="rotaSec" style="width:100%;margin-bottom:6px;"><option value="">Sipariş seçin…</option></select>
+          <div id="rotaBilgi" class="u-text-soft" style="font-size:12.5px;">Seçilen siparişin toplanma sırası 3D'de çizgiyle gösterilir. (Toplanma saati 24.11.2026'dan sonra kaydedilmeye başladı.)</div>
+        </div>
+        <div class="card">
+          <h3>👤 Toplayıcılar — son konum (bugün)</h3>
+          <div id="kisiler" class="u-text-soft" style="font-size:12.5px;">—</div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+<script type="module" src="js/isi.js?v=20261124"></script>
+</body>
+</html>
