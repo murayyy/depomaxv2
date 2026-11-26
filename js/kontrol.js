@@ -281,7 +281,25 @@ function siparisAc(siparis) {
     `${siparis.sistemeAktarildi ? ` <span class="badge badge-red">Sisteme Aktarıldı${siparis.mikroAktarim && siparis.mikroAktarim.evrak ? " · " + kacisEt(siparis.mikroAktarim.evrak) : ""}</span>` : ""}` +
     `${MIKRO_OTOMATIK_AKTARIM && !siparis.sistemeAktarildi && siparis.mikroAktarim && siparis.mikroAktarim.durum === "hata" ? ` <span class="badge badge-red">⚠ ${kacisEt(siparis.mikroAktarim.mesaj || "Mikro aktarım hatası")}</span>` : ""}`);
 
-  const saltOkunur = ["tamamlandi", "sevk_edildi", "teslim_edildi"].includes(siparis.durum);
+  const saltOkunur = saltOkunurMu(siparis);
+  const sevkDuzen = adminSevkDuzenler(siparis);
+  let notEl = document.getElementById("sevkDuzenNotu");
+  if (!notEl) {
+    notEl = document.createElement("div");
+    notEl.id = "sevkDuzenNotu";
+    notEl.style.cssText = "margin:8px 0;padding:8px 12px;border-radius:8px;font-size:13px;";
+    const detay = document.getElementById("detayGorunumu");
+    if (detay) detay.insertBefore(notEl, detay.children[1] || null);
+  }
+  if (sevkDuzen) {
+    notEl.style.background = "#FEF3C7"; notEl.style.color = "#92400E";
+    notEl.innerHTML = "✏ <b>Sevk sonrası düzenleme (admin):</b> Ürün ekleyebilir, miktar değiştirebilirsiniz. Değişiklikler Mikro'ya \"Sisteme Aktar\" ile gider; aktardıktan sonra liste kilitlenir.";
+    notEl.classList.remove("u-hidden");
+  } else if (mevcutKullanici?.rol === "admin" && siparis.durum === "sevk_edildi") {
+    notEl.style.background = "#F3F4F6"; notEl.style.color = "#374151";
+    notEl.innerHTML = "🔒 Bu sipariş Mikro'ya aktarıldığı (ya da aktarım sırada olduğu) için değiştirilemez. Değişiklik gerekiyorsa önce Mikro'daki fişi geri alın.";
+    notEl.classList.remove("u-hidden");
+  } else notEl.classList.add("u-hidden");
   document.getElementById("tamamlaBtn").classList.toggle("u-hidden", siparis.durum !== "toplandi" && siparis.durum !== "kontrol_ediliyor");
   document.getElementById("sevkeCevirBtn").classList.toggle("u-hidden", siparis.durum !== "tamamlandi");
   document.getElementById("sistemeAktarBtn").classList.toggle("u-hidden", siparis.durum !== "sevk_edildi" && siparis.durum !== "teslim_edildi");
@@ -295,11 +313,11 @@ function siparisAc(siparis) {
     // İlk yüklemede ürün kodlarına göre stok çek
     if (stokMap.size === 0 && liste.length) {
       const kodlar = [...new Set(liste.map(u => u.kod).filter(Boolean))];
-      stokKodlariGetir(kodlar).then(map => { stokMap = map; renderUrunler(["tamamlandi", "sevk_edildi", "teslim_edildi"].includes(siparis.durum)); }).catch(() => {});
+      stokKodlariGetir(kodlar).then(map => { stokMap = map; renderUrunler(saltOkunurMu(aktifSiparis || siparis)); }).catch(() => {});
     }
     const kontrolEdilen = liste.filter((u) => u.kontrol || u.eksik).length;
     const toplamKg = kgToplami(liste);
-    if (!["tamamlandi", "sevk_edildi", "teslim_edildi"].includes(siparis.durum) && (kontrolEdilen !== siparis.kontrolEdilenUrun || toplamKg !== siparis.toplamKg)) {
+    if ((!["tamamlandi", "sevk_edildi", "teslim_edildi"].includes(siparis.durum) || adminSevkDuzenler(siparis)) && (kontrolEdilen !== siparis.kontrolEdilenUrun || toplamKg !== siparis.toplamKg)) {
       siparis.kontrolEdilenUrun = kontrolEdilen;
       siparis.toplamKg = toplamKg;
       clearTimeout(sayacYazimZamanlayici);
@@ -307,7 +325,7 @@ function siparisAc(siparis) {
         siparisGuncelle(siparis.id, { kontrolEdilenUrun: kontrolEdilen, toplamKg });
       }, 2500);
     }
-    renderUrunler(saltOkunur);
+    renderUrunler(saltOkunurMu(aktifSiparis || siparis));
   });
 }
 
@@ -322,10 +340,27 @@ function geriDon() {
   document.getElementById("listeGorunumu").classList.remove("u-hidden");
 }
 
+/* Sevke çevrilmiş ama Mikro'ya henüz aktarılmamış siparişte ADMİN ürün ekleyip miktar değiştirebilir.
+   Mikro'ya aktarıldıktan sonra (ya da aktarım sıradayken) kilitli kalır: fiş ile liste ayrışmasın. */
+function adminSevkDuzenler(s) {
+  if (!s || mevcutKullanici?.rol !== "admin" || s.durum !== "sevk_edildi" || s.sistemeAktarildi) return false;
+  const d = s.mikroAktarim && s.mikroAktarim.durum;
+  return d !== "bekliyor" && d !== "isleniyor";
+}
+function saltOkunurMu(s) {
+  return !!s && ["tamamlandi", "sevk_edildi", "teslim_edildi"].includes(s.durum) && !adminSevkDuzenler(s);
+}
+function sevkSonrasiIzYaz() {
+  if (!aktifSiparis) return;
+  siparisGuncelle(aktifSiparis.id, {
+    sevkSonrasiDuzenleme: { kim: mevcutKullanici.ad || mevcutKullanici.uid, zaman: new Date() }
+  }).catch(() => {});
+}
+
 /* ---------------- Ürün listesi render ---------------- */
 document.getElementById("aramaKutusu").addEventListener("input", debounce((e) => {
   aramaMetni = e.target.value.trim().toLowerCase();
-  renderUrunler(!!aktifSiparis && ["tamamlandi", "sevk_edildi", "teslim_edildi"].includes(aktifSiparis.durum));
+  renderUrunler(saltOkunurMu(aktifSiparis));
 }, 200));
 
 function siraliListe() {
@@ -517,6 +552,11 @@ function baglaSatirOlaylari(kapsayici, saltOkunur) {
           patch.miktarDuzeltenKullanici = mevcutKullanici.ad || mevcutKullanici.uid;
         }
         toplananMiktarFarkiniUygula(urun, yeniMiktar);
+        if (adminSevkDuzenler(aktifSiparis)) {
+          patch.sevkSonrasiDegisti = true;
+          patch.sevkSonrasiDegistiren = mevcutKullanici.ad || mevcutKullanici.uid;
+          sevkSonrasiIzYaz();
+        }
         urunGuncelle(aktifSiparis.id, uid, patch);
       }, 400));
     }
@@ -781,14 +821,29 @@ document.getElementById("urunEkleBtn").addEventListener("click", () => {
     const ad = keAd.value.trim();
     if (!kod && !ad) { toast("Ürün kodu veya adı girin.", "error"); return; }
     try {
-      await urunEkle(aktifSiparis.id, {
-        kod, ad,
-        miktar: ondalikOku(document.getElementById("keMiktar").value),
+      const miktar = ondalikOku(document.getElementById("keMiktar").value);
+      const sevkSonrasi = adminSevkDuzenler(aktifSiparis);
+      if (sevkSonrasi && !(miktar > 0)) { toast("Miktar girin.", "error"); return; }
+      const yeni = {
+        kod, ad, miktar,
         birim: keBirim.value.trim(),
         reyon: keReyon.value.trim(),
         barkod: keBarkod.value.trim(),
         aciklama: document.getElementById("keAciklama").value.trim()
-      });
+      };
+      if (sevkSonrasi) {
+        // Sevkiyata eklenen ürün: araçta gidiyor sayılır (toplandı + kontrol edildi), gözden düşer
+        Object.assign(yeni, {
+          toplandi: true, kontrol: true, sevkSonrasiEklendi: true,
+          toplayanKullanici: mevcutKullanici.ad || mevcutKullanici.uid,
+          sevkSonrasiDegistiren: mevcutKullanici.ad || mevcutKullanici.uid
+        });
+      }
+      await urunEkle(aktifSiparis.id, yeni);
+      if (sevkSonrasi) {
+        if (kod) stokDusur(kod, miktar, yeni);
+        sevkSonrasiIzYaz();
+      }
       kapat();
       toast("Ürün eklendi.", "success");
     } catch (err) {
