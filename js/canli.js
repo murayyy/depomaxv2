@@ -9,7 +9,7 @@ import { collection, getDocs, query, where, onSnapshot, orderBy } from "https://
 const STAGES = [
   ["bekliyor", "Bekliyor", "--s0"],
   ["toplaniyor", "Toplanıyor", "--s1"],
-  ["kontrol", "Kontrolde", "--s2"],
+  ["kontrol", "Kontrol·Palet", "--s2"],
   ["hazir", "Paletlendi", "--s3"],
   ["yolda", "Yüklendi", "--s4"]
 ];
@@ -40,7 +40,8 @@ function asama(s) {
     case "toplaniyor": return ((Number(s.toplananUrun) || 0) + (Number(s.eksikUrun) || 0)) > 0 ? "toplaniyor" : "bekliyor";
     case "toplandi":
     case "kontrol_ediliyor": return "kontrol";
-    case "tamamlandi": return "hazir";
+    // Kontrol bitti + paletçi "bitirdim" dedi -> Paletlendi; palet bitmediyse kontrol & palet sütununda kalır
+    case "tamamlandi": return paletBitti(paletlemeler.get(s.id)) ? "hazir" : "kontrol";
     case "sevk_edildi":
     case "teslim_edildi": return bugun(tarih(s.sevkTarihi)) ? "yolda" : null;
     default: return null;
@@ -48,6 +49,22 @@ function asama(s) {
 }
 
 let siparisler = [];
+let paletlemeler = new Map();   // siparisId -> paletleme kaydı (paletçi ekranından)
+const paletBitti = (p) => !!p && (p.durum === "bitti" || (p.tamamlandi && p.durum !== "devam"));
+const paletSayisi = (s) => Number(s.paletSayisi) || Number(paletlemeler.get(s.id)?.toplamPalet) || 0;
+const darGenis = (s) => {
+  const p = paletlemeler.get(s.id);
+  const dar = s.darPalet ?? p?.darPalet, genis = s.genisPalet ?? p?.genisPalet;
+  return dar != null ? ` (${dar} dar, ${genis || 0} geniş)` : "";
+};
+function paletSatiri(s) {
+  const p = paletlemeler.get(s.id);
+  if (!p || (!p.durum && !p.tamamlandi)) return `<div class="m"><span>Palet</span><span style="color:var(--mute)">başlanmadı</span></div>`;
+  if (paletBitti(p)) return `<div class="m"><span>Palet ✓</span><span>${Number(p.toplamPalet) || 0} palet${p.darPalet != null ? ` · ${p.darPalet}D ${p.genisPalet || 0}G` : ""}</span></div>`;
+  const ys = (p.yardimcilar || []).filter((y) => typeof y === "string" || !y.cikis).length;
+  const bd = tarih(p.baslangic);
+  return `<div class="m"><span>Palet: ${esc(p.paletci || "")}${ys ? ` +${ys}` : ""}</span>${bd ? `<span class="tm" data-bas="${bd.getTime()}">${sayacYaz(bd.getTime())}</span>` : ""}</div>`;
+}
 const yeniler = new Set();
 let gorulen = null; // ilk yüklemeden sonra gelen yeni siparişleri ayırt etmek için
 const eksikOnbellek = new Map(); // id -> {anahtar, liste:[{ad,kod}]}
@@ -86,7 +103,7 @@ function ciz() {
   const eks = isler.reduce((t, s) => t + (Number(s.eksikUrun) || 0), 0);
   const subeler = new Set(isler.map(subeAd));
   const yolda = by("yolda");
-  const yoldaPalet = yolda.reduce((t, s) => t + (Number(s.paletSayisi) || 0), 0);
+  const yoldaPalet = yolda.reduce((t, s) => t + paletSayisi(s), 0);
 
   const K = [
     ["İşlemdeki şube", subeler.size, "var(--or)"],
@@ -135,7 +152,7 @@ function ciz() {
     const a = arac.get(k) || { surucu: s.surucuAd || "", ilk: null, liste: [], palet: 0 };
     const t = tarih(s.sevkTarihi);
     if (!a.ilk || t < a.ilk) a.ilk = t;
-    a.liste.push(s); a.palet += Number(s.paletSayisi) || 0;
+    a.liste.push(s); a.palet += paletSayisi(s);
     arac.set(k, a);
   });
   $("veh").innerHTML = [...arac.entries()].sort((a, b) => (b[1].ilk || 0) - (a[1].ilk || 0)).map(([k, a]) => {
@@ -166,7 +183,12 @@ function ciz() {
     ekle(s.olusturulmaTarihi, `${ad} siparişi geldi (${s.toplamUrun || 0} kalem).`);
     ekle(s.toplamaBaslangic, `${s.toplayanKullanici || "Toplayıcı"} ${ad} siparişini toplamaya başladı.`);
     ekle(s.toplamaBitis, `${ad} toplandı${s.eksikUrun ? `, ${s.eksikUrun} kalem eksik` : ""}. Kontrole geçti.`);
-    ekle(s.kontrolBitis, `${ad} kontrol edildi ve paletlendi, yükleme bekliyor.`);
+    ekle(s.kontrolBitis, `${ad} kontrol edildi.`);
+    const pl = paletlemeler.get(s.id);
+    if (pl) {
+      ekle(pl.baslangic, `${pl.paletci || "Paletçi"} ${ad} paletlemesine başladı.`);
+      ekle(pl.bitis, `${ad} paletlendi: ${Number(pl.toplamPalet) || 0} palet${pl.darPalet != null ? ` (${pl.darPalet} dar, ${pl.genisPalet || 0} geniş)` : ""}.`);
+    }
     ekle(s.sevkTarihi, `${ad} araca yüklendi${s.paletSayisi ? ` · ${s.paletSayisi} palet` : ""}${s.plaka ? ` · ${s.plaka}` : ""}.`);
   });
   olay.sort((a, b) => b.d - a.d);
@@ -193,20 +215,21 @@ function kart(s) {
   } else if (s._a === "toplaniyor") {
     satir = `<span>${tp + ek}/${toplam} kalem</span><span>${esc(s.toplayanKullanici || "")}</span>`;
   } else if (s._a === "kontrol") {
-    satir = `<span>${s.durum === "kontrol_ediliyor" ? "Kontrol ediliyor" : "Kontrol bekliyor"}</span><span>${esc(s.kontrolBaşlayan || "")}</span>`;
+    satir = `<span>${s.durum === "tamamlandi" ? "Kontrol ✓" : s.durum === "kontrol_ediliyor" ? "Kontrol ediliyor" : "Kontrol bekliyor"}</span><span>${esc(s.kontrolBaşlayan || "")}</span>`;
   } else if (s._a === "hazir") {
-    const m = dk(tarih(s.kontrolBitis));
-    satir = `<span>${tp} kalem${s.toplamKg ? ` · ${Math.round(s.toplamKg)} kg` : ""}</span><span>${s.kontrolBitis ? `${sure(m)} yükleme bekliyor` : ""}</span>`;
+    const p = paletlemeler.get(s.id);
+    const hazirAn = [tarih(s.kontrolBitis), tarih(p?.bitis)].filter(Boolean).sort((a, b) => b - a)[0];
+    satir = `<span>${paletSayisi(s)} palet${darGenis(s)}</span><span>${hazirAn ? `${sure(dk(hazirAn))} yükleme bekliyor` : ""}</span>`;
   } else {
-    satir = `<span>${s.paletSayisi || 0} palet · ${tp} kalem</span><span>${saat(tarih(s.sevkTarihi))}${s.plaka ? " · " + esc(s.plaka) : ""}</span>`;
+    satir = `<span>${paletSayisi(s)} palet · ${tp} kalem</span><span>${saat(tarih(s.sevkTarihi))}${s.plaka ? " · " + esc(s.plaka) : ""}</span>`;
   }
-  const bas = s._a === "toplaniyor" ? s.toplamaBaslangic : s._a === "kontrol" ? (s.kontrolBaslangic || s.toplamaBitis) : null;
+  const bas = s._a === "toplaniyor" ? s.toplamaBaslangic : s._a === "kontrol" && s.durum !== "tamamlandi" ? (s.kontrolBaslangic || s.toplamaBitis) : null;
   const bd = tarih(bas);
   const sayac = bd ? `<div class="m"><span>${s._a === "toplaniyor" ? "Toplama süresi" : "Kontrolde"}</span><span class="tm" data-bas="${bd.getTime()}">${sayacYaz(bd.getTime())}</span></div>` : "";
   return `<div class="card${yeniler.has(s.id) ? " new" : ""}" style="--c:${c}" data-id="${esc(s.id)}" role="button" tabindex="0"><b>${esc(ad)}${etiket}</b>
     <div class="m"><span>${s.olusturulmaTarihi ? "Geldi " + saat(tarih(s.olusturulmaTarihi)) : ""}</span>${ek ? `<span class="x">${ek} eksik</span>` : ""}</div>
     ${s._a === "toplaniyor" ? `<div class="bar"><div style="width:${pc}%"></div></div>` : ""}
-    <div class="m">${satir}</div>${sayac}</div>`;
+    <div class="m">${satir}</div>${sayac}${s._a === "kontrol" ? paletSatiri(s) : ""}</div>`;
 }
 const sayacYaz = (ms) => {
   const t = Math.max(0, Math.floor((Date.now() - ms) / 1000));
@@ -254,6 +277,11 @@ sayfaKorumasi(["depocu", "toplayici", "kontrolor"], (kullanici) => {
     if (detayId) detayBaslik();
     eksikleriGuncelle(liste.filter((s) => asama(s)));
   }, 7);
+  // paletçi kayıtları (son 7 gün)
+  onSnapshot(query(collection(db, "paletlemeler"), where("guncellemeTarihi", ">=", new Date(Date.now() - 7 * 864e5))), (snap) => {
+    paletlemeler = new Map(snap.docs.map((d) => [d.id, { id: d.id, ...d.data() }]));
+    ciz();
+  }, (err) => console.warn("paletlemeler okunamadı:", err.code || err.message));
   // süreler ("x dk bekliyor") canlı kalsın
   setInterval(ciz, 30000);
   // gün değişince sayfayı tazele (bellek ve "bugün" hesapları için)

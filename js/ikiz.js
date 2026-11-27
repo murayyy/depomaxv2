@@ -8,7 +8,7 @@
 // ============================================================================
 import { db, sayfaKorumasi } from "./firebase.js";
 import { tumSiparisleriCanliDinle } from "./veri.js?v=20261127";
-import { collection, getDocs } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { collection, getDocs, onSnapshot, query, where } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const THREE = window.THREE;
 const $ = (id) => document.getElementById(id);
@@ -162,7 +162,7 @@ function alanPaleti(x, z, h, color, rec, wrap) {
 }
 
 /* ---------------- Veri ---------------- */
-let raflar = [], gozler = [], siparisler = [], yersiz = [], urunRaf = null;
+let raflar = [], gozler = [], siparisler = [], yersiz = [], urunRaf = null, paletlemeler = new Map();
 const RAF_ID = (ad) => { if (norm(ad).includes("ORTA")) return "ORTA"; const m = norm(ad).replace(/[^A-Z0-9]/g, "").match(/^(?:RAF)?([DE][12])(?![0-9])/); return m ? m[1] : null; };
 const reyonCoz = (r) => { const m = norm(r).match(/^(ORTA(?:\s*RAF)?|[A-E][12])\s*[-_./ ]?\s*(\d+)/); return m ? { id: m[1].startsWith("ORTA") ? "ORTA" : m[1], no: Number(m[2]) } : null; };
 
@@ -271,23 +271,31 @@ function alanlariKur() {
   const eskiDinamik = dinamik; // alanPaleti dinamik'e ekler; burada gruba yönlendir
   const ekle = (...a) => { const g = alanPaleti(...a); eskiDinamik.remove(g); alanGrup.add(g); return g; };
 
-  const yapma = siparisler.filter((s) => ["toplandi", "kontrol_ediliyor"].includes(s.durum)).slice(0, 10);
+  const pBitti = (p) => !!p && (p.durum === "bitti" || (p.tamamlandi && p.durum !== "devam"));
+  // Paletleme alanı: paletçinin başladığı ama bitirmediği siparişler
+  const yapma = siparisler.filter((s) => paletlemeler.get(s.id)?.durum === "devam").slice(0, 10);
   yapma.forEach((s, i) => {
     const t = Number(s.toplamUrun) || 0, k = t ? (Number(s.kontrolEdilenUrun) || 0) / t : 0.3;
     const x = -7.4 + Math.floor(i / 5) * 2.6, z = 0.6 + (i % 5) * 2.2;
-    ekle(x, z, 0.4 + 1.2 * Math.max(0.15, k), renkKod(subeAd(s)), { zone: "yapma", title: `${subeAd(s)}`, tag: s.durum === "kontrol_ediliyor" ? "Kontrol ediliyor" : "Kontrol bekliyor", tagc: "#8e44ad",
-      rows: [["Kalem", `${t}`], ["Kontrol", `${s.kontrolEdilenUrun || 0} / ${t}`], ["Eksik", `${s.eksikUrun || 0}`], ["Toplayan", s.toplayanKullanici || "—"], ["Kontrol eden", s.kontrolBaşlayan || "—"]] }, false);
+    const pl = paletlemeler.get(s.id) || {};
+    const ys = (pl.yardimcilar || []).filter((y) => typeof y === "string" || !y.cikis).map((y) => typeof y === "string" ? y : y.ad);
+    const bd = pl.baslangic?.toDate ? pl.baslangic.toDate() : null;
+    ekle(x, z, 0.4 + 1.2 * Math.max(0.15, k), renkKod(subeAd(s)), { zone: "yapma", title: `${subeAd(s)}`, tag: "Paletleniyor", tagc: "#8e44ad",
+      rows: [["Paletçi", pl.paletci || "—"], ["Yardımcılar", ys.join(", ") || "—"], ["Başladı", bd ? bd.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" }) : "—"],
+        ["Kontrol", s.durum === "tamamlandi" ? "Bitti" : `${s.kontrolEdilenUrun || 0} / ${t}`], ["Kalem", `${t}`]] }, false);
     const L = label(subeAd(s), renkKod(subeAd(s)), 0.45); L.position.set(x, 2.1, z); alanGrup.add(L);
   });
-  const hazir = siparisler.filter((s) => s.durum === "tamamlandi");
+  // Palet koyma alanı: paletlemesi biten, henüz yüklenmemiş siparişler
+  const hazir = siparisler.filter((s) => ["toplandi", "kontrol_ediliyor", "tamamlandi"].includes(s.durum) && pBitti(paletlemeler.get(s.id)));
   let hz = 0;
   hazir.forEach((s) => {
-    const n = Math.max(1, Math.min(4, Number(s.paletSayisi) || 1));
+    const pl = paletlemeler.get(s.id) || {};
+    const n = Math.max(1, Math.min(6, Number(pl.toplamPalet) || Number(s.paletSayisi) || 1));
     for (let j = 0; j < n && hz < 35; j++) {
       const col = hz % 7, row = Math.floor(hz / 7); hz++;
       const x = -7.8 + row * 1.4, z = 20.8 + col * 1.12;
-      ekle(x, z, 1.45, renkKod(subeAd(s)), { zone: "hazir", title: `${subeAd(s)}${n > 1 ? ` · palet ${j + 1}/${n}` : ""}`, tag: "Sevke hazır", tagc: "#1f9d55",
-        rows: [["Kalem", `${s.toplananUrun || 0}`], ["Kilo", s.toplamKg ? `${Math.round(s.toplamKg)} kg` : "—"], ["Eksik", `${s.eksikUrun || 0}`], ["Kontrol bitti", s.kontrolBitis ? new Date(s.kontrolBitis).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" }) : "—"]] }, true);
+      ekle(x, z, 1.45, renkKod(subeAd(s)), { zone: "hazir", title: `${subeAd(s)}${n > 1 ? ` · palet ${j + 1}/${n}` : ""}`, tag: s.durum === "tamamlandi" ? "Yükleme bekliyor" : "Paletlendi, kontrol sürüyor", tagc: "#1f9d55",
+        rows: [["Palet", `${Number(pl.toplamPalet) || n}${pl.darPalet != null ? ` (${pl.darPalet} dar, ${pl.genisPalet || 0} geniş)` : ""}`], ["Paletçi", pl.paletci || "—"], ["Kalem", `${s.toplananUrun || 0}`], ["Kilo", s.toplamKg ? `${Math.round(s.toplamKg)} kg` : "—"], ["Eksik", `${s.eksikUrun || 0}`], ["Kontrol bitti", s.kontrolBitis ? new Date(s.kontrolBitis).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" }) : "—"]] }, true);
       if (j === 0) { const L = label(subeAd(s), renkKod(subeAd(s)), 0.45); L.position.set(x, 2.15, z); alanGrup.add(L); }
     }
   });
@@ -461,6 +469,10 @@ sayfaKorumasi(["depocu", "toplayici", "kontrolor"], (k) => {
   yukle();
   // siparişler canlı: palet yapma ve hazır alanları anında değişir
   tumSiparisleriCanliDinle((liste) => { siparisler = liste; if (raflar.length || gozler.length) { alanlariKur(); ozet(); } }, 7);
+  onSnapshot(query(collection(db, "paletlemeler"), where("guncellemeTarihi", ">=", new Date(Date.now() - 7 * 864e5))), (snap) => {
+    paletlemeler = new Map(snap.docs.map((d) => [d.id, { id: d.id, ...d.data() }]));
+    if (raflar.length || gozler.length) { alanlariKur(); ozet(); }
+  }, (err) => console.warn("paletlemeler okunamadı:", err.code || err.message));
   // raflar ve gözler 5 dakikada bir tazelenir
   setInterval(() => { if (document.visibilityState === "visible") yukle(); }, 5 * 60 * 1000);
 });

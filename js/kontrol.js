@@ -1,7 +1,7 @@
 // ============================================================================
 // KONTROL EKRANI MANTIĞI
 // ============================================================================
-import { auth, signOut, sayfaKorumasi } from "./firebase.js";
+import { auth, signOut, sayfaKorumasi, db as _db, doc as _doc, getDoc as _getDoc } from "./firebase.js";
 import { siparisleriDinle, siparisGuncelle, urunleriDinle, urunGuncelle, urunEkle, tumSiparisleriCanliDinle, siparisArsivle, suruculeriGetir, stokDusur, stokGeriEkle, stokGozaltiSifirla, katalogDinle, siparisAlanAta, alanlariDinle, siparisiSil, siparisiGeriGonder, stokKodlariGetir } from "./veri.js?v=20261118";
 import { stoklariDinle, stokRozetiHtml } from "./stok.js?v=20261030c";
 import { serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
@@ -891,6 +891,21 @@ document.getElementById("sevkeCevirBtn").addEventListener("click", async () => {
       </div>
     </div>`;
 
+  // Paletçi paletlemeyi bitirdiyse palet sayısı oradan gelir (değiştirilebilir)
+  let paletleme = null;
+  try {
+    const ps = await _getDoc(_doc(_db, "paletlemeler", aktifSiparis.id));
+    if (ps.exists() && (ps.data().durum === "bitti" || ps.data().tamamlandi)) paletleme = ps.data();
+  } catch (e) { console.warn("paletleme okunamadı", e.message); }
+  if (paletleme) {
+    const inp = document.getElementById("scPalet");
+    if (inp && !inp.value) inp.value = Number(paletleme.toplamPalet) || "";
+    inp?.insertAdjacentHTML("afterend", `<div class="u-text-soft" style="font-size:12px;margin-top:4px;">Paletçi: ${Number(paletleme.toplamPalet) || 0} palet` +
+      (paletleme.darPalet != null ? ` (${paletleme.darPalet} dar, ${paletleme.genisPalet || 0} geniş)` : "") + `${paletleme.paletci ? " · " + kacisEt(paletleme.paletci) : ""}</div>`);
+  } else {
+    document.getElementById("scPalet")?.insertAdjacentHTML("afterend", '<div class="u-text-soft" style="font-size:12px;margin-top:4px;color:#d97706;">⚠ Paletçi bu siparişin paletlemesini henüz bitirmedi.</div>');
+  }
+
   const kapat = () => { root.innerHTML = ""; };
   root.querySelector('[data-role="iptal"]').onclick = kapat;
   root.querySelector('[data-role="backdrop"]').onclick = (e) => {
@@ -923,6 +938,7 @@ document.getElementById("sevkeCevirBtn").addEventListener("click", async () => {
     await siparisGuncelle(aktifSiparis.id, {
       durum: "sevk_edildi",
       paletSayisi: palet,
+      ...(paletleme && paletleme.darPalet != null ? { darPalet: Number(paletleme.darPalet) || 0, genisPalet: Number(paletleme.genisPalet) || 0 } : {}),
       teslimatSirasi: teslimatSirasi || 0,
       sevkTarihi: serverTimestamp(),
       sevkEden: mevcutKullanici ? (mevcutKullanici.ad || mevcutKullanici.uid) : "",
