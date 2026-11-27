@@ -22,6 +22,11 @@ arayuzHazirla();
     b.className = "topbar__link"; b.href = "isi.html"; b.textContent = "🔥 Isı Haritası";
     nav.appendChild(b);
   }
+  if (nav && !nav.querySelector('a[href="ikiz.html"]')) {
+    const c = document.createElement("a");
+    c.className = "topbar__link"; c.href = "ikiz.html"; c.textContent = "🧊 Depo 3D";
+    nav.appendChild(c);
+  }
 })();
 
 // Günlük sayım sayfasına bağlantı
