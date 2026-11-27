@@ -17,12 +17,18 @@ const sayi = (v) => (Number(v) || 0).toLocaleString("tr-TR", { maximumFractionDi
 const norm = (v) => String(v || "").trim().toLocaleUpperCase("tr");
 
 /* ---------------- Sabit yerleşim (gerçek ölçüler) ---------------- */
+/* Yerleşim (çizime göre): soldan sağa
+   duvar | A1 | koridor | A2 B1 | koridor | B2 ORTA C1 | koridor | C2 D1 | koridor | D2 E1 | koridor | E2 | duvar
+   Ön (x<0): paletleme alanı + kepenk solda, palet koyma alanı + kapı sağda. Arka: ofis katı ve üretim. */
+const SIRA_Z = { A1: 0, A2: 4.3, B1: 5.5, B2: 9.8, ORTA: 11.0, C1: 12.2, C2: 16.5, D1: 17.7, D2: 22.0, E1: 23.2, E2: 27.5 };
+const SIRA_YUZ = { A1: 1, A2: -1, B1: 1, B2: -1, ORTA: 1, C1: 1, C2: -1, D1: 1, D2: -1, E1: 1, E2: -1 };
 const RACKS = [
-  { id: "D1", bays: 13, bw: 2.70, lv: [180, 180, 180, 350], z: 0, face: 1 },
-  { id: "D2", bays: 10, bw: 3.25, lv: [170, 170, 170, 300], z: 4.6, face: -1 },
-  { id: "E1", bays: 10, bw: 3.30, lv: [220, 200, 300], z: 5.8, face: 1 },
-  { id: "E2", bays: 11, bw: 3.30, lv: [150, 250, 250], z: 10.4, face: -1 }
-];
+  { id: "D1", bays: 13, bw: 2.70, lv: [180, 180, 180, 350] },
+  { id: "D2", bays: 10, bw: 3.25, lv: [170, 170, 170, 300] },
+  { id: "E1", bays: 10, bw: 3.30, lv: [220, 200, 300] },
+  { id: "E2", bays: 11, bw: 3.30, lv: [150, 250, 250] }
+].map((r) => ({ ...r, z: SIRA_Z[r.id], face: SIRA_YUZ[r.id] }));
+const DEPO_BOY = 37;   // raf sıralarının boyu (m)
 const PCOL = ["#2f7ed8", "#8e44ad", "#16a085", "#c0392b", "#d35400", "#2c3e50", "#27ae60", "#b8860b", "#7f8c8d", "#e84393"];
 const ST = { ok: "#c9a46a", skt: "#e3a400", gecti: "#d63b2f", low: "#d6336c", goz: "#5aa0e0" };
 const D = 1.1, PICK_X = -2;
@@ -42,11 +48,11 @@ for (const r of RACKS) {
   }
 }
 /* rafsız toplama şeritleri */
-const FL_N = 14, FL_W = 1.1, FL_X = -3 - FL_N * FL_W;
-const FLOORS = [["A1", 0, 1], ["A2", 1.2, -1], ["B1", 4.6, -1], ["B2", 5.8, 1], ["C1", 9.2, 1], ["C2", 10.4, -1]]
-  .map(([id, z, face]) => ({ id, floor: true, face, x0: FL_X, z0: z - 0.6, zc: z, w: FL_N * FL_W, d: 1.2, bays: FL_N }));
+const FL_N = 30, FL_W = 1.1, FL_X = 0;
+const FLOORS = ["A1", "A2", "B1", "B2", "ORTA", "C1", "C2"]
+  .map((id) => ({ id, floor: true, face: SIRA_YUZ[id], x0: FL_X, z0: SIRA_Z[id] - 0.6, zc: SIRA_Z[id], w: FL_N * FL_W, d: 1.2, bays: FL_N }));
 for (const f of FLOORS) for (let k = 0; k < FL_N; k++) slots.push({ r: f, b: k, l: 0, k: 0, levelCm: 999, pick: true, x: f.x0 + FL_W / 2 + k * FL_W, y: 0, z: f.zc, pal: null });
-const slotAdi = (s) => s.r.floor ? `${s.r.id} · Yer ${s.b + 1} (rafsız toplama)` : `${s.r.id} · Bölme ${s.b + 1} · Kat ${s.l + 1} · Yer ${s.k + 1}` + (s.pick ? " (taban / toplama)" : "");
+const slotAdi = (s) => s.r.floor ? `${s.r.id === "ORTA" ? "Orta raf" : s.r.id} · Yer ${s.b + 1} (toplama)` : `${s.r.id} · Bölme ${s.b + 1} · Kat ${s.l + 1} · Yer ${s.k + 1}` + (s.pick ? " (taban / toplama)" : "");
 const yuvaBul = (rid, b, l) => slots.filter((s) => s.r.id === rid && s.b === b && s.l === l);
 
 /* ---------------- Sahne ---------------- */
@@ -55,14 +61,14 @@ const renderer = new THREE.WebGLRenderer({ canvas: cv, antialias: true, alpha: t
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 const scene = new THREE.Scene();
 const cam = new THREE.PerspectiveCamera(45, 1, 0.1, 300);
-const HOME = { pos: new THREE.Vector3(6, 42, 60), tgt: new THREE.Vector3(10, 0, 8) };
+const HOME = { pos: new THREE.Vector3(-34, 34, 14), tgt: new THREE.Vector3(14, 0, 14) };
 cam.position.copy(HOME.pos);
 const ctl = new THREE.OrbitControls(cam, cv); ctl.target.copy(HOME.tgt); ctl.enableDamping = true; ctl.maxPolarAngle = Math.PI * 0.48; ctl.minDistance = 3; ctl.maxDistance = 90;
 scene.add(new THREE.HemisphereLight(0xffffff, 0x8a8f96, 0.85));
 const sun = new THREE.DirectionalLight(0xffffff, 0.7); sun.position.set(-20, 40, 25); scene.add(sun);
 const floorMat = new THREE.MeshLambertMaterial({ color: 0xc9cdd2 });
-const floor = new THREE.Mesh(new THREE.PlaneGeometry(80, 40), floorMat); floor.rotation.x = -Math.PI / 2; floor.position.set(16, -0.01, 5); scene.add(floor);
-const grid = new THREE.GridHelper(80, 80, 0x9aa0a8, 0xb4b9bf); grid.position.set(16, 0, 5); scene.add(grid);
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(58, 30), floorMat); floor.rotation.x = -Math.PI / 2; floor.position.set(20, -0.01, 13.75); scene.add(floor);
+const grid = new THREE.GridHelper(58, 58, 0x9aa0a8, 0xb4b9bf); grid.position.set(20, 0, 13.75); scene.add(grid);
 
 function label(text, bg, h = 0.9) {
   const c = document.createElement("canvas"), g = c.getContext("2d"), F = "800 56px Archivo, sans-serif"; g.font = F;
@@ -78,24 +84,39 @@ for (const r of RACKS) {
   m.rotation.x = -Math.PI / 2; m.position.set(r.len / 2, 0.02, r.z); scene.add(m);
 }
 const ZONES = [
-  ...FLOORS.map((f) => ({ id: f.id, name: f.id, css: "#d4a900", x: f.x0, z: f.z0, w: f.w, d: f.d, floor: true })),
-  { id: "yapma", name: "Palet yapma alanı", css: "#8e44ad", x: -7.6, z: 13.2, w: 16, d: 6.5 },
-  { id: "hazir", name: "Hazır palet alanı", css: "#1f9d55", x: 10, z: 13.2, w: 20, d: 6.5 },
-  { id: "uretim", name: "Üretim alanı", css: "#16a085", x: 39.5, z: -1.3, w: 11, d: 21 }
+  ...FLOORS.map((f) => ({ id: f.id, name: f.id === "ORTA" ? "Orta raf" : f.id, css: "#d4a900", x: f.x0, z: f.z0, w: f.w, d: f.d, floor: true })),
+  { id: "yapma", name: "Paletleme alanı", css: "#8e44ad", x: -8.5, z: -0.8, w: 7, d: 11.8 },
+  { id: "hazir", name: "Palet koyma alanı", css: "#1f9d55", x: -8.5, z: 20, w: 7, d: 8.3 },
+  { id: "ofis", name: "Ofis katı", css: "#64748b", x: 38, z: 3, w: 9, d: 11, sabit: true },
+  { id: "uretim", name: "Üretim", css: "#16a085", x: 38, z: 18, w: 9, d: 10.3 }
 ];
 for (const zn of ZONES) {
   zn.cx = zn.x + zn.w / 2; zn.cz = zn.z + zn.d / 2; zn.n = 0;
   const pm = new THREE.Mesh(new THREE.PlaneGeometry(zn.w, zn.d), new THREE.MeshBasicMaterial({ color: zn.css, transparent: true, opacity: 0.22, depthWrite: false }));
   pm.rotation.x = -Math.PI / 2; pm.position.set(zn.cx, 0.015, zn.cz); scene.add(pm);
   const e = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(zn.w, 0.001, zn.d)), new THREE.LineBasicMaterial({ color: zn.css })); e.position.set(zn.cx, 0.03, zn.cz); scene.add(e);
-  const L = label(zn.name, zn.floor ? "#b38f00" : zn.css, zn.floor ? 0.9 : 0.75); L.position.set(zn.floor ? zn.x - 0.9 : zn.cx, zn.floor ? 1.3 : zn.id === "uretim" ? 3.4 : 2.6, zn.floor ? zn.cz : zn.z + 0.4); scene.add(L);
+  const L = label(zn.name, zn.floor ? "#b38f00" : zn.css, zn.floor ? 0.9 : 0.85); L.position.set(zn.floor ? zn.x - 0.9 : zn.cx, zn.floor ? (zn.id === "ORTA" ? 2.6 : 1.3) : 3.2, zn.cz); scene.add(L);
 }
-{ const G = label("Rafsız toplama alanları", "#b38f00", 0.8); G.position.set(FL_X + FL_N * FL_W / 2, 3.2, 5.2); scene.add(G); }
+/* duvarlar, kepenk, kapı */
+{
+  const dm = new THREE.MeshLambertMaterial({ color: 0x9aa3ad, transparent: true, opacity: 0.55 });
+  const duvar = (x, z, w, d, h = 2.4) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), dm); m.position.set(x + w / 2, h / 2, z + d / 2); scene.add(m); };
+  const X0 = -9, X1 = 47.5, Z0 = -1.2, Z1 = 28.7;
+  duvar(X0, Z0 - 0.2, X1 - X0, 0.2);           // sol duvar
+  duvar(X0, Z1, X1 - X0, 0.2);                 // sağ duvar
+  duvar(X1, Z0, 0.2, Z1 - Z0);                 // arka duvar
+  // ön duvar: kepenk (z 6–10) ve kapı (z 23–27.5) boşluklu
+  duvar(X0 - 0.2, Z0, 0.2, 7.2); duvar(X0 - 0.2, 10, 0.2, 13); duvar(X0 - 0.2, 27.5, 0.2, Z1 - 27.5);
+  const K = label("Kepenk", "#475569", 0.7); K.position.set(X0 - 0.6, 1.6, 8); scene.add(K);
+  const Kp = label("Kapı", "#475569", 0.7); Kp.position.set(X0 - 0.6, 1.6, 25.2); scene.add(Kp);
+  const of = new THREE.Mesh(new THREE.BoxGeometry(9, 0.25, 11), new THREE.MeshLambertMaterial({ color: 0x94a3b8, transparent: true, opacity: 0.5 }));
+  of.position.set(42.5, 3.2, 8.5); scene.add(of);   // ofis katı (asma kat)
+}
 const Z = (id) => ZONES.find((z) => z.id === id);
 /* üretim hattı (sabit görsel) */
 {
-  const belt = new THREE.Mesh(new THREE.BoxGeometry(8.5, 0.75, 1), new THREE.MeshLambertMaterial({ color: 0x4a525c })); belt.position.set(44.6, 0.375, 4); scene.add(belt);
-  [41.5, 45.5].forEach((x) => { const m = new THREE.Mesh(new THREE.BoxGeometry(1.8, 2.2, 1.8), new THREE.MeshLambertMaterial({ color: 0x16a085 })); m.position.set(x, 1.1, 4); scene.add(m); });
+  const belt = new THREE.Mesh(new THREE.BoxGeometry(1, 0.75, 6), new THREE.MeshLambertMaterial({ color: 0x4a525c })); belt.position.set(45.5, 0.375, 23); scene.add(belt);
+  [20.5, 25.5].forEach((z) => { const m = new THREE.Mesh(new THREE.BoxGeometry(1.8, 2.2, 1.8), new THREE.MeshLambertMaterial({ color: 0x16a085 })); m.position.set(45.5, 1.1, z); scene.add(m); });
 }
 
 const woodGeo = new THREE.BoxGeometry(0.8, 0.14, 1);
@@ -124,7 +145,7 @@ function alanPaleti(x, z, h, color, rec, wrap) {
 /* ---------------- Veri ---------------- */
 let raflar = [], gozler = [], siparisler = [], yersiz = [], urunRaf = null;
 const RAF_ID = (ad) => { const m = norm(ad).replace(/[^A-Z0-9]/g, "").match(/^(?:RAF)?([DE][12])(?![0-9])/); return m ? m[1] : null; };
-const reyonCoz = (r) => { const m = norm(r).match(/^([A-E][12])\s*[-_./ ]?\s*(\d+)/); return m ? { id: m[1], no: Number(m[2]) } : null; };
+const reyonCoz = (r) => { const m = norm(r).match(/^(ORTA(?:\s*RAF)?|[A-E][12])\s*[-_./ ]?\s*(\d+)/); return m ? { id: m[1].startsWith("ORTA") ? "ORTA" : m[1], no: Number(m[2]) } : null; };
 
 async function yukle() {
   $("yenile").disabled = true;
@@ -198,7 +219,7 @@ function alanlariKur() {
   const yapma = siparisler.filter((s) => ["toplandi", "kontrol_ediliyor"].includes(s.durum)).slice(0, 10);
   yapma.forEach((s, i) => {
     const t = Number(s.toplamUrun) || 0, k = t ? (Number(s.kontrolEdilenUrun) || 0) / t : 0.3;
-    const x = -6.6 + (i % 5) * 3, z = 15.2 + Math.floor(i / 5) * 2.6;
+    const x = -7.4 + Math.floor(i / 5) * 2.6, z = 0.6 + (i % 5) * 2.2;
     ekle(x, z, 0.4 + 1.2 * Math.max(0.15, k), renkKod(subeAd(s)), { zone: "yapma", title: `${subeAd(s)}`, tag: s.durum === "kontrol_ediliyor" ? "Kontrol ediliyor" : "Kontrol bekliyor", tagc: "#8e44ad",
       rows: [["Kalem", `${t}`], ["Kontrol", `${s.kontrolEdilenUrun || 0} / ${t}`], ["Eksik", `${s.eksikUrun || 0}`], ["Toplayan", s.toplayanKullanici || "—"], ["Kontrol eden", s.kontrolBaşlayan || "—"]] }, false);
     const L = label(subeAd(s), renkKod(subeAd(s)), 0.45); L.position.set(x, 2.1, z); alanGrup.add(L);
@@ -207,16 +228,16 @@ function alanlariKur() {
   let hz = 0;
   hazir.forEach((s) => {
     const n = Math.max(1, Math.min(4, Number(s.paletSayisi) || 1));
-    for (let j = 0; j < n && hz < 30; j++) {
-      const col = hz % 10, row = Math.floor(hz / 10); hz++;
-      const x = 11 + col * 1.9, z = 14.6 + row * 2.1;
+    for (let j = 0; j < n && hz < 35; j++) {
+      const col = hz % 7, row = Math.floor(hz / 7); hz++;
+      const x = -7.8 + row * 1.4, z = 20.8 + col * 1.12;
       ekle(x, z, 1.45, renkKod(subeAd(s)), { zone: "hazir", title: `${subeAd(s)}${n > 1 ? ` · palet ${j + 1}/${n}` : ""}`, tag: "Sevke hazır", tagc: "#1f9d55",
         rows: [["Kalem", `${s.toplananUrun || 0}`], ["Kilo", s.toplamKg ? `${Math.round(s.toplamKg)} kg` : "—"], ["Eksik", `${s.eksikUrun || 0}`], ["Kontrol bitti", s.kontrolBitis ? new Date(s.kontrolBitis).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" }) : "—"]] }, true);
       if (j === 0) { const L = label(subeAd(s), renkKod(subeAd(s)), 0.45); L.position.set(x, 2.15, z); alanGrup.add(L); }
     }
   });
   (urunRaf?.kalemler || []).slice(0, 12).forEach((k, i) => {
-    const x = 41 + (i % 4) * 2.2, z = 8 + Math.floor(i / 4) * 2.4;
+    const x = 39 + Math.floor(i / 4) * 1.8, z = 19 + (i % 4) * 2.4;
     ekle(x, z, 1.1, renkKod(k.stokKodu || k.ad), { zone: "uretim", title: k.ad || k.stokKodu, tag: "ÜRETİM rafı", tagc: "#16a085",
       rows: [["Stok kodu", k.stokKodu || "—"], ["Miktar", `${sayi(k.miktar)} ${k.birim || ""}`], ["Giriş", k.girisTarihi || "—"], ["Not", k.not || "—"]] }, false);
   });
@@ -299,18 +320,18 @@ function alanSec(o) {
   selBox.scale.set(sz.x / 0.9 * 1.08, sz.y * 1.05, sz.z / 1.08 * 1.08); selBox.position.copy(c); selBox.visible = true;
   el.innerHTML = `<h2>${esc(r.title)}</h2><p style="margin:0 0 10px"><span class="tag" style="background:${r.tagc}">${esc(r.tag)}</span> <span class="muted">${esc(Z(r.zone).name)}</span></p><dl>${r.rows.map(([a, b]) => `<dt>${esc(a)}</dt><dd>${esc(b)}</dd>`).join("")}</dl>`;
 }
-function zonaUc(zn) { fly = { tgt: new THREE.Vector3(zn.cx, 0.6, zn.cz), pos: new THREE.Vector3(zn.cx - 7, 11 + zn.d * 0.25, zn.cz + 9 + zn.d * 0.4) }; }
+function zonaUc(zn) { fly = { tgt: new THREE.Vector3(zn.cx, 0.6, zn.cz), pos: new THREE.Vector3(zn.cx - 6 - zn.w * 0.4, 8 + Math.max(zn.w, zn.d) * 0.7, zn.cz + 2) }; }
 function sec(s) {
   sel = s; if (!s) { selBox.visible = false; return; }
   const bb = new THREE.Box3().setFromObject(s.pal.mesh), sz = bb.getSize(new THREE.Vector3()), c = bb.getCenter(new THREE.Vector3());
   selBox.scale.set(sz.x / 0.9 * 1.08, sz.y * 1.05 + 0.05, sz.z / 1.08 * 1.08); selBox.position.copy(c); selBox.visible = true; detay(s);
 }
-function ucTo(s) { fly = { tgt: new THREE.Vector3(s.x, s.y + 0.8, s.z), pos: new THREE.Vector3(s.x - 3.5, s.y + 3.2, s.z + (s.r.face || 1) * 7) }; }
+function ucTo(s) { fly = { tgt: new THREE.Vector3(s.x, s.y + 0.8, s.z), pos: new THREE.Vector3(s.x - 3.5, s.y + 3.2, s.z + (s.r.face || 1) * 3.5) }; }
 function zonlarCiz() {
   $("zones").innerHTML = ZONES.map((z) => {
     const n = z.floor ? slots.filter((s) => s.r.id === z.id && s.pal).length : z.n;
-    const yazi = z.floor ? `${n} göz` : z.id === "uretim" ? `${n} kalem` : `${n} palet`;
-    return `<li data-z="${z.id}"><span><i style="display:inline-block;width:12px;height:12px;border-radius:3px;background:${z.css};margin-inline-end:7px"></i>${z.floor ? z.name + " rafsız toplama" : z.name}</span><b>${yazi}</b></li>`;
+    const yazi = z.sabit ? "" : z.floor ? `${n} göz` : z.id === "uretim" ? `${n} kalem` : `${n} palet`;
+    return `<li data-z="${z.id}"><span><i style="display:inline-block;width:12px;height:12px;border-radius:3px;background:${z.css};margin-inline-end:7px"></i>${z.floor ? z.name + " toplama sırası" : z.name}</span><b>${yazi}</b></li>`;
   }).join("");
 }
 
