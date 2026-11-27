@@ -496,12 +496,49 @@ async function uretimRafiniBul() {
  *  giren:    {kod, ad, miktar, birim}    -> rafa eklenir (aynı koddan kalem varsa üstüne)
  * Dönüş: { rafAd, yetmeyen: [{kod, ad, eksik}] }
  */
-export async function uretimRafinaIsle({ cikanlar, giren, yapan, not }) {
+/** ÜRETİM rafında her kodun miktarı: Map(kod -> miktar). Raf yoksa boş. */
+export async function uretimRafiStoklari() {
+  const snap = await getDocs(collection(db, RAFLAR));
+  const norm = (v) => String(v || "").trim().toLocaleUpperCase("tr").replace("Ü", "U");
+  const raf = snap.docs.find((d) => norm(d.data().ad) === norm(URETIM_RAFI_ADI));
+  const stok = new Map();
+  if (!raf) return { rafId: null, stok };
+  const ks = await getDocs(collection(db, RAFLAR, raf.id, "kalemler"));
+  ks.docs.forEach((d) => {
+    const k = d.data(); const kod = String(k.stokKodu || "").trim();
+    if (kod) stok.set(kod, (stok.get(kod) || 0) + (Number(k.miktar) || 0));
+  });
+  return { rafId: raf.id, stok };
+}
+
+/** Bir malzemenin ÜRETİM dışında nerede olduğu: toplama gözü miktarı ve diğer raflar. */
+export async function malzemeKaynaklari(kodlar, uretimRafId) {
+  const goz = new Map();
+  await Promise.all(kodlar.map(async (kod) => {
+    const g = await getDoc(doc(db, TOPLAMA_GOZLERI, gozId(kod, null)));
+    if (g.exists()) goz.set(kod, Number(g.data().miktar) || 0);
+  }));
+  const harita = await rafKalemHaritasiGetir();
+  const raflar = new Map();
+  kodlar.forEach((kod) => {
+    const l = (harita.get("kod:" + kod) || []).filter((k) => k.rafId !== uretimRafId);
+    const r = new Map();
+    l.forEach((k) => { const x = r.get(k.rafId) || { rafId: k.rafId, rafAd: k.rafAdi, miktar: 0 }; x.miktar += Number(k.miktar) || 0; r.set(k.rafId, x); });
+    raflar.set(kod, [...r.values()].sort((a, b) => b.miktar - a.miktar));
+  });
+  return { goz, raflar };
+}
+
+/**
+ * kaynaklar: { kod: { tip: "goz" | "raf" | "kayitsiz", rafId? } } — ÜRETİM rafında yetmeyen kısım nereden düşülecek.
+ */
+export async function uretimRafinaIsle({ cikanlar, giren, yapan, not, kaynaklar = {} }) {
   const raf = await uretimRafiniBul();
   const kalemSnap = await getDocs(collection(db, RAFLAR, raf.id, "kalemler"));
   const kalemler = kalemSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
   const batch = writeBatch(db);
   const yetmeyen = [];
+  const gozDus = [];
   const hareket = (tip, k, miktar) => batch.set(doc(collection(db, RAF_HAREKETLERI)), {
     rafId: raf.id, rafAd: raf.ad, tip, stokKodu: k.kod || "", ad: k.ad || "",
     miktar: Number(miktar) || 0, palet: 0, birim: k.birim || "KG", yapan: yapan || "", not: not || "Üretim",
@@ -522,7 +559,34 @@ export async function uretimRafinaIsle({ cikanlar, giren, yapan, not }) {
       else batch.update(doc(db, RAFLAR, raf.id, "kalemler", k.id), { miktar: yeni });
     }
     if ((Number(c.miktar) || 0) - kalan > 0) hareket("cikis", c, (Number(c.miktar) || 0) - kalan);
-    if (kalan > 0) yetmeyen.push({ kod: c.kod, ad: c.ad || "", eksik: kalan });
+    if (kalan > 0) {
+      const kay = kaynaklar[c.kod] || {};
+      if (kay.tip === "goz") {
+        gozDus.push({ kod: c.kod, miktar: kalan });
+      } else if (kay.tip === "raf" && kay.rafId) {
+        const ks = await getDocs(collection(db, RAFLAR, kay.rafId, "kalemler"));
+        const rafAdi = kay.rafAd || kay.rafId;
+        let k2 = kalan;
+        const ayni2 = ks.docs.map((d) => ({ id: d.id, ...d.data() })).filter((k) => String(k.stokKodu || "").trim() === c.kod)
+          .sort((a, b) => (a.skt || "9999").localeCompare(b.skt || "9999") || (a.girisTarihi || "").localeCompare(b.girisTarihi || ""));
+        for (const k of ayni2) {
+          if (k2 <= 0) break;
+          const var_ = Number(k.miktar) || 0, dus = Math.min(var_, k2);
+          k2 = Math.round((k2 - dus) * 1000) / 1000;
+          const yeni = Math.round((var_ - dus) * 1000) / 1000;
+          if (yeni <= 0) batch.delete(doc(db, RAFLAR, kay.rafId, "kalemler", k.id));
+          else batch.update(doc(db, RAFLAR, kay.rafId, "kalemler", k.id), { miktar: yeni });
+        }
+        batch.set(doc(collection(db, RAF_HAREKETLERI)), {
+          rafId: kay.rafId, rafAd: rafAdi, tip: "cikis", stokKodu: c.kod, ad: c.ad || "",
+          miktar: kalan - k2, palet: 0, birim: c.birim || "KG", yapan: yapan || "", not: (not || "Üretim") + " (doğrudan raftan)",
+          tarih: serverTimestamp()
+        });
+        if (k2 > 0) yetmeyen.push({ kod: c.kod, ad: c.ad || "", eksik: k2, kaynak: rafAdi });
+      } else {
+        yetmeyen.push({ kod: c.kod, ad: c.ad || "", eksik: kalan, kaynak: "kayıtsız" });
+      }
+    }
   }
   if (giren && giren.kod && Number(giren.miktar) > 0) {
     const mevcut = kalemler.find((k) => String(k.stokKodu || "").trim() === giren.kod);
@@ -535,7 +599,9 @@ export async function uretimRafinaIsle({ cikanlar, giren, yapan, not }) {
     hareket("giris", giren, giren.miktar);
   }
   await batch.commit();
-  return { rafAd: raf.ad, yetmeyen };
+  // Toplama gözünden alınanlar
+  await Promise.all(gozDus.map((g) => gozMiktarDegistir(g.kod, -g.miktar, null)));
+  return { rafAd: raf.ad, yetmeyen, gozdenDusulen: gozDus };
 }
 
 /* ---- KAĞIT TOPLAMA ----

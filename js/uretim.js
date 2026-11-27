@@ -4,8 +4,9 @@
 import { auth, signOut, sayfaKorumasi } from "./firebase.js";
 import {
   receteleriDinle, receteOlustur, receteGuncelle, recedeSil,
-  uretimKaydet, paketlemeKaydet, uretimGecmisGetir, katalogDinle, uretimRafinaIsle
-} from "./veri.js?v=20261124";
+  uretimKaydet, paketlemeKaydet, uretimGecmisGetir, katalogDinle, uretimRafinaIsle,
+  uretimRafiStoklari, malzemeKaynaklari
+} from "./veri.js?v=20261127";
 import { arayuzHazirla, toast, onayIste, kacisEt, sayiBicimle, ondalikOku } from "./utils.js";
 
 arayuzHazirla();
@@ -66,6 +67,66 @@ function yardimciEkleModal(tip) {
   };
   document.getElementById("yardimciAdInput").focus();
 }
+/**
+ * ÜRETİM rafında yetmeyen malzemeler için "Nereden aldınız?" sorar.
+ * Dönen: { kaynaklar: {kod:{tip,rafId,rafAd}}, ozet: [...] } ; vazgeçilirse null.
+ */
+async function kaynakSor(cikanlar) {
+  const { rafId, stok } = await uretimRafiStoklari();
+  const eksikler = cikanlar.map((c) => {
+    const var_ = stok.get(c.kod) || 0;
+    const eksik = Math.round(((Number(c.miktar) || 0) - var_) * 1000) / 1000;
+    return { ...c, rafta: var_, eksik };
+  }).filter((c) => c.eksik > 0);
+  if (!eksikler.length) return { kaynaklar: {}, ozet: [] };
+  const { goz, raflar } = await malzemeKaynaklari(eksikler.map((e) => e.kod), rafId);
+  const root = document.getElementById("modalRoot");
+  return new Promise((coz) => {
+    root.innerHTML = `
+      <div class="modal-backdrop" data-role="backdrop">
+        <div class="modal" style="max-width:560px;">
+          <h3>📦 Nereden aldınız?</h3>
+          <div style="font-size:13px;color:var(--color-ink-soft);margin-bottom:10px;">Aşağıdaki malzemeler ÜRETİM rafında yok ya da yetmiyor. Eksik kısım seçtiğiniz yerden düşülecek.</div>
+          ${eksikler.map((e, i) => {
+            const g = goz.get(e.kod);
+            const rl = raflar.get(e.kod) || [];
+            return `
+            <div style="border:1px solid var(--color-line,#ddd);border-radius:8px;padding:8px 10px;margin-bottom:8px;">
+              <div style="font-weight:600;">${kacisEt(e.kod)} — ${kacisEt(e.ad || "")}</div>
+              <div style="font-size:12.5px;color:var(--color-ink-soft);margin:2px 0 6px;">Gereken ${sayiBicimle(e.miktar)} · ÜRETİM rafında ${sayiBicimle(e.rafta)} · <b>eksik ${sayiBicimle(e.eksik)} ${kacisEt(e.birim || "KG")}</b></div>
+              <select class="input" data-kaynak="${i}">
+                <option value="goz">Toplama gözünden${g != null ? ` (gözde ${sayiBicimle(g)})` : " (göz kaydı yok)"}</option>
+                ${rl.map((r) => `<option value="raf:${kacisEt(r.rafId)}">Raftan: ${kacisEt(r.rafAd || r.rafId)} (${sayiBicimle(r.miktar)})</option>`).join("")}
+                <option value="kayitsiz">Bilmiyorum / kayıtsız (sadece not düşülsün)</option>
+              </select>
+            </div>`;
+          }).join("")}
+          <div class="modal__actions">
+            <button class="btn btn-ghost" data-role="iptal">Vazgeç</button>
+            <button class="btn btn-primary" data-role="tamam">Kaydet</button>
+          </div>
+        </div>
+      </div>`;
+    const kapat = (sonuc) => { root.innerHTML = ""; coz(sonuc); };
+    root.querySelector('[data-role="iptal"]').onclick = () => kapat(null);
+    root.querySelector('[data-role="backdrop"]').onclick = (ev) => { if (ev.target.dataset.role === "backdrop") kapat(null); };
+    root.querySelector('[data-role="tamam"]').onclick = () => {
+      const kaynaklar = {}, ozet = [];
+      eksikler.forEach((e, i) => {
+        const v = root.querySelector(`[data-kaynak="${i}"]`).value;
+        let k;
+        if (v.startsWith("raf:")) {
+          const id = v.slice(4); const r = (raflar.get(e.kod) || []).find((x) => x.rafId === id);
+          k = { tip: "raf", rafId: id, rafAd: r?.rafAd || id };
+        } else k = { tip: v };
+        kaynaklar[e.kod] = k;
+        ozet.push({ kod: e.kod, ad: e.ad || "", eksik: e.eksik, kaynak: k.tip, rafAd: k.rafAd || "" });
+      });
+      kapat({ kaynaklar, ozet });
+    };
+  });
+}
+
 let aktifSekme = "kokteyl";
 
 // Bugünün tarihini giriş alanlarına yaz
@@ -184,7 +245,19 @@ document.getElementById("kokKaydetBtn").addEventListener("click", async () => {
     onayMetni: "Sadece kaydet"
   }))) return;
   const btn = document.getElementById("kokKaydetBtn");
+  const rafIsle = cikanlar.every((c) => c.kod) && recete.ciktiKod;
   btn.disabled = true;
+  let kaynak = { kaynaklar: {}, ozet: [] };
+  if (rafIsle) {
+    try {
+      const k = await kaynakSor(cikanlar);
+      if (!k) { btn.disabled = false; return; }
+      kaynak = k;
+    } catch (err) {
+      console.error(err);
+      toast("ÜRETİM rafı okunamadı, malzeme kaynağı sorulamadı: " + (err.code || err.message), "error");
+    }
+  }
   try {
   await uretimKaydet({
     receteId, receteAd: recete.ad,
@@ -201,7 +274,8 @@ document.getElementById("kokKaydetBtn").addEventListener("click", async () => {
     parti: document.getElementById("kokParti").value.trim(),
     not: document.getElementById("kokNot").value.trim(),
     yapan: mevcutKullanici.ad || mevcutKullanici.uid,
-    yardimcilar: [...kokYardimcilar]
+    yardimcilar: [...kokYardimcilar],
+    ...(kaynak.ozet.length ? { malzemeKaynaklari: kaynak.ozet } : {})
   });
   } catch (err) {
     console.error(err);
@@ -212,14 +286,16 @@ document.getElementById("kokKaydetBtn").addEventListener("click", async () => {
   btn.disabled = false;
   toast(`✅ ${recete.ad} — ${sayiBicimle(miktar)} KG kaydedildi${mikroya ? ", Mikro'ya virman yazılıyor" : ""}.`, "success");
   // ÜRETİM rafı: malzemeler buradan düşer, karışım buraya girer
-  if (cikanlar.every((c) => c.kod) && recete.ciktiKod) {
+  if (rafIsle) {
     try {
       const r = await uretimRafinaIsle({
         cikanlar, giren: { kod: recete.ciktiKod, ad: recete.ciktiAdi || recete.ad, miktar, birim: "KG" },
-        yapan: mevcutKullanici.ad || mevcutKullanici.uid, not: `Üretim: ${recete.ad}`
+        yapan: mevcutKullanici.ad || mevcutKullanici.uid, not: `Üretim: ${recete.ad}`,
+        kaynaklar: kaynak.kaynaklar
       });
-      if (r.yetmeyen.length) {
-        toast(`⚠ ${r.rafAd} rafında yetmeyen: ${r.yetmeyen.map((y) => `${y.kod} ${sayiBicimle(y.eksik)}`).join(", ")}. Çuvalları rafa taşıyıp raf kaydını düzeltin.`, "error", 10000);
+      const raftaYok = r.yetmeyen.filter((y) => y.kaynak !== "kayıtsız");
+      if (raftaYok.length) {
+        toast(`⚠ Seçilen rafta yetmedi: ${raftaYok.map((y) => `${y.kod} ${sayiBicimle(y.eksik)} (${y.kaynak})`).join(", ")}. Raf kaydını kontrol edin.`, "error", 10000);
       }
     } catch (err) {
       console.error(err);
