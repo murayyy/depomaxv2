@@ -51,7 +51,19 @@ for (const r of RACKS) {
 const FL_N = 30, FL_W = 1.1, FL_X = 0;
 const FLOORS = ["A1", "A2", "B1", "B2", "ORTA", "C1", "C2"]
   .map((id) => ({ id, floor: true, face: SIRA_YUZ[id], x0: FL_X, z0: SIRA_Z[id] - 0.6, zc: SIRA_Z[id], w: FL_N * FL_W, d: 1.2, bays: FL_N }));
-for (const f of FLOORS) for (let k = 0; k < FL_N; k++) slots.push({ r: f, b: k, l: 0, k: 0, levelCm: 999, pick: true, x: f.x0 + FL_W / 2 + k * FL_W, y: 0, z: f.zc, pal: null });
+/* rafsız sıraların yer sayısı veriye göre belirlenir (en büyük reyon numarası); sıra boyu sabit */
+function zeminYuvalari(sayilar = {}) {
+  for (let i = slots.length - 1; i >= 0; i--) if (slots[i].r.floor) slots.splice(i, 1);
+  for (const f of FLOORS) {
+    const n = Math.max(10, sayilar[f.id] || FL_N), w = f.w / n;
+    f.bays = n;
+    for (let k = 0; k < n; k++) slots.push({ r: f, b: k, l: 0, k: 0, levelCm: 999, pick: true, x: f.x0 + w / 2 + k * w, y: 0, z: f.zc, pal: null });
+  }
+}
+zeminYuvalari();
+/* Reyon numaraları: X1 sırası 1'den başlar; X2 sırası (E2 hariç) X1'in bittiği yerden devam eder
+   ve koridorda geri dönerek (arkadan öne) ilerler. */
+const DEVAM_EDEN = { A2: "A1", B2: "B1", C2: "C1", D2: "D1" };
 const slotAdi = (s) => s.r.floor ? `${s.r.id === "ORTA" ? "Orta raf" : s.r.id} · Yer ${s.b + 1} (toplama)` : `${s.r.id} · Bölme ${s.b + 1} · Kat ${s.l + 1} · Yer ${s.k + 1}` + (s.pick ? " (taban / toplama)" : "");
 const yuvaBul = (rid, b, l) => slots.filter((s) => s.r.id === rid && s.b === b && s.l === l);
 
@@ -172,14 +184,42 @@ function yerlestir() {
   selBox.visible = false; sel = null;
 
   // 1) toplama gözleri: reyondan konum
-  for (const g of gozler) {
-    const yr = reyonCoz(g.reyon);
+  const coz = gozler.map((g) => reyonCoz(g.reyon));
+  const enBuyuk = {};
+  coz.forEach((y) => { if (y) enBuyuk[y.id] = Math.max(enBuyuk[y.id] || 0, y.no); });
+  const fark = {};   // X2 sırasının numarası bu kadar kaydırılır
+  for (const [x2, x1] of Object.entries(DEVAM_EDEN)) {
+    const ilk2 = Math.min(...coz.filter((y) => y && y.id === x2).map((y) => y.no));
+    fark[x2] = enBuyuk[x1] && ilk2 > enBuyuk[x1] - 1 ? enBuyuk[x1] : 0;
+  }
+  const sira = (y) => ({ ...y, yer: y.no - (fark[y.id] || 0) });   // sıra içindeki 1'den başlayan yer
+  const yerSayisi = {};
+  coz.forEach((y) => { if (y) { const t = sira(y); yerSayisi[t.id] = Math.max(yerSayisi[t.id] || 0, t.yer); } });
+  zeminYuvalari(yerSayisi);
+  for (const [i, g] of gozler.entries()) {
+    const yr = coz[i] ? sira(coz[i]) : null;
     const pal = { tip: "goz", kod: g.kod || g.id, ad: g.ad || "", miktar: Number(g.miktar) || 0, birim: g.birim || "", uyari: Number(g.uyariSeviyesi) || 0,
       ikmal: !!g.ikmalGerekli, reyon: g.reyon || "", h: 110, fill: 1 };
     const esik = pal.uyari > 0 ? pal.uyari * 4 : Math.max(pal.miktar, 1);
     pal.fill = Math.max(0.06, Math.min(1, pal.miktar / esik));
     if (!yr) { yersiz.push({ ...pal, neden: g.reyon ? `Reyon "${g.reyon}"` : "Reyon yok" }); continue; }
-    const s = yuvaBul(yr.id, yr.no - 1, 0).find((x) => !x.pal);
+    let s = null;
+    const geri = !!DEVAM_EDEN[yr.id];
+    const f = FLOORS.find((x) => x.id === yr.id);
+    if (f) {
+      const b = geri ? f.bays - yr.yer : yr.yer - 1;
+      s = yuvaBul(yr.id, b, 0).find((x) => !x.pal);
+    } else {
+      const r = RACKS.find((x) => x.id === yr.id);
+      if (r) {
+        const ucluk = (yerSayisi[r.id] || 0) > r.bays;   // numaralar palet yeri bazında (bölme × 3)
+        const i0 = yr.yer - 1;
+        let bay = ucluk ? Math.floor(i0 / 3) : i0;
+        if (geri) bay = r.bays - 1 - bay;
+        const aday = yuvaBul(r.id, bay, 0);
+        s = ucluk ? aday.find((x) => x.k === i0 % 3 && !x.pal) : aday.find((x) => !x.pal);
+      }
+    }
     if (!s) { yersiz.push({ ...pal, neden: `${g.reyon}: yer dolu ya da yok` }); continue; }
     s.pal = pal;
   }
