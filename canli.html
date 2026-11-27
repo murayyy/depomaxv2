@@ -1,76 +1,142 @@
 <!DOCTYPE html>
 <html lang="tr">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>Canlı Takip — Depomax</title>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css" />
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Canlı Takip · Depomax</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100..125,400..800&display=swap" rel="stylesheet">
 <style>
-  .canli-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
-  .canli-kart { background: var(--color-surface-1); border: 1px solid var(--color-border); border-radius: var(--radius-sm); padding: 14px; position: relative; }
-  .canli-kart.toplaniyor { border-left: 3px solid #3B82F6; }
-  .canli-kart.kontrol { border-left: 3px solid #8B5CF6; }
-  .canli-kart.bekliyor { border-left: 3px solid #9CA3AF; }
-  .progress-bar { height: 6px; background: var(--color-surface-2); border-radius: 3px; overflow: hidden; margin: 8px 0; }
-  .progress-fill { height: 100%; border-radius: 3px; transition: width .5s; }
-  .progress-fill.blue { background: #3B82F6; }
-  .progress-fill.purple { background: #8B5CF6; }
-  .canli-personel { font-size: 13px; font-weight: 600; }
-  .canli-sure { font-size: 11px; color: var(--color-ink-soft); }
-  .pulse { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #10B981; animation: pulse 1.5s infinite; }
-  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(1.3)} }
-  .ozet-bar { display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 20px; }
-  .ozet-item { text-align: center; }
-  .ozet-sayi { font-size: 28px; font-weight: 700; }
-  .ozet-label { font-size: 12px; color: var(--color-ink-soft); }
+/* VOICE: depo duvarındaki TV; 5 metreden okunur, tek bakışta "kim bekliyor, ne eksik"
+   IDEA: havalimanı kalkış panosu gibi bir sevkiyat panosu; şube kartları akış sütunlarında ilerler
+   PICTURE: beş aşamalı canlı sipariş akışı (bekliyor → toplanıyor → paletleniyor → hazır → yüklendi)
+   COLOUR and TYPE: koyu pano zemini her iki temada; depo turuncusu vurgu, aşama renkleri; Archivo geniş
+   LAYOUT: üstte saat ve rakamlar, solda akış, sağda araç planı, eksikler ve son olaylar */
+.hidden{display:none!important}
+.tag{font-size:11px;font-weight:700;border-radius:4px;padding:1px 6px;background:var(--or);color:#fff;margin-inline-start:6px;vertical-align:2px}
+.late{color:#fbbf24;font-weight:700}
+#hata{background:#7f1d1d;color:#fff;padding:8px max(2vw,14px);font-size:15px}
+.btns{display:flex;gap:8px;flex-wrap:wrap}
+.btn-a{font-size:14px;min-height:44px;padding:9px 14px;border-radius:7px;border:1px solid var(--line);background:var(--pan);color:var(--ink);text-decoration:none;display:inline-flex;align-items:center}
+.card{cursor:pointer;-webkit-tap-highlight-color:transparent}
+.card:active{transform:scale(.97)}
+.card .tm{font-variant-numeric:tabular-nums}
+.card.new{animation:pop .8s}
+.online li{display:grid;grid-template-columns:12px minmax(0,1fr) auto;gap:8px;align-items:center;padding:6px 0;border-top:1px solid var(--line);font-size:15px}
+.online li:first-child{border-top:0}
+.online i{width:10px;height:10px;border-radius:50%;background:var(--s3);box-shadow:0 0 0 0 rgba(34,176,102,.6);animation:nab 2s infinite}
+.online i.idle{background:#fbbf24;animation:none}
+.online span.r{color:var(--mute);font-size:13px;white-space:nowrap}
+@keyframes nab{70%{box-shadow:0 0 0 8px rgba(34,176,102,0)}100%{box-shadow:0 0 0 0 rgba(34,176,102,0)}}
+.drawer{position:fixed;inset:0;z-index:50;display:flex;justify-content:flex-end}
+.drawer__bg{position:absolute;inset:0;background:rgba(0,0,0,.55)}
+.drawer__in{position:relative;width:min(620px,100%);height:100%;background:var(--bg);border-left:4px solid var(--or);display:flex;flex-direction:column;padding:14px 16px;gap:10px;overflow:hidden}
+.drawer__hd{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.drawer__hd b{font-size:26px;font-stretch:112%}
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.chips button[aria-pressed=true]{background:var(--or);border-color:var(--or)}
+.dliste{overflow-y:auto;-webkit-overflow-scrolling:touch;flex:1}
+.urun{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:4px 10px;padding:9px 4px;border-top:1px solid var(--line);align-items:center}
+.urun .d{font-size:18px;text-align:center}
+.urun .a{font-size:16px;font-weight:600}
+.urun .k{color:var(--mute);font-size:13px;grid-column:2/4}
+.urun .q{font-variant-numeric:tabular-nums;font-weight:700;font-size:16px;white-space:nowrap}
+.urun.eksik .a{color:var(--red)}
+.urun.bitti{opacity:.55}
+@media(max-width:1400px){body{font-size:15px}.card b{font-size:17px}.col{min-height:300px;padding:8px}.kpi{padding:8px 12px}}
+:root{color-scheme:dark;--bg:#0e1115;--pan:#171c22;--pan2:#1f252d;--ink:#eef1f4;--mute:#97a2af;--line:#2a313a;--or:#f26a1b;
+ --s0:#7b8794;--s1:#3b82f6;--s2:#a259d9;--s3:#22b066;--s4:#56606b;--red:#ef4444}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.4 Archivo,system-ui,sans-serif;overflow-x:clip}
+header{display:flex;flex-wrap:wrap;align-items:center;gap:10px 24px;padding:14px max(2vw,14px);border-top:6px solid var(--or)}
+h1{margin:0;font-size:clamp(24px,2.6vw,40px);line-height:1.05;font-stretch:118%;font-weight:800}
+.sub{color:var(--mute);font-size:14px;margin-top:3px}
+.clock{margin-inline-start:auto;text-align:right}
+.clock b{display:block;font-size:clamp(32px,3.6vw,52px);font-stretch:112%;line-height:1;font-variant-numeric:tabular-nums}
+.clock span{color:var(--mute);font-size:14px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;padding:0 max(2vw,14px) 12px}
+.kpi{background:var(--pan);border-radius:10px;padding:10px 14px;border-left:5px solid var(--c,var(--line))}
+.kpi b{display:block;font-size:clamp(26px,2.4vw,38px);font-stretch:112%;line-height:1.1;font-variant-numeric:tabular-nums}
+.kpi span{color:var(--mute);font-size:14px}
+main{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,26%);gap:12px;padding:0 max(2vw,14px) 14px}
+.flow{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px}
+.col{background:var(--pan);border-radius:10px;padding:10px;display:flex;flex-direction:column;gap:8px;min-height:420px}
+.col h2{margin:0 0 2px;font-size:17px;display:flex;justify-content:space-between;align-items:center;gap:6px}
+.col h2 i{width:12px;height:12px;border-radius:50%;background:var(--c);display:inline-block;margin-inline-end:7px}
+.col h2 em{font-style:normal;background:var(--pan2);border-radius:20px;padding:1px 10px;font-variant-numeric:tabular-nums}
+.card{background:var(--pan2);border-radius:8px;padding:9px 10px;border-left:4px solid var(--c);transition:transform .4s,opacity .4s}
+.card.new{animation:pop .6s}
+@keyframes pop{from{transform:scale(.92);opacity:.3}to{transform:none;opacity:1}}
+.card b{font-size:19px;font-stretch:110%;display:block;line-height:1.15}
+.card .m{color:var(--mute);font-size:13px;display:flex;justify-content:space-between;gap:6px;flex-wrap:wrap}
+.card .x{color:var(--red);font-weight:700}
+.bar{height:8px;background:#0e1115;border-radius:4px;overflow:hidden;margin:6px 0 4px}
+.bar div{height:100%;background:var(--c);transition:width .8s}
+.side{display:flex;flex-direction:column;gap:12px}
+.box{background:var(--pan);border-radius:10px;padding:12px 14px}
+.box h2{margin:0 0 8px;font-size:17px}
+.veh{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:2px 10px;padding:7px 0;border-top:1px solid var(--line);align-items:center}
+.veh:first-of-type{border-top:0}
+.veh .t{font-size:20px;font-weight:800;font-variant-numeric:tabular-nums}
+.veh .s{font-size:13px;color:var(--mute);grid-column:2/4}
+.veh .s i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-inline-end:4px;vertical-align:0}
+.pill{font-size:12px;font-weight:700;border-radius:4px;padding:2px 7px;white-space:nowrap}
+ul{list-style:none;margin:0;padding:0}
+.miss li{display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-top:1px solid var(--line);font-size:15px}
+.miss li:first-child{border-top:0}
+.miss b{color:var(--red);white-space:nowrap}
+.feed li{font-size:14px;padding:5px 0;border-top:1px solid var(--line);display:grid;grid-template-columns:3.2em minmax(0,1fr);gap:6px}
+.feed li:first-child{border-top:0}
+.feed time{color:var(--mute);font-variant-numeric:tabular-nums}
+.teams{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin-top:12px}
+.team{background:var(--pan);border-radius:10px;padding:10px 12px}
+.team .m{display:flex;justify-content:space-between;font-size:14px;color:var(--mute)}
+.team b{font-size:22px;font-variant-numeric:tabular-nums}
+footer{color:var(--mute);font-size:13px;padding:0 max(2vw,14px) 18px}
+button{font:inherit;font-size:14px;min-height:40px;padding:6px 12px;border-radius:7px;border:1px solid var(--line);background:var(--pan);color:var(--ink);cursor:pointer}
+:focus-visible{outline:3px solid var(--or);outline-offset:2px}
+@media(max-width:1100px){main{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:900px){.flow{display:flex;overflow-x:auto;scroll-snap-type:x mandatory}.col{flex:0 0 78%;scroll-snap-align:start;min-height:0}.clock{margin-inline-start:0;text-align:left}}
+@media(prefers-reduced-motion:reduce){.card,.bar div{transition:none}.card.new{animation:none}}
 </style>
 </head>
 <body>
-<div class="app-shell">
-  <header class="topbar">
-    <div class="topbar__brand"><span class="topbar__mark">D</span> Depomax · <span style="font-size:12px;color:var(--color-green);"><span class="pulse"></span> Canlı Takip</span></div>
-    <nav class="topbar__nav">
-      <a class="topbar__link" href="admin.html">⬅ Admin</a>
-    </nav>
-    <div class="topbar__user">
-      <span id="kullaniciAdi">…</span>
-      <button class="btn btn-ghost btn-sm" id="cikisBtn">Çıkış</button>
-    </div>
-  </header>
-
-  <main class="page">
-    <div class="page__header">
-      <div>
-        <div class="page__title">Canlı Takip</div>
-        <div class="page__subtitle" id="sonGuncelleme">Yükleniyor…</div>
-      </div>
-    </div>
-
-    <!-- Özet bar -->
-    <div class="ozet-bar" id="ozetBar">
-      <div class="ozet-item"><div class="ozet-sayi" id="ozetToplaniyor" style="color:#3B82F6;">—</div><div class="ozet-label">Toplama</div></div>
-      <div class="ozet-item"><div class="ozet-sayi" id="ozetKontrol" style="color:#8B5CF6;">—</div><div class="ozet-label">Kontrol</div></div>
-      <div class="ozet-item"><div class="ozet-sayi" id="ozetBekliyor" style="color:#9CA3AF;">—</div><div class="ozet-label">Bekliyor</div></div>
-      <div class="ozet-item"><div class="ozet-sayi" id="ozetTamamlandi" style="color:#10B981;">—</div><div class="ozet-label">Bugün Tamam</div></div>
-    </div>
-
-    <!-- Aktif kullanıcılar -->
-    <div style="font-weight:700;font-size:13px;margin-bottom:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--color-ink-soft);">👥 Aktif Kullanıcılar</div>
-    <div class="card" style="margin-bottom:20px;max-width:500px;">
-      <div id="aktifKullanicilarDiv" style="min-height:40px;">⏳</div>
-    </div>
-
-    <!-- Aktif siparişler -->
-    <div style="font-weight:700;font-size:13px;margin-bottom:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--color-ink-soft);">Aktif Siparişler</div>
-    <div class="canli-grid" id="canliGrid"></div>
-    <div class="empty-state u-hidden" id="bosDurum">
-      <div class="empty-state__icon">✅</div>
-      <div class="empty-state__title">Aktif sipariş yok</div>
-      <div class="empty-state__text">Tüm siparişler tamamlandı veya henüz başlanmadı.</div>
-    </div>
-  </main>
+<header>
+  <div>
+    <h1>Şube siparişleri · Merkez depo</h1>
+    <div class="sub" id="altyazi">Bağlanıyor…</div>
+  </div>
+  <div class="clock"><b id="clock">--:--</b><span id="date"></span></div>
+  <div class="btns">
+    <a class="btn-a" href="admin.html" id="geriBtn">← Panel</a>
+    <button id="sesBtn" aria-pressed="false">🔕 Ses kapalı</button>
+    <button id="tamEkran">⛶ Tam ekran</button>
+  </div>
+</header>
+<div id="hata" class="hidden"></div>
+<section class="kpis" id="kpis"></section>
+<main>
+  <div>
+    <div class="flow" id="flow"></div>
+    <div class="teams" id="teams"></div>
+  </div>
+  <div class="side">
+    <div class="box" id="ekipKutu"><h2>Şu an sistemde</h2><ul class="online" id="online"></ul></div>
+    <div class="box"><h2>Bugün yola çıkanlar</h2><div id="veh"></div></div>
+    <div class="box"><h2>Bugün eksik çıkan ürünler</h2><ul class="miss" id="miss"></ul></div>
+    <div class="box"><h2>Son olaylar</h2><ul class="feed" id="feed"></ul></div>
+  </div>
+</main>
+<footer id="alt"></footer>
+<div id="detay" class="drawer hidden" role="dialog" aria-modal="true">
+  <div class="drawer__bg" data-kapat></div>
+  <div class="drawer__in">
+    <div class="drawer__hd"><div><b id="dBaslik"></b><div class="sub" id="dAlt"></div></div><button data-kapat>✕ Kapat</button></div>
+    <div class="chips" id="dFiltre"></div>
+    <div id="dListe" class="dliste"></div>
+  </div>
 </div>
-<script type="module" src="js/canli.js"></script>
+<script type="module" src="js/canli.js?v=20261127"></script>
 </body>
 </html>

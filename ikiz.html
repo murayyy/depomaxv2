@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Depo İkizi 3D · Depomax</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100..125,400..800&display=swap" rel="stylesheet">
+<style>
+/* VOICE: işçi gibi net, sahadaki forklift operatörünün okuyacağı kadar sade
+   IDEA: depo zemini planı + gerçek palet rafının kendisi (mavi dikme, turuncu kiriş)
+   PICTURE: canlı, döndürülebilir 3D depo; her palet tıklanabilir
+   COLOUR and TYPE: beton gri zemin, raf mavisi #1f5fbf, kiriş turuncusu #f26a1b; Archivo geniş
+   LAYOUT: üstte rakam şeridi, solda büyük 3D sahne, sağda arama/öneri/detay paneli */
+:root{color-scheme:light dark;--bg:light-dark(#eef0f2,#15181c);--panel:light-dark(#ffffff,#1e2228);--ink:light-dark(#15191e,#e9ecef);--mute:light-dark(#5b6470,#9aa4b0);--line:light-dark(#d7dbe0,#323840);--blue:#1f5fbf;--orange:#f26a1b;--red:#d63b2f;--amber:#e3a400;--green:#1f9d55}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 Archivo,system-ui,sans-serif;overflow-x:clip}
+header{padding:18px max(3vw,14px) 10px;display:flex;flex-wrap:wrap;gap:10px 28px;align-items:end;border-top:6px solid var(--orange)}
+h1{font-size:clamp(24px,3.2vw,36px);line-height:1.05;margin:0;font-stretch:115%;font-weight:800;text-wrap:balance}
+.sub{color:var(--mute);font-size:14px;margin:4px 0 0}
+.kpis{display:flex;flex-wrap:wrap;gap:8px;margin-inline-start:auto}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:6px 12px;min-width:96px}
+.kpi b{display:block;font-size:22px;font-stretch:112%;line-height:1.1;font-variant-numeric:tabular-nums}
+.kpi span{font-size:13px;color:var(--mute);white-space:nowrap}
+.kpi.r b{color:var(--red)}.kpi.p b{color:#d6336c}.kpi.a b{color:var(--amber)}
+main{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:12px;padding:6px max(3vw,14px) 18px}
+.stage{position:relative;height:calc(100vh - 150px);min-height:460px;border-radius:10px;overflow:hidden;border:1px solid var(--line);background:light-dark(#dfe3e7,#1b1f24)}
+.stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:grab;touch-action:none}
+.legend{position:absolute;left:10px;bottom:10px;display:flex;flex-wrap:wrap;gap:6px 12px;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:13px;max-width:calc(100% - 20px)}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;margin-inline-end:5px;vertical-align:-1px}
+.tools{position:absolute;right:10px;top:10px;display:flex;gap:6px}
+aside{display:flex;flex-direction:column;gap:12px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}
+.card h2{font-size:17px;margin:0 0 8px;font-stretch:110%}
+label{font-size:13px;color:var(--mute);display:block;margin-bottom:3px}
+input,select{width:100%;font:inherit;font-size:16px;padding:9px 10px;border:1px solid var(--line);border-radius:7px;background:var(--bg);color:var(--ink);min-height:44px}
+button{font:inherit;font-size:15px;font-weight:600;min-height:44px;padding:8px 14px;border-radius:7px;border:1px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer}
+button.pri{background:var(--blue);color:#fff;border-color:var(--blue)}
+button.go{background:var(--green);color:#fff;border-color:var(--green)}
+button[aria-pressed=true]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+:focus-visible{outline:3px solid var(--orange);outline-offset:2px}
+.row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}
+.seg{display:flex;gap:6px}.seg button{flex:1}
+.muted{color:var(--mute);font-size:14px}
+dl{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 12px;margin:0;font-size:15px}
+dt{color:var(--mute)}dd{margin:0;font-variant-numeric:tabular-nums}
+.tag{display:inline-block;font-size:12px;font-weight:700;padding:2px 7px;border-radius:4px;color:#fff}
+ul.list{list-style:none;margin:0;padding:0}
+ul.list li{display:flex;justify-content:space-between;gap:8px;padding:7px 0;border-top:1px solid var(--line);font-size:15px;cursor:pointer}
+ul.list li:first-child{border-top:0}
+ul.list li:hover{color:var(--blue)}
+.bar{height:10px;background:var(--line);border-radius:5px;overflow:hidden;margin:3px 0 9px}
+.bar div{height:100%;background:var(--blue)}
+.brow{display:flex;justify-content:space-between;font-size:14px}
+.sug li.on{color:var(--green);font-weight:700}
+footer{padding:0 max(3vw,14px) 24px;color:var(--mute);font-size:13px}
+@media(max-width:900px){main{grid-template-columns:minmax(0,1fr)}.stage{height:62vh;min-height:360px}.kpis{margin-inline-start:0}}
+@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto}}
+ul.list li .r{white-space:nowrap;color:var(--mute)}
+.hidden{display:none!important}
+.durum{font-size:13px;color:var(--mute)}
+.uyari{background:#7f1d1d;color:#fff;border-radius:8px;padding:8px 12px;font-size:14px}
+a.btn{font-size:15px;font-weight:600;min-height:44px;padding:8px 14px;border-radius:7px;border:1px solid var(--line);background:var(--panel);color:var(--ink);text-decoration:none;display:inline-flex;align-items:center}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Merkez depo, canlı 3D görünüm</h1>
+    <p class="sub" id="altyazi">Raflar, toplama gözleri ve siparişler yükleniyor…</p>
+  </div>
+  <div class="kpis" id="kpis"></div>
+</header>
+<main>
+  <div class="stage" id="stage">
+    <canvas id="cv" aria-label="3D depo görünümü"></canvas>
+    <div class="tools"><a class="btn" id="geriBtn" href="admin.html">← Panel</a><button id="yenile">↻ Yenile</button><button id="reset">Genel görünüm</button></div>
+    <div class="legend" id="legend"></div>
+  </div>
+  <aside>
+    <div class="uyari hidden" id="uyari"></div>
+    <div class="card">
+      <h2>Ara</h2>
+      <input id="q" type="search" placeholder="Stok kodu ya da ürün adı" autocomplete="off">
+      <p class="muted" id="qinfo" style="margin:6px 0 0">Yazınca eşleşen paletler öne çıkar.</p>
+      <div style="margin-top:10px"><label>Renklendirme</label>
+        <div class="seg"><button id="mStatus" aria-pressed="true">Duruma göre</button><button id="mProd" aria-pressed="false">Ürüne göre</button></div></div>
+    </div>
+    <div class="card" id="detail"><h2>Detay</h2><p class="muted" style="margin:0">Sahnede bir palete ya da göze dokunun.</p></div>
+    <div class="card">
+      <h2>Gelen palete yer öner</h2>
+      <div class="row">
+        <div><label for="ph">Palet yüksekliği (cm)</label><input id="ph" type="number" min="40" max="330" value="150" inputmode="numeric"></div>
+        <div><label for="pp">Stok kodu</label><input id="pp" list="ppList" placeholder="Kod ya da ad"><datalist id="ppList"></datalist></div>
+      </div>
+      <button class="pri" id="suggest" style="width:100%;margin-top:10px">Yer öner</button>
+      <ul class="list sug" id="sug" style="margin-top:8px"></ul>
+      <p class="muted hidden" id="sugNot" style="margin:6px 0 0">Seçtiğiniz yeri Raflar ekranından kaydedin; bu ekran sadece gösterir.</p>
+    </div>
+    <div class="card"><h2>Alanlar</h2><ul class="list" id="zones"></ul></div>
+    <div class="card"><h2>İkmal gereken gözler</h2><ul class="list" id="crit"></ul></div>
+    <div class="card"><h2>Raf doluluğu</h2><div id="fill"></div></div>
+    <div class="card hidden" id="yersizKart"><h2>Yeri belli olmayanlar</h2><p class="muted" style="margin:0 0 6px">Reyon kodu ya da kat/bölmesi okunamadığı için sahneye konamadı.</p><ul class="list" id="yersiz"></ul></div>
+  </aside>
+</main>
+<footer id="alt">Raf ölçüleri gerçek (D1 13 bölme × 270 cm, D2 10 × 325 cm, E1 10 × 330 cm, E2 11 × 330 cm). Paletler Depomax raf kayıtlarından, toplama gözleri göz kayıtlarından, palet yapma ve hazır alanları siparişlerden gelir. Ekran hiçbir kaydı değiştirmez.</footer>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script type="module" src="js/ikiz.js?v=20261127"></script>
+</body>
+</html>
