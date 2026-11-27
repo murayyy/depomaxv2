@@ -10,8 +10,8 @@ const STAGES = [
   ["bekliyor", "Bekliyor", "--s0"],
   ["toplaniyor", "Toplanıyor", "--s1"],
   ["kontrol", "Kontrolde", "--s2"],
-  ["hazir", "Hazır", "--s3"],
-  ["yolda", "Yola çıktı", "--s4"]
+  ["hazir", "Paletlendi", "--s3"],
+  ["yolda", "Yüklendi", "--s4"]
 ];
 const SC = Object.fromEntries(STAGES.map((s) => [s[0], `var(${s[2]})`]));
 const KART_SINIRI = 7;
@@ -92,8 +92,8 @@ function ciz() {
     ["İşlemdeki şube", subeler.size, "var(--or)"],
     ["Toplanan kalem", kal ? `%${Math.round(top / kal * 100)}` : "—", "var(--s1)"],
     ["Eksik çıkan kalem", eks, "var(--red)"],
-    ["Sevke hazır", by("hazir").length, "var(--s3)"],
-    ["Bugün yola çıkan", `${yolda.length} · ${yoldaPalet} palet`, "var(--s4)"],
+    ["Yükleme bekliyor", by("hazir").length, "var(--s3)"],
+    ["Bugün yüklenen", `${yolda.length} · ${yoldaPalet} palet`, "var(--s4)"],
     ["Bekleyen", by("bekliyor").length, "var(--s0)"]
   ];
   $("kpis").innerHTML = K.map(([a, b, c]) => `<div class="kpi" style="--c:${c}"><b>${b}</b><span>${a}</span></div>`).join("");
@@ -143,7 +143,7 @@ function ciz() {
     return `<div class="veh"><span class="t">${saat(a.ilk)}</span><span><b>${esc(k)}</b>${a.surucu && a.surucu !== k ? ` <span style="color:var(--mute);font-size:13px">${esc(a.surucu)}</span>` : ""}</span>
       <span class="pill" style="background:var(--s4)">${a.palet} palet</span>
       <span class="s">${a.liste.map((s) => `<span style="white-space:nowrap"><i style="background:${s.durum === "teslim_edildi" ? "var(--s3)" : "var(--s4)"}"></i>${esc(subeAd(s))}</span>`).join(" &nbsp;")}</span></div>`;
-  }).join("") || '<div class="m" style="color:var(--mute)">Bugün henüz araç çıkmadı.</div>';
+  }).join("") || '<div class="m" style="color:var(--mute)">Bugün henüz araç yüklenmedi.</div>';
 
   // Eksikler: bugün işlem gören siparişlerden
   const miss = new Map();
@@ -166,8 +166,8 @@ function ciz() {
     ekle(s.olusturulmaTarihi, `${ad} siparişi geldi (${s.toplamUrun || 0} kalem).`);
     ekle(s.toplamaBaslangic, `${s.toplayanKullanici || "Toplayıcı"} ${ad} siparişini toplamaya başladı.`);
     ekle(s.toplamaBitis, `${ad} toplandı${s.eksikUrun ? `, ${s.eksikUrun} kalem eksik` : ""}. Kontrole geçti.`);
-    ekle(s.kontrolBitis, `${ad} kontrol edildi, sevke hazır.`);
-    ekle(s.sevkTarihi, `${ad} yola çıktı${s.paletSayisi ? ` · ${s.paletSayisi} palet` : ""}${s.plaka ? ` · ${s.plaka}` : ""}.`);
+    ekle(s.kontrolBitis, `${ad} kontrol edildi ve paletlendi, yükleme bekliyor.`);
+    ekle(s.sevkTarihi, `${ad} araca yüklendi${s.paletSayisi ? ` · ${s.paletSayisi} palet` : ""}${s.plaka ? ` · ${s.plaka}` : ""}.`);
   });
   olay.sort((a, b) => b.d - a.d);
   $("feed").innerHTML = olay.slice(0, 8).map((o) => `<li><time>${saat(o.d)}</time><span>${esc(o.t)}</span></li>`).join("") || "<li><time></time><span>Bugün henüz hareket yok.</span></li>";
@@ -196,7 +196,7 @@ function kart(s) {
     satir = `<span>${s.durum === "kontrol_ediliyor" ? "Kontrol ediliyor" : "Kontrol bekliyor"}</span><span>${esc(s.kontrolBaşlayan || "")}</span>`;
   } else if (s._a === "hazir") {
     const m = dk(tarih(s.kontrolBitis));
-    satir = `<span>${tp} kalem${s.toplamKg ? ` · ${Math.round(s.toplamKg)} kg` : ""}</span><span>${s.kontrolBitis ? `${sure(m)} hazır bekliyor` : ""}</span>`;
+    satir = `<span>${tp} kalem${s.toplamKg ? ` · ${Math.round(s.toplamKg)} kg` : ""}</span><span>${s.kontrolBitis ? `${sure(m)} yükleme bekliyor` : ""}</span>`;
   } else {
     satir = `<span>${s.paletSayisi || 0} palet · ${tp} kalem</span><span>${saat(tarih(s.sevkTarihi))}${s.plaka ? " · " + esc(s.plaka) : ""}</span>`;
   }

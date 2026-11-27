@@ -26,7 +26,9 @@ const RACKS = [
   { id: "D1", bays: 13, bw: 2.70, lv: [180, 180, 180, 350] },
   { id: "D2", bays: 10, bw: 3.25, lv: [170, 170, 170, 300] },
   { id: "E1", bays: 10, bw: 3.30, lv: [220, 200, 300] },
-  { id: "E2", bays: 11, bw: 3.30, lv: [150, 250, 250] }
+  { id: "E2", bays: 11, bw: 3.30, lv: [150, 250, 250] },
+  // Orta raf: normal stok rafı. Ölçüsü Raflar ekranındaki kat/bölme sayısından alınır (yoksa 12 bölme × 3 kat).
+  { id: "ORTA", bays: 12, bw: 33 / 12, lv: [170, 170, 170], ad: "Orta raf" }
 ].map((r) => ({ ...r, z: SIRA_Z[r.id], face: SIRA_YUZ[r.id] }));
 const DEPO_BOY = 37;   // raf sıralarının boyu (m)
 const PCOL = ["#2f7ed8", "#8e44ad", "#16a085", "#c0392b", "#d35400", "#2c3e50", "#27ae60", "#b8860b", "#7f8c8d", "#e84393"];
@@ -39,17 +41,19 @@ const renkKod = (kod) => PCOL[[...String(kod)].reduce((t, c) => t + c.charCodeAt
 
 /* yuvalar: her raf bölmesi × kat × 3 palet yeri */
 const slots = [];
-for (const r of RACKS) {
+function rafYuvalari(r) {
+  for (let i = slots.length - 1; i >= 0; i--) if (slots[i].r === r) slots.splice(i, 1);
   r.base = []; let y = 0; r.lv.forEach((h) => { r.base.push(y); y += h / 100; });
   r.H = r.base[r.base.length - 1] + Math.min(r.lv[r.lv.length - 1] / 100, 2);
   r.len = r.bays * r.bw;
   for (let b = 0; b < r.bays; b++) for (let l = 0; l < r.lv.length; l++) for (let k = 0; k < 3; k++) {
-    slots.push({ r, b, l, k, levelCm: r.lv[l], x: b * r.bw + r.bw * (k + 0.5) / 3, y: r.base[l] + (l ? 0.07 : 0), z: r.z, pick: l === 0, pal: null });
+    slots.push({ r, b, l, k, levelCm: r.lv[l], x: b * r.bw + r.bw * (k + 0.5) / 3, y: r.base[l] + (l ? 0.07 : 0), z: r.z, pick: l === 0 && r.id !== "ORTA", pal: null });
   }
 }
+RACKS.forEach(rafYuvalari);
 /* rafsız toplama şeritleri */
 const FL_N = 30, FL_W = 1.1, FL_X = 0;
-const FLOORS = ["A1", "A2", "B1", "B2", "ORTA", "C1", "C2"]
+const FLOORS = ["A1", "A2", "B1", "B2", "C1", "C2"]
   .map((id) => ({ id, floor: true, face: SIRA_YUZ[id], x0: FL_X, z0: SIRA_Z[id] - 0.6, zc: SIRA_Z[id], w: FL_N * FL_W, d: 1.2, bays: FL_N }));
 /* rafsız sıraların yer sayısı veriye göre belirlenir (en büyük reyon numarası); sıra boyu sabit */
 function zeminYuvalari(sayilar = {}) {
@@ -64,7 +68,7 @@ zeminYuvalari();
 /* Reyon numaraları: X1 sırası 1'den başlar; X2 sırası (E2 hariç) X1'in bittiği yerden devam eder
    ve koridorda geri dönerek (arkadan öne) ilerler. */
 const DEVAM_EDEN = { A2: "A1", B2: "B1", C2: "C1", D2: "D1" };
-const slotAdi = (s) => s.r.floor ? `${s.r.id === "ORTA" ? "Orta raf" : s.r.id} · Yer ${s.b + 1} (toplama)` : `${s.r.id} · Bölme ${s.b + 1} · Kat ${s.l + 1} · Yer ${s.k + 1}` + (s.pick ? " (taban / toplama)" : "");
+const slotAdi = (s) => s.r.floor ? `${s.r.id} · Yer ${s.b + 1} (toplama)` : `${s.r.ad || s.r.id} · Bölme ${s.b + 1} · Kat ${s.l + 1} · Yer ${s.k + 1}` + (s.pick ? " (taban / toplama)" : "");
 const yuvaBul = (rid, b, l) => slots.filter((s) => s.r.id === rid && s.b === b && s.l === l);
 
 /* ---------------- Sahne ---------------- */
@@ -88,15 +92,18 @@ function label(text, bg, h = 0.9) {
   const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), depthTest: false })); s.scale.set(c.width / 96 * h, h, 1); return s;
 }
 const upMat = new THREE.MeshLambertMaterial({ color: 0x1f5fbf }), bmMat = new THREE.MeshLambertMaterial({ color: 0xf26a1b });
-for (const r of RACKS) {
-  for (let b = 0; b <= r.bays; b++) for (const dz of [-D / 2, D / 2]) { const m = new THREE.Mesh(new THREE.BoxGeometry(0.08, r.H, 0.08), upMat); m.position.set(b * r.bw, r.H / 2, r.z + dz); scene.add(m); }
-  for (let l = 1; l < r.lv.length; l++) for (let b = 0; b < r.bays; b++) for (const dz of [-D / 2, D / 2]) { const m = new THREE.Mesh(new THREE.BoxGeometry(r.bw, 0.1, 0.07), bmMat); m.position.set(b * r.bw + r.bw / 2, r.base[l] + 0.02, r.z + dz); scene.add(m); }
-  const L = label(r.id, "#1f5fbf"); L.position.set(-0.9, r.H * 0.55, r.z); scene.add(L);
+function rafCiz(r) {
+  if (r.grp) scene.remove(r.grp);
+  const G = r.grp = new THREE.Group(); scene.add(G);
+  for (let b = 0; b <= r.bays; b++) for (const dz of [-D / 2, D / 2]) { const m = new THREE.Mesh(new THREE.BoxGeometry(0.08, r.H, 0.08), upMat); m.position.set(b * r.bw, r.H / 2, r.z + dz); G.add(m); }
+  for (let l = 1; l < r.lv.length; l++) for (let b = 0; b < r.bays; b++) for (const dz of [-D / 2, D / 2]) { const m = new THREE.Mesh(new THREE.BoxGeometry(r.bw, 0.1, 0.07), bmMat); m.position.set(b * r.bw + r.bw / 2, r.base[l] + 0.02, r.z + dz); G.add(m); }
+  const L = label(r.ad || r.id, "#1f5fbf", r.ad ? 0.7 : 0.9); L.position.set(-0.9, r.ad ? r.H + 0.6 : r.H * 0.55, r.z); G.add(L);
   const m = new THREE.Mesh(new THREE.PlaneGeometry(r.len, D), new THREE.MeshBasicMaterial({ color: 0xf2c200, transparent: true, opacity: 0.45, depthWrite: false }));
-  m.rotation.x = -Math.PI / 2; m.position.set(r.len / 2, 0.02, r.z); scene.add(m);
+  m.rotation.x = -Math.PI / 2; m.position.set(r.len / 2, 0.02, r.z); G.add(m);
 }
+RACKS.forEach(rafCiz);
 const ZONES = [
-  ...FLOORS.map((f) => ({ id: f.id, name: f.id === "ORTA" ? "Orta raf" : f.id, css: "#d4a900", x: f.x0, z: f.z0, w: f.w, d: f.d, floor: true })),
+  ...FLOORS.map((f) => ({ id: f.id, name: f.id, css: "#d4a900", x: f.x0, z: f.z0, w: f.w, d: f.d, floor: true })),
   { id: "yapma", name: "Paletleme alanı", css: "#8e44ad", x: -8.5, z: -0.8, w: 7, d: 11.8 },
   { id: "hazir", name: "Palet koyma alanı", css: "#1f9d55", x: -8.5, z: 20, w: 7, d: 8.3 },
   { id: "ofis", name: "Ofis katı", css: "#64748b", x: 38, z: 3, w: 9, d: 11, sabit: true },
@@ -156,7 +163,7 @@ function alanPaleti(x, z, h, color, rec, wrap) {
 
 /* ---------------- Veri ---------------- */
 let raflar = [], gozler = [], siparisler = [], yersiz = [], urunRaf = null;
-const RAF_ID = (ad) => { const m = norm(ad).replace(/[^A-Z0-9]/g, "").match(/^(?:RAF)?([DE][12])(?![0-9])/); return m ? m[1] : null; };
+const RAF_ID = (ad) => { if (norm(ad).includes("ORTA")) return "ORTA"; const m = norm(ad).replace(/[^A-Z0-9]/g, "").match(/^(?:RAF)?([DE][12])(?![0-9])/); return m ? m[1] : null; };
 const reyonCoz = (r) => { const m = norm(r).match(/^(ORTA(?:\s*RAF)?|[A-E][12])\s*[-_./ ]?\s*(\d+)/); return m ? { id: m[1].startsWith("ORTA") ? "ORTA" : m[1], no: Number(m[2]) } : null; };
 
 async function yukle() {
@@ -168,6 +175,14 @@ async function yukle() {
       return { id: d.id, ...d.data(), kalemler: k.docs.map((x) => ({ id: x.id, ...x.data() })).filter((x) => (Number(x.miktar) || 0) > 0 || (Number(x.palet) || 0) > 0) };
     }));
     gozler = gs.docs.map((d) => ({ id: d.id, ...d.data() }));
+    // Orta raf ölçüsü: Raflar ekranındaki kat / bölme sayısı
+    const ortaKayit = raflar.find((r) => RAF_ID(r.ad) === "ORTA");
+    const orta = RACKS.find((r) => r.id === "ORTA");
+    const bolme = Number(ortaKayit?.bolme) || 0, kat = Number(ortaKayit?.kat) || 0;
+    if (bolme > 0 && kat > 0 && (bolme !== orta.bays || kat !== orta.lv.length)) {
+      orta.bays = Math.min(bolme, 40); orta.bw = 33 / orta.bays; orta.lv = Array(Math.min(kat, 6)).fill(170);
+      rafYuvalari(orta); rafCiz(orta);
+    }
     $("uyari").classList.add("hidden");
     yerlestir();
   } catch (e) {
@@ -317,7 +332,7 @@ function ozet() {
   $("kpis").innerHTML = k.map(([a, b, c]) => `<div class="kpi ${c}"><b>${b}</b><span>${a}</span></div>`).join("");
   $("fill").innerHTML = RACKS.map((r) => {
     const ss = slots.filter((s) => s.r === r && !s.pick), f = ss.filter((s) => s.pal).length, pc = ss.length ? Math.round(f / ss.length * 100) : 0;
-    return `<div class="brow"><b>${r.id}</b><span>${f}/${ss.length} yer · %${pc}</span></div><div class="bar"><div style="width:${pc}%"></div></div>`;
+    return `<div class="brow"><b>${r.ad || r.id}</b><span>${f}/${ss.length} yer · %${pc}</span></div><div class="bar"><div style="width:${pc}%"></div></div>`;
   }).join("");
   $("crit").innerHTML = ikmal.length ? ikmal.sort((a, b) => (a.miktar || 0) - (b.miktar || 0)).slice(0, 12)
     .map((g) => `<li data-c="${esc(g.kod || g.id)}"><span>${esc(g.kod || "")} ${esc(g.ad || "")}</span><b style="color:var(--red);white-space:nowrap">${sayi(g.miktar)} / ${sayi(g.uyariSeviyesi)} ${esc(g.birim || "")}</b></li>`).join("") : "<li>İkmal gereken göz yok.</li>";
