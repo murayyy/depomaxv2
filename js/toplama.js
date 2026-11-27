@@ -290,13 +290,8 @@ function siparisAc(siparis) {
   document.getElementById("barkodTaraBtn").classList.toggle("u-hidden", saltOkunur);
   document.getElementById("excelYukleBtn").classList.toggle("u-hidden", saltOkunur);
 
-  // Toplayıcı siparişi açtı — başlangıç zamanını kaydet (henüz kaydedilmemişse)
-  if (!saltOkunur && !siparis.toplamaBaslangic) {
-    siparisGuncelle(siparis.id, {
-      toplamaBaslangic: new Date().toISOString(),
-      toplayanKullanici: mevcutKullanici.ad || mevcutKullanici.uid
-    }).catch(console.error);
-  }
+  // Siparişi açmak toplamayı BAŞLATMAZ (admin ya da başkası sadece bakmak için girebilir).
+  // Başlangıç, ilk ürün "Toplandı" ya da "Eksik" işaretlendiğinde yazılır — bkz. toplamaBasladi().
 
   if (urunAbonelikIptal) urunAbonelikIptal();
   urunAbonelikIptal = urunleriDinle(siparis.id, (liste) => {
@@ -559,6 +554,7 @@ function baglaSatirOlaylari(kapsayici, saltOkunur) {
           if (urun) urun.toplandi = false;
         }
         urunGuncelle(aktifSiparis.id, uid, patch);
+        if (toplandiCb.checked) toplamaBasladi();
       });
     }
     const eksikCb = satir.querySelector('[data-rol="eksik"]');
@@ -578,6 +574,7 @@ function baglaSatirOlaylari(kapsayici, saltOkunur) {
           urun.eksik = false;
         }
         urunGuncelle(aktifSiparis.id, uid, patch);
+        if (eksikCb.checked) toplamaBasladi();
       });
     }
     const silBtn = satir.querySelector('[data-rol="sil"]');
@@ -762,6 +759,7 @@ function taramaSonucModalAc(urun) {
     }
     guncel.toplandi = true; guncel.eksik = false; guncel.miktar = miktar;
     await urunGuncelle(aktifSiparis.id, urun.id, { toplandi: true, eksik: false, miktar, toplayanKullanici: mevcutKullanici.ad || mevcutKullanici.uid, toplanmaZamani: new Date() });
+    toplamaBasladi();
     toast(`${urun.ad} toplandı. Stok güncellendi.`, "success");
     devamEt();
   };
@@ -771,6 +769,7 @@ function taramaSonucModalAc(urun) {
     if (guncel.kod && guncel.toplandi) stokGeriEkle(guncel.kod, guncel.miktar, guncel);
     guncel.toplandi = false; guncel.eksik = true;
     await urunGuncelle(aktifSiparis.id, urun.id, { eksik: true, toplandi: false, miktar, toplayanKullanici: mevcutKullanici.ad || mevcutKullanici.uid });
+    toplamaBasladi();
     toast(`${urun.ad} eksik olarak işaretlendi.`, "info");
     devamEt();
   };
@@ -855,3 +854,17 @@ function gecikmeZamanlamasiniBaslat() {
   }, 30 * 60 * 1000);
 }
 gecikmeZamanlamasiniBaslat();
+
+
+/* Toplama başlangıcı: siparişte ilk ürün işaretlendiğinde bir kez yazılır.
+   Siparişi açıp bakmak (admin, kontrolör, başka toplayıcı) başlangıç sayılmaz. */
+function toplamaBasladi() {
+  const s = aktifSiparis;
+  if (!s || s.toplamaBaslangic || s._baslangicYazildi) return;
+  s._baslangicYazildi = true;
+  s.toplamaBaslangic = new Date().toISOString();
+  siparisGuncelle(s.id, {
+    toplamaBaslangic: s.toplamaBaslangic,
+    toplayanKullanici: mevcutKullanici.ad || mevcutKullanici.uid
+  }).catch((e) => { s._baslangicYazildi = false; s.toplamaBaslangic = null; console.error(e); });
+}

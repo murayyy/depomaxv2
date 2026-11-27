@@ -36,7 +36,8 @@ const subeAd = (s) => s.subeAdi || String(s.ad || "").split(" — ")[0] || "—"
 function asama(s) {
   switch (s.durum) {
     case "beklemede": return "bekliyor";
-    case "toplaniyor": return s.toplamaBaslangic ? "toplaniyor" : "bekliyor";
+    // ilk ürün işaretlenmeden "toplanıyor" sayılmaz (siparişi açıp bakmak başlatmaz)
+    case "toplaniyor": return ((Number(s.toplananUrun) || 0) + (Number(s.eksikUrun) || 0)) > 0 ? "toplaniyor" : "bekliyor";
     case "toplandi":
     case "kontrol_ediliyor": return "kontrol";
     case "tamamlandi": return "hazir";
@@ -115,7 +116,7 @@ function ciz() {
   const ekip = new Map();
   aktif.forEach((s) => {
     const kim = s.toplayanKullanici;
-    if (!kim || !bugun(tarih(s.toplamaBaslangic))) return;
+    if (!kim || !bugun(tarih(s.toplamaBaslangic)) || !((Number(s.toplananUrun) || 0) + (Number(s.eksikUrun) || 0))) return;
     const e = ekip.get(kim) || { kalem: 0, siparis: 0, simdi: null };
     e.kalem += Number(s.toplananUrun) || 0; e.siparis++;
     if (s._a === "toplaniyor") e.simdi = subeAd(s);
