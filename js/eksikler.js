@@ -6,7 +6,7 @@
 // verisiyle karşılaştırır. Stok gelmiş ürünler üstte ve yeşil rozetle çıkar.
 // ============================================================================
 import { auth, signOut, sayfaKorumasi } from "./firebase.js";
-import { tumSiparisleriGetir, urunleriniGetir, urunGuncelle, urunEkle, urunSil, rafKalemHaritasiGetir, katalogDinle, stokDusur } from "./veri.js?v=20261118";
+import { tumSiparisleriGetir, urunleriniGetir, urunGuncelle, urunEkle, urunSil, rafKalemHaritasiGetir, katalogDinle, stokDusur } from "./veri.js?v=20261127";
 import { stoklariDinle, stokBildirimGoruldu } from "./stok.js";
 import { arayuzHazirla, toast, onayIste, girdiIste, kacisEt, sayiBicimle, ondalikOku, yukleniyorGoster, yukleniyorKapat } from "./utils.js";
 
@@ -224,6 +224,7 @@ async function yukle() {
         eksikKayitlari.push({
           siparisId: s.id, siparisAdi: s.ad,
           urunId: u.id, kod: u.kod, ad: u.ad, birim: u.birim, miktar: u.miktar,
+          reyon: u.reyon || "", ozelReyon: u.ozelReyon || "", ada: adaMi(u),
           tekrarKontrol
         });
       });
@@ -244,8 +245,9 @@ async function yukle() {
 function grupla(eksikKayitlari) {
   const map = new Map();
   eksikKayitlari.forEach((e) => {
-    const anahtar = e.kod || e.ad;
-    if (!map.has(anahtar)) map.set(anahtar, { kod: e.kod, ad: e.ad, birim: e.birim, toplamMiktar: 0, kayitlar: [] });
+    // ADA reyonu eksikleri ayrı grup: ADA'nın kendi gözünden toplanır
+    const anahtar = (e.kod || e.ad) + (e.ada ? "@" + e.ada : "");
+    if (!map.has(anahtar)) map.set(anahtar, { kod: e.kod, ad: e.ad, birim: e.birim, ada: e.ada, toplamMiktar: 0, kayitlar: [] });
     const grup = map.get(anahtar);
     grup.toplamMiktar += Number(e.miktar) || 0;
     grup.kayitlar.push(e);
@@ -297,7 +299,7 @@ function render() {
     return `
       <div class="card order-card" data-idx="${idx}">
         <div class="order-card__main">
-          <div class="order-card__name">${kacisEt(grup.ad)} <span class="cell-code">(${kacisEt(grup.kod)})</span></div>
+          <div class="order-card__name">${kacisEt(grup.ad)}${adaRozeti(grup.ada)} <span class="cell-code">(${kacisEt(grup.kod)})</span></div>
           <div class="order-card__meta">
             <span class="badge ${durum.sinif}">${durum.etiket}</span>
             <span>Eksik: ${sayiBicimle(grup.toplamMiktar)} ${kacisEt(grup.birim || "")}</span>
@@ -361,8 +363,8 @@ function detayModalAc(grup) {
   root.innerHTML = `
     <div class="modal-backdrop" data-role="backdrop">
       <div class="modal" style="max-width:480px;">
-        <h3>${kacisEt(grup.ad)}</h3>
-        <p>Bu ürünün eksik kaldığı siparişler:</p>
+        <h3>${kacisEt(grup.ad)}${adaRozeti(grup.ada)}</h3>
+        <p>Bu ürünün eksik kaldığı siparişler:${grup.ada ? ` <b>${kacisEt(grup.ada)} reyonundan toplanır; "Toplandı" deyince ${kacisEt(grup.ada)} gözünden düşer.</b>` : ""}</p>
         <div>${grup.kayitlar.map(satirHtml).join("")}</div>
         <div class="modal__actions">
           <button class="btn btn-ghost" data-role="kapat">Kapat</button>
@@ -446,4 +448,15 @@ function detayModalAc(grup) {
       }
     });
   });
+}
+
+
+/* ADA (kısıtlı reyon) ürünü mü? Toplama ekranıyla aynı kural. */
+function adaMi(u) {
+  if (u.ozelReyon) return u.ozelReyon;
+  const r = String(u.reyon || "").trim().toLocaleUpperCase("tr");
+  return (r === "ADA" || r.startsWith("ADA-") || r.startsWith("ADA ")) ? "ADA" : "";
+}
+function adaRozeti(ada) {
+  return ada ? ` <span class="badge" style="background:#F59E0B;color:#fff;font-weight:700;font-size:11px;vertical-align:middle;">🏝 ${kacisEt(ada)}</span>` : "";
 }
